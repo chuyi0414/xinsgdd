@@ -1,0 +1,7 @@
+#Id	Code	Name	IconPath	HatchSeconds	Quality	HatchProbability	AcquireWays	PurchaseGold	Description
+1	egg_universal	万能蛋	Arts/Main/Egg/UI_Egg_Universal	10	Universal	50|25|20|3|2	Gift|Free	0	基础万能蛋
+2	egg_normal	普通蛋	Arts/Main/Egg/UI_Egg_Normal	10	Normal	80|15|5|0|0	Shop	500	基础普通蛋
+3	egg_rare	稀有蛋	Arts/Main/Egg/UI_Egg_Rare	15	Rare	0|80|15|5|0	Shop	1000	基础稀有蛋
+4	egg_epic	史诗蛋	Arts/Main/Egg/UI_Egg_Epic	20	Epic	0|0|80|15|5	Shop	3000	基础史诗蛋
+5	egg_legendary	传说蛋	Arts/Main/Egg/UI_Egg_Legendary	25	Legendary	0|0|15|80|5	Shop	5000	基础传说蛋
+6	egg_mythic	神话蛋	Arts/Main/Egg/UI_Egg_Mythic	30	Mythic	0|0|0|20|80	Shop	10000	基础神话蛋

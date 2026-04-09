@@ -1,0 +1,69 @@
+
+MS_Miemieyang_001.png
+size: 359,267
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+1
+  rotate: false
+  xy: 237, 2
+  size: 75, 26
+  orig: 77, 28
+  offset: 1, 1
+  index: -1
+2
+  rotate: false
+  xy: 2, 93
+  size: 237, 172
+  orig: 239, 172
+  offset: 2, 0
+  index: -1
+3
+  rotate: false
+  xy: 241, 30
+  size: 58, 109
+  orig: 58, 109
+  offset: 0, 0
+  index: -1
+4
+  rotate: false
+  xy: 241, 141
+  size: 114, 124
+  orig: 118, 124
+  offset: 0, 0
+  index: -1
+5
+  rotate: true
+  xy: 187, 46
+  size: 45, 39
+  orig: 45, 39
+  offset: 0, 0
+  index: -1
+6
+  rotate: false
+  xy: 187, 8
+  size: 48, 36
+  orig: 48, 36
+  offset: 0, 0
+  index: -1
+7
+  rotate: true
+  xy: 314, 12
+  size: 18, 20
+  orig: 20, 23
+  offset: 1, 2
+  index: -1
+8
+  rotate: false
+  xy: 2, 4
+  size: 183, 87
+  orig: 187, 97
+  offset: 3, 6
+  index: -1
+9
+  rotate: false
+  xy: 301, 32
+  size: 56, 107
+  orig: 56, 107
+  offset: 0, 0
+  index: -1

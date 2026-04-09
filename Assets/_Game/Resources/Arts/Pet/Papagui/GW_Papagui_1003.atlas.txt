@@ -1,0 +1,76 @@
+
+GW_Papagui_1003.png
+size: 607,157
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+GJBQ
+  rotate: false
+  xy: 539, 59
+  size: 60, 19
+  orig: 62, 21
+  offset: 1, 1
+  index: -1
+GK
+  rotate: false
+  xy: 312, 2
+  size: 225, 153
+  orig: 225, 166
+  offset: 0, 2
+  index: -1
+PG
+  rotate: true
+  xy: 539, 80
+  size: 75, 66
+  orig: 77, 70
+  offset: 1, 1
+  index: -1
+ST
+  rotate: false
+  xy: 2, 36
+  size: 308, 119
+  orig: 308, 122
+  offset: 0, 3
+  index: -1
+YJ1
+  rotate: false
+  xy: 539, 19
+  size: 26, 38
+  orig: 27, 40
+  offset: 0, 0
+  index: -1
+YJ2
+  rotate: false
+  xy: 539, 19
+  size: 26, 38
+  orig: 27, 40
+  offset: 0, 0
+  index: -1
+YJ3
+  rotate: true
+  xy: 567, 31
+  size: 26, 38
+  orig: 27, 40
+  offset: 1, 0
+  index: -1
+ZJ1
+  rotate: true
+  xy: 2, 8
+  size: 26, 37
+  orig: 27, 42
+  offset: 1, 2
+  index: -1
+ZJ2
+  rotate: true
+  xy: 567, 3
+  size: 26, 38
+  orig: 27, 42
+  offset: 1, 1
+  index: -1
+ZJ3
+  rotate: true
+  xy: 41, 9
+  size: 25, 38
+  orig: 27, 42
+  offset: 1, 1
+  index: -1

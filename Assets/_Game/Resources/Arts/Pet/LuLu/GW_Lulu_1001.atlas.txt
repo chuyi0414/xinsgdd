@@ -1,0 +1,27 @@
+
+GW_Lulu_1001.png
+size: 257,190
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+ST
+  rotate: false
+  xy: 2, 2
+  size: 212, 186
+  orig: 212, 186
+  offset: 0, 0
+  index: -1
+眼睛
+  rotate: true
+  xy: 216, 126
+  size: 62, 39
+  orig: 64, 41
+  offset: 1, 1
+  index: -1
+高光
+  rotate: true
+  xy: 216, 67
+  size: 57, 18
+  orig: 60, 20
+  offset: 1, 1
+  index: -1

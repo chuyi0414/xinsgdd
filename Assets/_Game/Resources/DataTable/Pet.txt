@@ -1,0 +1,6 @@
+#Id	Code	Name	Quality	SkeletonDataPath	AttributeType	AttributeValue	Description
+1	pet_slime	史莱姆	Normal	Arts/Pet/LuLu/GW_Lulu_1001_SkeletonData	ScoreBase	1	蹦蹦跳跳的水滴状粘液小怪物
+2	pet_shuxiaoxiao	树小小	Epic	Arts/Pet/Shuxiaoxiao/GW_Shuxiaoxiao_1002_SkeletonData	ScoreBase	2	受到魔法石影响的树妖
+3	pet_papagui	爬爬龟	Epic	Arts/Pet/Papagui/GW_Papagui_1003_SkeletonData	ScoreBase	3	移动缓慢，喜欢吃苹果
+4	pet_duoduoshou	多多兽	Legendary	Arts/Pet/Duoduoshou/BOOS_Duoduoshou_001_SkeletonData	ScoreBase	4	黄色独眼变异兽
+5	pet_miemieyang	咩咩羊	Mythic	Arts/Pet/Miemieyang/MS_Miemieyang_001_SkeletonData	ScoreBase	5	拥有治愈之力的绵羊
