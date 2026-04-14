@@ -11,6 +11,9 @@ public class LoadUIForm : UIFormLogic
     [SerializeField]
     private Button _btnLoad;
 
+    /// <summary>
+    /// 初始化加载界面并绑定按钮事件。
+    /// </summary>
     protected override void OnInit(object userData)
     {
         base.OnInit(userData);
@@ -25,12 +28,18 @@ public class LoadUIForm : UIFormLogic
         SetLoadButtonInteractable(CanEnterMain());
     }
 
+    /// <summary>
+    /// 打开界面时同步一次按钮状态。
+    /// </summary>
     protected override void OnOpen(object userData)
     {
         base.OnOpen(userData);
         SetLoadButtonInteractable(CanEnterMain());
     }
 
+    /// <summary>
+    /// 销毁时移除按钮监听。
+    /// </summary>
     private void OnDestroy()
     {
         if (_btnLoad != null)
@@ -59,7 +68,7 @@ public class LoadUIForm : UIFormLogic
     {
         if (!CanEnterMain())
         {
-            Log.Warning("静态配置尚未加载完成，暂时不能进入主界面。");
+            Log.Warning("静态配置或业务资源尚未加载完成，暂时不能进入主界面。");
             return;
         }
 
@@ -74,7 +83,8 @@ public class LoadUIForm : UIFormLogic
     private static bool CanEnterMain()
     {
         return GameEntry.DataTables != null
-            && GameEntry.DataTables.IsAvailable<EggDataRow>()
-            && GameEntry.DataTables.IsAvailable<PetDataRow>();
+            && GameEntry.DataTables.IsReady
+            && GameEntry.GameAssets != null
+            && GameEntry.GameAssets.IsReady;
     }
 }

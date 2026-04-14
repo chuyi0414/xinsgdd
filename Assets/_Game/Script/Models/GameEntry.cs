@@ -6,6 +6,9 @@ using UnityEngine;
 /// </summary>
 public partial class GameEntry : MonoBehaviour
 {
+    /// <summary>
+    /// 场景启动后初始化 GameEntry 的全部组件入口。
+    /// </summary>
     private void Start()
     {
         InitBuiltinComponents();

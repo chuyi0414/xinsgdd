@@ -7,10 +7,24 @@ using UnityGameFramework.Runtime;
 /// </summary>
 public sealed class PetDataRow : DataRowBase, ICodeDataRow
 {
+    /// <summary>
+    /// 列拆分分隔符。
+    /// </summary>
     private static readonly string[] ColumnSplitSeparator = { "\t" };
-    private const int ColumnCount = 8;
+
+    /// <summary>
+    /// 数据表固定列数。
+    /// </summary>
+    private const int ColumnCount = 10;
+
+    /// <summary>
+    /// 合法宠物 Code 的前缀。
+    /// </summary>
     private const string CodePrefix = "pet_";
 
+    /// <summary>
+    /// 当前行的内部 Id 缓存。
+    /// </summary>
     private int _id;
 
     /// <summary>
@@ -39,6 +53,16 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
     public string SkeletonDataPath { get; private set; }
 
     /// <summary>
+    /// 待机动画名。
+    /// </summary>
+    public string IdleAnimationName { get; private set; }
+
+    /// <summary>
+    /// 移动动画名。
+    /// </summary>
+    public string MoveAnimationName { get; private set; }
+
+    /// <summary>
     /// 属性类型。
     /// </summary>
     public PetAttributeType AttributeType { get; private set; }
@@ -53,6 +77,12 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
     /// </summary>
     public string Description { get; private set; }
 
+    /// <summary>
+    /// 从文本行解析宠物表数据。
+    /// </summary>
+    /// <param name="dataRowString">原始数据行文本。</param>
+    /// <param name="userData">额外上下文。</param>
+    /// <returns>是否解析成功。</returns>
     public override bool ParseDataRow(string dataRowString, object userData)
     {
         if (string.IsNullOrWhiteSpace(dataRowString))
@@ -101,15 +131,29 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        if (!Enum.TryParse(columns[5].Trim(), true, out PetAttributeType attributeType) || !Enum.IsDefined(typeof(PetAttributeType), attributeType))
+        string idleAnimationName = columns[5].Trim();
+        if (string.IsNullOrWhiteSpace(idleAnimationName))
         {
-            Log.Warning("PetDataRow parse failed because AttributeType '{0}' is invalid, code '{1}'.", columns[5], code);
+            Log.Warning("PetDataRow parse failed because IdleAnimationName is empty, code '{0}'.", code);
             return false;
         }
 
-        if (!int.TryParse(columns[6], out int attributeValue))
+        string moveAnimationName = columns[6].Trim();
+        if (string.IsNullOrWhiteSpace(moveAnimationName))
         {
-            Log.Warning("PetDataRow parse failed because AttributeValue '{0}' is invalid, code '{1}'.", columns[6], code);
+            Log.Warning("PetDataRow parse failed because MoveAnimationName is empty, code '{0}'.", code);
+            return false;
+        }
+
+        if (!Enum.TryParse(columns[7].Trim(), true, out PetAttributeType attributeType) || !Enum.IsDefined(typeof(PetAttributeType), attributeType))
+        {
+            Log.Warning("PetDataRow parse failed because AttributeType '{0}' is invalid, code '{1}'.", columns[7], code);
+            return false;
+        }
+
+        if (!int.TryParse(columns[8], out int attributeValue))
+        {
+            Log.Warning("PetDataRow parse failed because AttributeValue '{0}' is invalid, code '{1}'.", columns[8], code);
             return false;
         }
 
@@ -130,12 +174,22 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
         Name = name;
         Quality = quality;
         SkeletonDataPath = skeletonDataPath;
+        IdleAnimationName = idleAnimationName;
+        MoveAnimationName = moveAnimationName;
         AttributeType = attributeType;
         AttributeValue = attributeValue;
-        Description = columns[7].Trim();
+        Description = columns[9].Trim();
         return true;
     }
 
+    /// <summary>
+    /// 从二进制数据解析宠物表数据。
+    /// </summary>
+    /// <param name="dataRowBytes">原始字节数组。</param>
+    /// <param name="startIndex">起始下标。</param>
+    /// <param name="length">读取长度。</param>
+    /// <param name="userData">额外上下文。</param>
+    /// <returns>是否解析成功。</returns>
     public override bool ParseDataRow(byte[] dataRowBytes, int startIndex, int length, object userData)
     {
         return ParseDataRow(Encoding.UTF8.GetString(dataRowBytes, startIndex, length), userData);

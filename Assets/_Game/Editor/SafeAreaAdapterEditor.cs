@@ -10,6 +10,9 @@ using UnityEngine;
 [CustomEditor(typeof(SafeAreaAdapter))]
 public class SafeAreaAdapterEditor : UnityEditor.Editor
 {
+    /// <summary>
+    /// 基础适配配置字段。
+    /// </summary>
     private SerializedProperty adaptModeProperty;
     private SerializedProperty targetProperty;
     private SerializedProperty applyLeftProperty;
@@ -19,24 +22,39 @@ public class SafeAreaAdapterEditor : UnityEditor.Editor
     private SerializedProperty extraPaddingProperty;
     private SerializedProperty logChangesProperty;
 
+    /// <summary>
+    /// 初始锚点配置字段。
+    /// </summary>
     private SerializedProperty initialAnchorMinXProperty;
     private SerializedProperty initialAnchorMaxXProperty;
     private SerializedProperty topPositionProperty;
     private SerializedProperty bottomPositionProperty;
 
+    /// <summary>
+    /// 锚点精度配置字段。
+    /// </summary>
     private SerializedProperty anchorPrecisionLeftProperty;
     private SerializedProperty anchorPrecisionRightProperty;
     private SerializedProperty anchorPrecisionTopProperty;
     private SerializedProperty anchorPrecisionBottomProperty;
 
+    /// <summary>
+    /// 微信适配策略字段。
+    /// </summary>
     private SerializedProperty wechatStrategyProperty;
 
+    /// <summary>
+    /// 编辑器模拟安全区域字段。
+    /// </summary>
     private SerializedProperty simulateSafeAreaInEditorProperty;
     private SerializedProperty simulatedTopInsetProperty;
     private SerializedProperty simulatedBottomInsetProperty;
     private SerializedProperty simulatedLeftInsetProperty;
     private SerializedProperty simulatedRightInsetProperty;
 
+    /// <summary>
+    /// 缓存所有序列化字段引用。
+    /// </summary>
     private void OnEnable()
     {
         adaptModeProperty = serializedObject.FindProperty("adaptMode");
@@ -67,6 +85,9 @@ public class SafeAreaAdapterEditor : UnityEditor.Editor
         simulatedRightInsetProperty = serializedObject.FindProperty("simulatedRightInset");
     }
 
+    /// <summary>
+    /// 绘制 SafeAreaAdapter 的自定义 Inspector。
+    /// </summary>
     public override void OnInspectorGUI()
     {
         serializedObject.Update();
@@ -208,7 +229,8 @@ public class SafeAreaAdapterEditor : UnityEditor.Editor
             "水平：从左往右设置位置（0-1）\n" +
             "垂直：从屏幕顶部往下设置位置（0-1）\n" +
             "例如：顶部0，底部0.8 → UI从顶部0%到80%，底部留20%空白\n\n" +
-            "💡 调整这些值时，RectTransform锚点会实时同步更新",
+            "💡 调整这些值时，RectTransform锚点会同步到基础布局。\n" +
+            "安全区域预览仅在运行时，或开启【模拟安全区域】后生效。",
             MessageType.Info);
 
         // 检测初始锚点值是否改变

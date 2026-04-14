@@ -1,41 +1,48 @@
-using System;
-using GameFramework.Event;
 using GameFramework.Procedure;
-using Spine.Unity;
 using ProcedureOwner = GameFramework.Fsm.IFsm<GameFramework.Procedure.IProcedureManager>;
-using UnityEngine;
 using UnityGameFramework.Runtime;
 
 /// <summary>
-/// 加载流程
+/// 加载流程。
+/// 仅负责启动数据表与资源预加载，并驱动加载界面按钮状态。
+/// 具体的数据表读取、注册与校验逻辑统一下沉到 GameDataTableModule。
 /// </summary>
 public class LoadProcedure : ProcedureBase
 {
-    private static readonly string EggDataTableAssetName = AssetPath.GetDataTable("Egg");
-    private static readonly string PetDataTableAssetName = AssetPath.GetDataTable("Pet");
-
     // 流程间传递“待关闭界面”序列号的键名。
     private const string PendingCloseUIFormIdDataName = "PendingCloseUIFormId";
 
-    //加载界面ID
+    // 当前加载界面的序列号。
     private int _loadUIFormId;
-    // 当前是否已订阅数据表加载事件。
-    private bool _isListeningDataTableEvents;
 
+    // 当前是否已订阅数据表状态事件。
+    private bool _isListeningDataTableStateEvents;
+
+    // 当前是否已订阅资源预加载状态事件。
+    private bool _isListeningAssetPreloadEvents;
+
+    /// <summary>
+    /// 进入加载流程后打开加载界面并开始读取静态表。
+    /// </summary>
     protected override void OnEnter(ProcedureOwner procedureOwner)
     {
-        SubscribeDataTableEvents();
+        SubscribeDataTableStateEvents();
+        SubscribeAssetPreloadEvents();
         _loadUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.LoadUIForm, UIFormDefine.MainGroup);
-        RefreshLoadButtonState(AreRequiredDataTablesReady());
-        BeginLoadEggDataTable();
-        BeginLoadPetDataTable();
+        RefreshLoadButtonState(CanEnterMain());
+        GameEntry.DataTables?.BeginLoadRequiredDataTables();
+        GameEntry.GameAssets?.BeginPreloadRequiredAssets();
 
         base.OnEnter(procedureOwner);
     }
 
+    /// <summary>
+    /// 离开流程时移除事件监听，并决定是否延迟关闭加载界面。
+    /// </summary>
     protected override void OnLeave(ProcedureOwner procedureOwner, bool isShutdown)
     {
-        UnsubscribeDataTableEvents();
+        UnsubscribeDataTableStateEvents();
+        UnsubscribeAssetPreloadEvents();
 
         if (isShutdown)
         {
@@ -68,251 +75,88 @@ public class LoadProcedure : ProcedureBase
     }
 
     /// <summary>
-    /// 开始加载蛋系统数据表。
+    /// 订阅数据表状态变化事件。
     /// </summary>
-    private void BeginLoadEggDataTable()
+    private void SubscribeDataTableStateEvents()
     {
-        if (GameEntry.DataTables != null && GameEntry.DataTables.IsAvailable<EggDataRow>())
+        if (_isListeningDataTableStateEvents || GameEntry.DataTables == null)
         {
-            RefreshLoadButtonState(AreRequiredDataTablesReady());
             return;
         }
 
-        if (GameEntry.DataTables == null)
-        {
-            Log.Error("通用数据表模块不存在，无法加载蛋系统配置。");
-            RefreshLoadButtonState(AreRequiredDataTablesReady());
-            return;
-        }
-
-        var eggDataTable = GameEntry.DataTables.EnsureDataTable<EggDataRow>();
-        if (eggDataTable == null)
-        {
-            Log.Error("创建蛋系统数据表失败。");
-            RefreshLoadButtonState(AreRequiredDataTablesReady());
-            return;
-        }
-
-        if (eggDataTable.Count > 0)
-        {
-            TryRegisterEggDataTable(eggDataTable);
-            RefreshLoadButtonState(AreRequiredDataTablesReady());
-            return;
-        }
-
-        RefreshLoadButtonState(AreRequiredDataTablesReady());
-        ((GameFramework.DataTable.DataTableBase)eggDataTable).ReadData(EggDataTableAssetName);
+        GameEntry.DataTables.LoadStateChanged += OnDataTableLoadStateChanged;
+        _isListeningDataTableStateEvents = true;
     }
 
     /// <summary>
-    /// 开始加载宠物系统数据表。
+    /// 取消订阅数据表状态变化事件。
     /// </summary>
-    private void BeginLoadPetDataTable()
+    private void UnsubscribeDataTableStateEvents()
     {
-        if (GameEntry.DataTables != null && GameEntry.DataTables.IsAvailable<PetDataRow>())
-        {
-            RefreshLoadButtonState(AreRequiredDataTablesReady());
-            return;
-        }
-
-        if (GameEntry.DataTables == null)
-        {
-            Log.Error("通用数据表模块不存在，无法加载宠物系统配置。");
-            RefreshLoadButtonState(AreRequiredDataTablesReady());
-            return;
-        }
-
-        var petDataTable = GameEntry.DataTables.EnsureDataTable<PetDataRow>();
-        if (petDataTable == null)
-        {
-            Log.Error("创建宠物系统数据表失败。");
-            RefreshLoadButtonState(AreRequiredDataTablesReady());
-            return;
-        }
-
-        if (petDataTable.Count > 0)
-        {
-            TryRegisterPetDataTable(petDataTable);
-            RefreshLoadButtonState(AreRequiredDataTablesReady());
-            return;
-        }
-
-        RefreshLoadButtonState(AreRequiredDataTablesReady());
-        ((GameFramework.DataTable.DataTableBase)petDataTable).ReadData(PetDataTableAssetName);
-    }
-
-    /// <summary>
-    /// 订阅蛋系统数据表加载事件。
-    /// </summary>
-    private void SubscribeDataTableEvents()
-    {
-        if (_isListeningDataTableEvents)
+        if (!_isListeningDataTableStateEvents || GameEntry.DataTables == null)
         {
             return;
         }
 
-        GameEntry.Event.Subscribe(LoadDataTableSuccessEventArgs.EventId, OnLoadDataTableSuccess);
-        GameEntry.Event.Subscribe(LoadDataTableFailureEventArgs.EventId, OnLoadDataTableFailure);
-        _isListeningDataTableEvents = true;
+        GameEntry.DataTables.LoadStateChanged -= OnDataTableLoadStateChanged;
+        _isListeningDataTableStateEvents = false;
     }
 
     /// <summary>
-    /// 取消订阅蛋系统数据表加载事件。
+    /// 订阅资源预加载状态事件。
     /// </summary>
-    private void UnsubscribeDataTableEvents()
+    private void SubscribeAssetPreloadEvents()
     {
-        if (!_isListeningDataTableEvents)
+        if (_isListeningAssetPreloadEvents || GameEntry.GameAssets == null)
         {
             return;
         }
 
-        GameEntry.Event.Unsubscribe(LoadDataTableSuccessEventArgs.EventId, OnLoadDataTableSuccess);
-        GameEntry.Event.Unsubscribe(LoadDataTableFailureEventArgs.EventId, OnLoadDataTableFailure);
-        _isListeningDataTableEvents = false;
+        GameEntry.GameAssets.PreloadStateChanged += OnAssetPreloadStateChanged;
+        _isListeningAssetPreloadEvents = true;
     }
 
     /// <summary>
-    /// 蛋系统数据表加载成功回调。
+    /// 取消订阅资源预加载状态事件。
     /// </summary>
-    private void OnLoadDataTableSuccess(object sender, GameEventArgs e)
+    private void UnsubscribeAssetPreloadEvents()
     {
-        var ne = e as LoadDataTableSuccessEventArgs;
-        if (ne == null)
+        if (!_isListeningAssetPreloadEvents || GameEntry.GameAssets == null)
         {
             return;
         }
 
-        if (string.Equals(ne.DataTableAssetName, EggDataTableAssetName, StringComparison.Ordinal))
-        {
-            var eggDataTable = GameEntry.DataTable.GetDataTable<EggDataRow>();
-            TryRegisterEggDataTable(eggDataTable);
-        }
-        else if (string.Equals(ne.DataTableAssetName, PetDataTableAssetName, StringComparison.Ordinal))
-        {
-            var petDataTable = GameEntry.DataTable.GetDataTable<PetDataRow>();
-            TryRegisterPetDataTable(petDataTable);
-        }
-
-        RefreshLoadButtonState(AreRequiredDataTablesReady());
+        GameEntry.GameAssets.PreloadStateChanged -= OnAssetPreloadStateChanged;
+        _isListeningAssetPreloadEvents = false;
     }
 
     /// <summary>
-    /// 蛋系统数据表加载失败回调。
+    /// 数据表状态变化回调。
+    /// 新表注册完成后，尝试补齐依赖该表的资源预加载并刷新按钮状态。
     /// </summary>
-    private void OnLoadDataTableFailure(object sender, GameEventArgs e)
+    private void OnDataTableLoadStateChanged()
     {
-        var ne = e as LoadDataTableFailureEventArgs;
-        if (ne == null)
-        {
-            return;
-        }
-
-        if (string.Equals(ne.DataTableAssetName, EggDataTableAssetName, StringComparison.Ordinal))
-        {
-            Log.Error("加载蛋系统数据表失败：{0}", ne.ErrorMessage);
-            GameEntry.DataTables?.Clear<EggDataRow>();
-        }
-        else if (string.Equals(ne.DataTableAssetName, PetDataTableAssetName, StringComparison.Ordinal))
-        {
-            Log.Error("加载宠物系统数据表失败：{0}", ne.ErrorMessage);
-            GameEntry.DataTables?.Clear<PetDataRow>();
-        }
-
-        RefreshLoadButtonState(AreRequiredDataTablesReady());
+        GameEntry.GameAssets?.BeginPreloadRequiredAssets();
+        RefreshLoadButtonState(CanEnterMain());
     }
 
     /// <summary>
-    /// 注册蛋系统数据表到通用模块。
+    /// 当前是否已经满足进入主界面的所有条件。
     /// </summary>
-    private bool TryRegisterEggDataTable(GameFramework.DataTable.IDataTable<EggDataRow> eggDataTable)
-    {
-        if (GameEntry.DataTables == null)
-        {
-            Log.Error("通用数据表模块未初始化。");
-            return false;
-        }
-
-        if (!GameEntry.DataTables.Register(eggDataTable))
-        {
-            Log.Error("蛋系统数据表注册失败。");
-            return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// 注册宠物系统数据表到通用模块。
-    /// </summary>
-    private bool TryRegisterPetDataTable(GameFramework.DataTable.IDataTable<PetDataRow> petDataTable)
-    {
-        if (GameEntry.DataTables == null)
-        {
-            Log.Error("通用数据表模块未初始化。");
-            return false;
-        }
-
-        if (!ValidatePetSkeletonDataAssets(petDataTable))
-        {
-            GameEntry.DataTables.Clear<PetDataRow>();
-            return false;
-        }
-
-        if (!GameEntry.DataTables.Register(petDataTable))
-        {
-            Log.Error("宠物系统数据表注册失败。");
-            return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// 校验宠物表中的 SkeletonData 资源是否存在。
-    /// </summary>
-    private static bool ValidatePetSkeletonDataAssets(GameFramework.DataTable.IDataTable<PetDataRow> petDataTable)
-    {
-        if (petDataTable == null)
-        {
-            Log.Error("校验宠物 SkeletonData 资源失败，数据表为空。");
-            return false;
-        }
-
-        PetDataRow[] rows = petDataTable.GetAllDataRows();
-        if (rows == null || rows.Length == 0)
-        {
-            Log.Error("校验宠物 SkeletonData 资源失败，数据表为空。");
-            return false;
-        }
-
-        for (int i = 0; i < rows.Length; i++)
-        {
-            PetDataRow row = rows[i];
-            if (row == null)
-            {
-                Log.Error("校验宠物 SkeletonData 资源失败，存在空行。");
-                return false;
-            }
-
-            SkeletonDataAsset skeletonDataAsset = Resources.Load<SkeletonDataAsset>(row.SkeletonDataPath);
-            if (skeletonDataAsset == null)
-            {
-                Log.Error("宠物表配置错误，SkeletonData 资源不存在，Code='{0}'，Path='{1}'。", row.Code, row.SkeletonDataPath);
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// 必需静态表是否全部可用。
-    /// </summary>
-    private static bool AreRequiredDataTablesReady()
+    private static bool CanEnterMain()
     {
         return GameEntry.DataTables != null
-            && GameEntry.DataTables.IsAvailable<EggDataRow>()
-            && GameEntry.DataTables.IsAvailable<PetDataRow>();
+            && GameEntry.DataTables.IsReady
+            && GameEntry.GameAssets != null
+            && GameEntry.GameAssets.IsReady;
+    }
+
+    /// <summary>
+    /// 资源预加载状态变化回调。
+    /// </summary>
+    private void OnAssetPreloadStateChanged()
+    {
+        RefreshLoadButtonState(CanEnterMain());
     }
 
     /// <summary>

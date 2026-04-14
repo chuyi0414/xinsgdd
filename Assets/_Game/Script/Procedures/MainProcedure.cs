@@ -14,10 +14,15 @@ public class MainProcedure : ProcedureBase
     // 流程间传递“待关闭界面”序列号的键名。
     private const string PendingCloseUIFormIdDataName = "PendingCloseUIFormId";
 
+    // 当前主界面的序列号。
     private int _mainUIFormId = 0;
+
     // 记录当前是否已经订阅打开成功事件，避免重复反订阅报错。
     private bool _isListeningOpenSuccessEvent = false;
 
+    /// <summary>
+    /// 进入主流程时打开主界面。
+    /// </summary>
     protected override void OnEnter(IFsm<IProcedureManager> procedureOwner)
     {
         // 先监听打开成功事件，确保主界面真正显示后再关闭加载界面。
@@ -27,6 +32,9 @@ public class MainProcedure : ProcedureBase
         base.OnEnter(procedureOwner);
     }
 
+    /// <summary>
+    /// 离开主流程时关闭主界面并清理遗留的加载界面。
+    /// </summary>
     protected override void OnLeave(IFsm<IProcedureManager> procedureOwner, bool isShutdown)
     {
         UnsubscribeOpenSuccessEvent();

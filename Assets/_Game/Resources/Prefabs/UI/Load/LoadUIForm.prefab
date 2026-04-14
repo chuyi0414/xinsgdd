@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 4543640315509759574}
   - component: {fileID: 5582337572001872364}
   - component: {fileID: 3907424976607831599}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: ImgBJ2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -86,7 +86,7 @@ GameObject:
   - component: {fileID: 6227395918325529345}
   - component: {fileID: 5486591128874351424}
   - component: {fileID: 3979691424106306326}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: SkeletonGraphic (GW_Lulu_1001)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -132,7 +132,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d85b887af7e6c3f45a2e2d2920d641bc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Material: {fileID: 2100000, guid: b66cf7a186d13054989b33a5c90044e4, type: 2}
+  m_Material: {fileID: 2100000, guid: d36d5130926a25244b9163e668d42bbd, type: 2}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
@@ -176,7 +176,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4744435234668332805}
   - component: {fileID: 681277774302908659}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: LoadUIForm
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -232,7 +232,7 @@ GameObject:
   - component: {fileID: 1217269578139961805}
   - component: {fileID: 355927058860375850}
   - component: {fileID: 99986284629588863}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: ImgBJ
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -307,7 +307,7 @@ GameObject:
   - component: {fileID: 2684042426372508965}
   - component: {fileID: 3543707230147471174}
   - component: {fileID: 583508948873549199}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Background
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -383,7 +383,7 @@ GameObject:
   - component: {fileID: 7894958767036764166}
   - component: {fileID: 6821448166865334165}
   - component: {fileID: 4503339690842857855}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: BtnLoad
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -501,7 +501,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7300782476157717502}
   - component: {fileID: 6070499967777798422}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Slider
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -592,7 +592,7 @@ GameObject:
   - component: {fileID: 9062841726511231794}
   - component: {fileID: 3061863689030729407}
   - component: {fileID: 3402098104641571652}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: TxtJKZG
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -726,7 +726,7 @@ GameObject:
   - component: {fileID: 4470431504002687924}
   - component: {fileID: 1734165966143177209}
   - component: {fileID: 8512382763454022774}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Img12+
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -799,7 +799,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7903026649437302150}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Handle Slide Area
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -835,7 +835,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 609520811435879838}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Fill Area
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -873,7 +873,7 @@ GameObject:
   - component: {fileID: 7212479799314041387}
   - component: {fileID: 6358302773970046985}
   - component: {fileID: 3679506354803025363}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Fill
   m_TagString: Untagged
   m_Icon: {fileID: 0}

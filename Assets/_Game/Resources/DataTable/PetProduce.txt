@@ -1,0 +1,17 @@
+#Id	PetId	Code	Name	Grade	CoinValue	Description
+#唯一编号	关联宠物Id	机器码	产出物品名称	产出等级(Primary初级|Intermediate中级|Advanced高级)	金币价值	备注描述
+1	1	petprod_slime_mucus	史莱姆粘液	Primary	100	史莱姆的初级产出物
+2	1	petprod_slime_crown	史莱姆王冠	Intermediate	5000	史莱姆的中级产出物
+3	1	petprod_slime_heart	史莱姆之心	Advanced	20000	史莱姆的高级产出物
+4	2	petprod_tree_branch	树小小树枝	Primary	200	树小小的初级产出物
+5	2	petprod_tree_gem	树小小树冠宝石	Intermediate	10000	树小小的中级产出物
+6	2	petprod_tree_lifesource	树小小生命之源	Advanced	40000	树小小的高级产出物
+7	3	petprod_turtle_apple	爬爬龟苹果	Primary	300	爬爬龟的初级产出物
+8	3	petprod_turtle_resonance	爬爬龟龟甲共鸣石	Intermediate	15000	爬爬龟的中级产出物
+9	3	petprod_turtle_defensegem	爬爬龟防御宝石	Advanced	60000	爬爬龟的高级产出物
+10	4	petprod_duo_fur	多多兽皮毛	Primary	400	多多兽的初级产出物
+11	4	petprod_duo_eye	多多兽的眼球	Intermediate	20000	多多兽的中级产出物
+12	4	petprod_duo_magicsource	多多兽变异魔法本源	Advanced	80000	多多兽的高级产出物
+13	5	petprod_sheep_wool	咩咩羊绒毛	Primary	500	咩咩羊的初级产出物
+14	5	petprod_sheep_staff	咩咩羊法杖	Intermediate	25000	咩咩羊的中级产出物
+15	5	petprod_sheep_healheart	咩咩羊治愈之心	Advanced	100000	咩咩羊的高级产出物

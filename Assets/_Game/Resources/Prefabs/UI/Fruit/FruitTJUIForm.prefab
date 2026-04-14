@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 1356879060406167121}
   - component: {fileID: 8996804549715351454}
   - component: {fileID: 1573673509208534333}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: ImgSG
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -86,7 +86,7 @@ GameObject:
   - component: {fileID: 5955991815817929235}
   - component: {fileID: 8378245961738716497}
   - component: {fileID: 1980364991840056497}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: GoShuiGuo
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -166,7 +166,7 @@ GameObject:
   - component: {fileID: 1505672489712637574}
   - component: {fileID: 2946462159153703225}
   - component: {fileID: 4138118225179459412}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Viewport
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -254,8 +254,8 @@ GameObject:
   m_Component:
   - component: {fileID: 2855432846892743058}
   - component: {fileID: 1196912217069886168}
-  m_Layer: 0
-  m_Name: ShuiGuoTJUIForm
+  m_Layer: 5
+  m_Name: FruitTJUIForm
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -305,7 +305,7 @@ GameObject:
   - component: {fileID: 2195995750742413495}
   - component: {fileID: 4903463098874350072}
   - component: {fileID: 2484426727708088674}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: ImgMR
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -381,7 +381,7 @@ GameObject:
   - component: {fileID: 3649700261990233541}
   - component: {fileID: 2503597984411948586}
   - component: {fileID: 3016341032479147795}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Button
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -501,7 +501,7 @@ GameObject:
   - component: {fileID: 3852266344193184822}
   - component: {fileID: 6982930887442302623}
   - component: {fileID: 543758767831303956}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Text (TMP)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -635,7 +635,7 @@ GameObject:
   - component: {fileID: 2519159100990068486}
   - component: {fileID: 6372336966658337340}
   - component: {fileID: 753658284030730968}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Image
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -710,7 +710,7 @@ GameObject:
   - component: {fileID: 7009183464953516762}
   - component: {fileID: 1997405490035318857}
   - component: {fileID: 3173233545197997569}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Content
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -786,7 +786,7 @@ GameObject:
   - component: {fileID: 2021558096653643820}
   - component: {fileID: 4175396517313516689}
   - component: {fileID: 5629826816265874385}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: ImgTop
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -862,7 +862,7 @@ GameObject:
   - component: {fileID: 5995233703605631769}
   - component: {fileID: 8549183370978198706}
   - component: {fileID: 3739654188562832125}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Scroll View
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -938,7 +938,7 @@ GameObject:
   - component: {fileID: 1845587339351525225}
   - component: {fileID: 5771361851699833987}
   - component: {fileID: 5734083868655444657}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Text (TMP)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1073,7 +1073,7 @@ GameObject:
   - component: {fileID: 4301534975128586819}
   - component: {fileID: 997612327628344119}
   - component: {fileID: 8121669315134852145}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: BJ
   m_TagString: Untagged
   m_Icon: {fileID: 0}

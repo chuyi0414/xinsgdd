@@ -69,6 +69,9 @@ public sealed class EntityIdPoolComponent : GameFrameworkComponent
         StartCoroutine(SubscribeWhenReady());
     }
 
+    /// <summary>
+    /// 等待 Event 组件就绪后再订阅实体隐藏完成事件。
+    /// </summary>
     private IEnumerator SubscribeWhenReady()
     {
         int waitFrames = 0;

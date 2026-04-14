@@ -7,20 +7,65 @@ using UnityGameFramework.Runtime;
 /// </summary>
 public sealed class EggDataRow : DataRowBase, ICodeDataRow
 {
+    /// <summary>
+    /// 列拆分分隔符。
+    /// </summary>
     private static readonly string[] ColumnSplitSeparator = { "\t" };
+
+    /// <summary>
+    /// 概率字段拆分分隔符。
+    /// </summary>
     private static readonly char[] ProbabilitySplitSeparator = { '|' };
+
+    /// <summary>
+    /// 获取方式字段拆分分隔符。
+    /// </summary>
     private static readonly char[] AcquireWaySplitSeparator = { '|' };
+
+    /// <summary>
+    /// 数据表固定列数。
+    /// </summary>
     private const int ColumnCount = 10;
+
+    /// <summary>
+    /// 合法蛋 Code 的前缀。
+    /// </summary>
     private const string CodePrefix = "egg_";
+
+    /// <summary>
+    /// 当前行的内部 Id 缓存。
+    /// </summary>
     private int _id;
 
+    /// <summary>
+    /// 蛋的获取方式枚举。
+    /// </summary>
     [Flags]
     public enum EggAcquireWay
     {
+        /// <summary>
+        /// 无获取方式。
+        /// </summary>
         None = 0,
+
+        /// <summary>
+        /// 赠送获得。
+        /// </summary>
         Gift = 1 << 0,
+
+        /// <summary>
+        /// 免费获得。
+        /// </summary>
         Free = 1 << 1,
+
+        /// <summary>
+        /// 商店购买获得。
+        /// </summary>
         Shop = 1 << 2,
+
+        /// <summary>
+        /// 广告奖励获得。
+        /// </summary>
         Ad = 1 << 3,
     }
 
@@ -94,6 +139,12 @@ public sealed class EggDataRow : DataRowBase, ICodeDataRow
     /// </summary>
     public string Description { get; private set; }
 
+    /// <summary>
+    /// 从文本行解析蛋表数据。
+    /// </summary>
+    /// <param name="dataRowString">原始数据行文本。</param>
+    /// <param name="userData">额外上下文。</param>
+    /// <returns>是否解析成功。</returns>
     public override bool ParseDataRow(string dataRowString, object userData)
     {
         if (string.IsNullOrWhiteSpace(dataRowString))
@@ -194,11 +245,22 @@ public sealed class EggDataRow : DataRowBase, ICodeDataRow
         return true;
     }
 
+    /// <summary>
+    /// 从二进制数据解析蛋表数据。
+    /// </summary>
+    /// <param name="dataRowBytes">原始字节数组。</param>
+    /// <param name="startIndex">起始下标。</param>
+    /// <param name="length">读取长度。</param>
+    /// <param name="userData">额外上下文。</param>
+    /// <returns>是否解析成功。</returns>
     public override bool ParseDataRow(byte[] dataRowBytes, int startIndex, int length, object userData)
     {
         return ParseDataRow(Encoding.UTF8.GetString(dataRowBytes, startIndex, length), userData);
     }
 
+    /// <summary>
+    /// 解析品质概率字段。
+    /// </summary>
     private static bool TryParseProbabilities(
         string probabilityValue,
         string code,
@@ -248,6 +310,9 @@ public sealed class EggDataRow : DataRowBase, ICodeDataRow
         return true;
     }
 
+    /// <summary>
+    /// 解析获取方式字段。
+    /// </summary>
     private static bool TryParseAcquireWays(string acquireWaysValue, string code, out EggAcquireWay acquireWays)
     {
         acquireWays = EggAcquireWay.None;

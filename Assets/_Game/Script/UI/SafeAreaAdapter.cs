@@ -53,27 +53,51 @@ public enum WeChatAdaptStrategy
 [ExecuteAlways]
 public class SafeAreaAdapter : MonoBehaviour
 {
+    /// <summary>
+    /// 当前安全区域适配模式。
+    /// </summary>
     [SerializeField]
     private SafeAreaMode adaptMode = SafeAreaMode.Auto;
 
+    /// <summary>
+    /// 需要应用安全区域的目标 RectTransform。
+    /// </summary>
     [SerializeField]
     private RectTransform target;
 
+    /// <summary>
+    /// 是否应用左侧安全区域。
+    /// </summary>
     [SerializeField]
     private bool applyLeft = false;
 
+    /// <summary>
+    /// 是否应用右侧安全区域。
+    /// </summary>
     [SerializeField]
     private bool applyRight = false;
 
+    /// <summary>
+    /// 是否应用顶部安全区域。
+    /// </summary>
     [SerializeField]
     private bool applyTop = false;
 
+    /// <summary>
+    /// 是否应用底部安全区域。
+    /// </summary>
     [SerializeField]
     private bool applyBottom = false;
 
+    /// <summary>
+    /// 在安全区域基础上额外附加的边距。
+    /// </summary>
     [SerializeField]
     private Vector2 extraPadding = Vector2.zero;
 
+    /// <summary>
+    /// 是否输出调试日志。
+    /// </summary>
     [SerializeField]
     private bool logChanges = false;
 
@@ -141,14 +165,40 @@ public class SafeAreaAdapter : MonoBehaviour
     [Tooltip("模拟的右侧安全宽度（像素）")]
     private float simulatedRightInset = 0f;
 
+    /// <summary>
+    /// 上一次应用过的安全区域矩形。
+    /// </summary>
     private Rect _lastSafeRect = Rect.zero;
+
+    /// <summary>
+    /// 上一次应用时记录的屏幕尺寸。
+    /// </summary>
     private Vector2Int _lastScreenSize = Vector2Int.zero;
 
     // 记录初始锚点值，用于增量式适配
+    /// <summary>
+    /// 初始最小锚点缓存。
+    /// </summary>
     private Vector2 _initialAnchorMin = Vector2.zero;
+
+    /// <summary>
+    /// 初始最大锚点缓存。
+    /// </summary>
     private Vector2 _initialAnchorMax = Vector2.one;
+
+    /// <summary>
+    /// 是否已经保存过初始锚点。
+    /// </summary>
     private bool _initialAnchorsSaved = false;
 
+    /// <summary>
+    /// 当前是否至少启用了一个安全区域边的适配。
+    /// </summary>
+    private bool HasAnySafeAreaEdgeEnabled => applyLeft || applyRight || applyTop || applyBottom;
+
+    /// <summary>
+    /// 当前安全区域适配模式。
+    /// </summary>
     public SafeAreaMode AdaptMode
     {
         get => adaptMode;
@@ -164,6 +214,9 @@ public class SafeAreaAdapter : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 当前适配目标 RectTransform。
+    /// </summary>
     public RectTransform Target
     {
         get => target;
@@ -179,6 +232,9 @@ public class SafeAreaAdapter : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 是否应用左侧安全区域。
+    /// </summary>
     public bool ApplyLeft
     {
         get => applyLeft;
@@ -194,6 +250,9 @@ public class SafeAreaAdapter : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 是否应用右侧安全区域。
+    /// </summary>
     public bool ApplyRight
     {
         get => applyRight;
@@ -209,6 +268,9 @@ public class SafeAreaAdapter : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 是否应用顶部安全区域。
+    /// </summary>
     public bool ApplyTop
     {
         get => applyTop;
@@ -224,6 +286,9 @@ public class SafeAreaAdapter : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 是否应用底部安全区域。
+    /// </summary>
     public bool ApplyBottom
     {
         get => applyBottom;
@@ -267,6 +332,9 @@ public class SafeAreaAdapter : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 额外边距设置。
+    /// </summary>
     public Vector2 ExtraPadding
     {
         get => extraPadding;
@@ -282,6 +350,9 @@ public class SafeAreaAdapter : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 是否输出调试日志。
+    /// </summary>
     public bool LogChanges
     {
         get => logChanges;
@@ -317,6 +388,9 @@ public class SafeAreaAdapter : MonoBehaviour
         ApplySafeArea(true);
     }
 
+    /// <summary>
+    /// 重置组件引用并保存初始锚点。
+    /// </summary>
     private void Reset()
     {
         target = transform as RectTransform;
@@ -376,9 +450,23 @@ public class SafeAreaAdapter : MonoBehaviour
     public void RefreshFromSettings()
     {
         SaveInitialAnchors();
+
+#if UNITY_EDITOR
+        // 编辑器下调整初始锚点配置时，只同步基础锚点，不直接套用安全区域，
+        // 避免切换 Game 视图分辨率时把预览结果写回场景或 Prefab。
+        if (!Application.isPlaying)
+        {
+            ResetToInitialAnchors();
+            return;
+        }
+#endif
+
         ApplySafeArea(true);
     }
 
+    /// <summary>
+    /// 初始化目标节点并立即应用一次适配。
+    /// </summary>
     private void Awake()
     {
         if (target == null)
@@ -392,6 +480,9 @@ public class SafeAreaAdapter : MonoBehaviour
         ApplySafeArea(true);
     }
 
+    /// <summary>
+    /// 启用时确保初始锚点存在并刷新适配。
+    /// </summary>
     private void OnEnable()
     {
         // 如果还没保存初始锚点，先保存
@@ -403,11 +494,17 @@ public class SafeAreaAdapter : MonoBehaviour
         ApplySafeArea(true);
     }
 
+    /// <summary>
+    /// 每帧检查屏幕或安全区域变化。
+    /// </summary>
     private void Update()
     {
         ApplySafeArea();
     }
 
+    /// <summary>
+    /// 尺寸变化时重新应用安全区域。
+    /// </summary>
     private void OnRectTransformDimensionsChange()
     {
         ApplySafeArea();
@@ -422,6 +519,9 @@ public class SafeAreaAdapter : MonoBehaviour
         return Mathf.Round(value / precision) * precision;
     }
 
+    /// <summary>
+    /// 根据当前模式计算并应用安全区域锚点。
+    /// </summary>
     private void ApplySafeArea(bool force = false)
     {
         if (target == null)
@@ -432,6 +532,20 @@ public class SafeAreaAdapter : MonoBehaviour
                 return;
             }
         }
+
+        if (!HasAnySafeAreaEdgeEnabled)
+        {
+            return;
+        }
+
+#if UNITY_EDITOR
+        // 编辑器非运行态默认不自动改 RectTransform，只有显式开启模拟安全区域时才允许预览，
+        // 避免单纯切换 Game 分辨率就把布局结果持久化到资源。
+        if (!Application.isPlaying && !(adaptMode == SafeAreaMode.ForceStandard && simulateSafeAreaInEditor))
+        {
+            return;
+        }
+#endif
 
         if (!TryGetSafeArea(out Rect safeRect, out Vector2Int screenSize))
         {
@@ -553,6 +667,9 @@ public class SafeAreaAdapter : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 获取当前应使用的安全区域矩形。
+    /// </summary>
     private bool TryGetSafeArea(out Rect safeRect, out Vector2Int screenSize)
     {
         // 根据适配模式决定使用哪种API
