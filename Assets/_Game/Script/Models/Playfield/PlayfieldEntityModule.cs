@@ -735,6 +735,11 @@ public sealed class PlayfieldEntityModule
                 GameEntry.Entity.DetachEntity(entityId);
             }
 
+            if (!shouldAnimateMovement && petEntityLogic.IsMoving)
+            {
+                return;
+            }
+
             if (TryGetQueueTargetWorldPosition(petState, out Vector3 queueWorldPosition))
             {
                 if (shouldAnimateMovement)

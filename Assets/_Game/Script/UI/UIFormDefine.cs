@@ -24,4 +24,9 @@ public static class UIFormDefine
     /// Main界面资源名。
     /// </summary>
     public static readonly string MainUIForm = AssetPath.GetUI("Main/MainUIForm");
+
+    /// <summary>
+    /// 建筑升级界面资源名。
+    /// </summary>
+    public static readonly string ArchitectureUpgradeUIForm = AssetPath.GetUI("Architecture/ArchitectureUpgradeUIForm");
 }

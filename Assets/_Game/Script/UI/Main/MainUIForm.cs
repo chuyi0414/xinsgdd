@@ -102,6 +102,7 @@ public partial class MainUIForm : UIFormLogic
         InitializePetPlacementView();
         InitializeGoldView();
         InitializeProduceView();
+        InitializeArchitectureView();
     }
 
     /// <summary>
@@ -116,6 +117,7 @@ public partial class MainUIForm : UIFormLogic
         OpenPetPlacementView();
         OpenGoldView();
         OpenProduceView();
+        OpenArchitectureView();
     }
 
     /// <summary>
@@ -128,6 +130,7 @@ public partial class MainUIForm : UIFormLogic
         ClosePetPlacementView();
         CloseGoldView();
         CloseProduceView();
+        CloseArchitectureView();
         base.OnClose(isShutdown, userData);
     }
 
@@ -163,6 +166,7 @@ public partial class MainUIForm : UIFormLogic
         DestroyPetPlacementView();
         DestroyGoldView();
         DestroyProduceView();
+        DestroyArchitectureView();
     }
 
     /// <summary>
@@ -273,6 +277,7 @@ public partial class MainUIForm : UIFormLogic
 
         CacheHatchReferences();
         CachePetPlacementReferences();
+        CacheArchitectureReferences();
     }
 
     /// <summary>

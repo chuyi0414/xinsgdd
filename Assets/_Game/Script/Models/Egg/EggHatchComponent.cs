@@ -15,7 +15,7 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     private const float ManualReduceSeconds = 2f;
     // 自动补 1 个万能蛋所需时间。
     private const float RefillDurationSeconds = 30f;
-    // 当前主界面固定 4 个孵化槽位。
+    // 当前主界面固定摆放 4 个孵化槽位，但运行时可购买数量由 PlayerRuntimeModule 决定。
     private const int HatchSlotCountValue = 4;
     // 这一版只接万能蛋的手动孵化闭环。
     private const string UniversalEggCode = "egg_universal";
@@ -72,8 +72,22 @@ public sealed class EggHatchComponent : GameFrameworkComponent
 
     /// <summary>
     /// 孵化槽位数量。
+    /// 这里返回的是总槽位数量，不等于当前已购买数量。
     /// </summary>
     public int SlotCount => HatchSlotCountValue;
+
+    /// <summary>
+    /// 当前已购买并可参与孵化的槽位数量。
+    /// 若玩家运行时模块不可用，则退回到全部 4 槽。
+    /// </summary>
+    public int UnlockedSlotCount
+    {
+        get
+        {
+            int runtimeSlotCount = GameEntry.Fruits != null ? GameEntry.Fruits.HatchSlotCount : HatchSlotCountValue;
+            return Mathf.Clamp(runtimeSlotCount, 1, HatchSlotCountValue);
+        }
+    }
 
     /// <summary>
     /// 补蛋进度，0 到 1。
@@ -198,6 +212,11 @@ public sealed class EggHatchComponent : GameFrameworkComponent
             return null;
         }
 
+        if (index >= UnlockedSlotCount)
+        {
+            return null;
+        }
+
         return _slotStates[index];
     }
 
@@ -247,7 +266,8 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     private void UpdateHatchSlots(float deltaTime)
     {
         bool hasSlotChanged = false;
-        for (int i = 0; i < _slotStates.Length; i++)
+        int unlockedSlotCount = UnlockedSlotCount;
+        for (int i = 0; i < unlockedSlotCount; i++)
         {
             EggHatchSlotState slotState = _slotStates[i];
             if (!slotState.IsOccupied)
@@ -323,7 +343,8 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     /// </summary>
     private bool TryGetEmptySlotIndex(out int slotIndex)
     {
-        for (int i = 0; i < _slotStates.Length; i++)
+        int unlockedSlotCount = UnlockedSlotCount;
+        for (int i = 0; i < unlockedSlotCount; i++)
         {
             if (_slotStates[i].IsOccupied)
             {
