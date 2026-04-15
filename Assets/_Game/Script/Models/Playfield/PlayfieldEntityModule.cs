@@ -49,6 +49,12 @@ public sealed class PlayfieldEntityModule
     private int[] _orchardEntityIds = Array.Empty<int>();
 
     /// <summary>
+    /// 每个孵化槽当前绑定的孵化器实体 Id。
+    /// 孵化器显示规则是“已解锁槽位就显示”，与槽位里是否有蛋无关。
+    /// </summary>
+    private readonly int[] _incubatorEntityIds = new int[HatchSlotCountValue];
+
+    /// <summary>
     /// 每个孵化槽当前绑定的蛋实体 Id。
     /// </summary>
     private readonly int[] _eggEntityIds = new int[HatchSlotCountValue];
@@ -208,6 +214,8 @@ public sealed class PlayfieldEntityModule
         EnsureOrchardEntities();
         UpdateLoadedTableEntityPositions();
         UpdateLoadedOrchardEntityPositions();
+        RefreshIncubatorEntities();
+        UpdateLoadedIncubatorEntityPositions();
         RefreshEggEntities();
         RefreshPetEntities(false);
         ProcessPendingDiningPets();
@@ -224,6 +232,7 @@ public sealed class PlayfieldEntityModule
             return;
         }
 
+        RefreshIncubatorEntities();
         RefreshEggEntities();
     }
 
@@ -478,6 +487,36 @@ public sealed class PlayfieldEntityModule
     }
 
     /// <summary>
+    /// 按当前孵化槽解锁状态刷新孵化器实体。
+    /// 只要槽位已经解锁，就显示一个孵化器；是否有蛋由蛋实体自己决定。
+    /// </summary>
+    private void RefreshIncubatorEntities()
+    {
+        EggHatchComponent eggHatch = GameEntry.EggHatch;
+        if (eggHatch == null || !eggHatch.IsAvailable)
+        {
+            for (int i = 0; i < _incubatorEntityIds.Length; i++)
+            {
+                HideIncubatorEntity(i);
+            }
+
+            return;
+        }
+
+        for (int i = 0; i < _incubatorEntityIds.Length; i++)
+        {
+            EggHatchSlotState slotState = eggHatch.GetSlotState(i);
+            if (slotState == null)
+            {
+                HideIncubatorEntity(i);
+                continue;
+            }
+
+            EnsureIncubatorEntity(i);
+        }
+    }
+
+    /// <summary>
     /// 按当前孵化槽状态刷新蛋实体。
     /// </summary>
     private void RefreshEggEntities()
@@ -605,6 +644,31 @@ public sealed class PlayfieldEntityModule
     }
 
     /// <summary>
+    /// 确保指定孵化槽的孵化器实体存在。
+    /// </summary>
+    private void EnsureIncubatorEntity(int slotIndex)
+    {
+        int entityId = _incubatorEntityIds[slotIndex];
+        if (IsEntityLoaded(entityId) || IsEntityLoading(entityId))
+        {
+            return;
+        }
+
+        entityId = AcquireEntityId();
+        if (entityId <= 0)
+        {
+            return;
+        }
+
+        _incubatorEntityIds[slotIndex] = entityId;
+        GameEntry.Entity.ShowEntity<IncubatorEntityLogic>(
+            entityId,
+            EntityDefine.IncubatorEntity,
+            EntityDefine.IncubatorGroup,
+            BuildIncubatorEntityData(slotIndex));
+    }
+
+    /// <summary>
     /// 确保指定孵化槽的蛋实体存在。
     /// </summary>
     private void EnsureEggEntity(int slotIndex, EggHatchSlotState slotState)
@@ -692,6 +756,22 @@ public sealed class PlayfieldEntityModule
     }
 
     /// <summary>
+    /// 更新已加载孵化器实体的位置。
+    /// </summary>
+    private void UpdateLoadedIncubatorEntityPositions()
+    {
+        for (int i = 0; i < _incubatorEntityIds.Length; i++)
+        {
+            if (!TryGetEntityLogic(_incubatorEntityIds[i], out IncubatorEntityLogic incubatorEntityLogic))
+            {
+                continue;
+            }
+
+            incubatorEntityLogic.SetWorldPosition(_currentMarkerSnapshot.HatchSlotWorldPositions[i]);
+        }
+    }
+
+    /// <summary>
     /// 将最新蛋数据应用到已加载的实体逻辑。
     /// </summary>
     private void ApplyEggDataToLoadedEntity(int slotIndex, EggHatchSlotState slotState)
@@ -718,13 +798,13 @@ public sealed class PlayfieldEntityModule
         {
             if (petState.PlacementType == PetPlacementType.DiningSeat)
             {
-                RegisterPendingDiningPet(petState.InstanceId, animateMovement || petState.PendingSpawnHatchSlotIndex >= 0);
+                RegisterPendingDiningPet(petState.InstanceId, animateMovement || petState.PendingSpawnHatchSlotIndex >= 0 || petState.PendingPromoteToDining);
             }
 
             return;
         }
 
-        bool shouldAnimateMovement = animateMovement || petState.PendingSpawnHatchSlotIndex >= 0;
+        bool shouldAnimateMovement = animateMovement || petState.PendingSpawnHatchSlotIndex >= 0 || petState.PendingPromoteToDining;
 
         Entity parentEntity = GameEntry.Entity.GetParentEntity(entityId);
         if (petState.PlacementType == PetPlacementType.Queue)
@@ -851,6 +931,7 @@ public sealed class PlayfieldEntityModule
             diningWorldPosition,
             () => CompleteDiningAttachment(petState.InstanceId, entityId, tableEntityId));
         petState.PendingSpawnHatchSlotIndex = -1;
+        petState.PendingPromoteToDining = false;
         _pendingDiningPetAnimations.Remove(petState.InstanceId);
     }
 
@@ -886,6 +967,26 @@ public sealed class PlayfieldEntityModule
         }
 
         _pendingDiningPetBuffer.Clear();
+    }
+
+    /// <summary>
+    /// 隐藏指定孵化槽的孵化器实体。
+    /// </summary>
+    private void HideIncubatorEntity(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= _incubatorEntityIds.Length)
+        {
+            return;
+        }
+
+        int entityId = _incubatorEntityIds[slotIndex];
+        if (entityId <= 0)
+        {
+            return;
+        }
+
+        _incubatorEntityIds[slotIndex] = 0;
+        HideEntityIfNeeded(entityId);
     }
 
     /// <summary>
@@ -959,6 +1060,16 @@ public sealed class PlayfieldEntityModule
         }
 
         GameEntry.Entity.HideEntity(entityId);
+    }
+
+    /// <summary>
+    /// 构建孵化器实体显示数据。
+    /// </summary>
+    private IncubatorEntityData BuildIncubatorEntityData(int slotIndex)
+    {
+        return new IncubatorEntityData(
+            slotIndex,
+            _currentMarkerSnapshot.HatchSlotWorldPositions[slotIndex]);
     }
 
     /// <summary>
@@ -1095,7 +1206,7 @@ public sealed class PlayfieldEntityModule
     {
         if (GameEntry.EntityIdPool == null)
         {
-            Log.Warning("PlayfieldEntityModule can not acquire entity id because EntityIdPoolComponent is missing.");
+            Log.Warning("PlayfieldEntityModule 无法申请实体 Id，EntityIdPoolComponent 缺失。");
             return 0;
         }
 
@@ -1423,6 +1534,29 @@ public sealed class PlayfieldEntityModule
             return;
         }
 
+        if (ne.UserData is IncubatorEntityData incubatorEntityData)
+        {
+            if (incubatorEntityData.SlotIndex < 0 || incubatorEntityData.SlotIndex >= _incubatorEntityIds.Length)
+            {
+                HideEntityIfNeeded(ne.Entity.Id);
+                return;
+            }
+
+            EggHatchSlotState slotState = GameEntry.EggHatch != null ? GameEntry.EggHatch.GetSlotState(incubatorEntityData.SlotIndex) : null;
+            if (slotState == null || _incubatorEntityIds[incubatorEntityData.SlotIndex] != ne.Entity.Id)
+            {
+                HideEntityIfNeeded(ne.Entity.Id);
+                return;
+            }
+
+            if (TryGetEntityLogic(ne.Entity.Id, out IncubatorEntityLogic incubatorEntityLogic))
+            {
+                incubatorEntityLogic.ApplyData(BuildIncubatorEntityData(incubatorEntityData.SlotIndex));
+            }
+
+            return;
+        }
+
         if (ne.UserData is EggEntityData eggEntityData)
         {
             if (eggEntityData.SlotIndex < 0 || eggEntityData.SlotIndex >= _eggEntityIds.Length)
@@ -1458,7 +1592,7 @@ public sealed class PlayfieldEntityModule
                 return;
             }
 
-            ApplyPetPlacementState(petState, petState.PendingSpawnHatchSlotIndex >= 0);
+            ApplyPetPlacementState(petState, petState.PendingSpawnHatchSlotIndex >= 0 || petState.PendingPromoteToDining);
             ProcessPendingDiningPets();
         }
     }
@@ -1479,6 +1613,15 @@ public sealed class PlayfieldEntityModule
             if (tableEntityData.TableIndex >= 0 && tableEntityData.TableIndex < _tableEntityIds.Length && _tableEntityIds[tableEntityData.TableIndex] == ne.EntityId)
             {
                 _tableEntityIds[tableEntityData.TableIndex] = 0;
+            }
+        }
+        else if (ne.UserData is IncubatorEntityData incubatorEntityData)
+        {
+            if (incubatorEntityData.SlotIndex >= 0
+                && incubatorEntityData.SlotIndex < _incubatorEntityIds.Length
+                && _incubatorEntityIds[incubatorEntityData.SlotIndex] == ne.EntityId)
+            {
+                _incubatorEntityIds[incubatorEntityData.SlotIndex] = 0;
             }
         }
         else if (ne.UserData is OrchardEntityData orchardEntityData)
@@ -1530,7 +1673,7 @@ public sealed class PlayfieldEntityModule
 
         GameEntry.EntityIdPool?.Release(ne.EntityId);
         Log.Warning(
-            "PlayfieldEntityModule show entity failed. Id='{0}', Asset='{1}', Group='{2}', Error='{3}'.",
+            "PlayfieldEntityModule 显示实体失败。Id='{0}'，Asset='{1}'，Group='{2}'，Error='{3}'。",
             ne.EntityId,
             ne.EntityAssetName,
             ne.EntityGroupName,

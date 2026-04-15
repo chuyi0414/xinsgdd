@@ -10,23 +10,6 @@ using System.Collections.Generic;
 public sealed class PetDiningOrderComponent : GameFrameworkComponent
 {
     /// <summary>
-    /// 玩耍区停留秒数。
-    /// 停留结束后再次做 50/50 去向判定。
-    /// </summary>
-    private const float PlayAreaStaySeconds = 5f;
-
-    /// <summary>
-    /// 餐桌水果上桌后的展示秒数。
-    /// </summary>
-    private const float ServingDurationSeconds = 5f;
-
-    /// <summary>
-    /// 水果送达飞行动画时长（秒）。
-    /// 从果树飞到 BJRight 左边界的时间。
-    /// </summary>
-    private const float DeliverAnimationDuration = 0.8f;
-
-    /// <summary>
     /// 宠物吃完食物后产出金币时触发。
     /// 参数一：宠物实例 Id。
     /// 参数二：本次产出的金币数量（来自 FruitDataRow.CoinAmount）。
@@ -55,6 +38,11 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
     /// 避免在 Update 中通过 GetAllPets() 反复分配数组。
     /// </summary>
     private readonly List<PetRuntimeState> _petStateBuffer = new List<PetRuntimeState>(32);
+
+    /// <summary>
+    /// 全局玩法规则缓存。
+    /// </summary>
+    private GameplayRuleDataRow _gameplayRuleDataRow;
 
     /// <summary>
     /// 当前组件是否可用。
@@ -113,6 +101,13 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
             return;
         }
 
+        _gameplayRuleDataRow = GameEntry.DataTables.GetDataRowByCode<GameplayRuleDataRow>(GameplayRuleDataRow.DefaultCode);
+        if (_gameplayRuleDataRow == null)
+        {
+            _isAvailable = false;
+            return;
+        }
+
         _isInitialized = true;
         _isAvailable = true;
     }
@@ -126,6 +121,7 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
         return GameEntry.DataTables != null
             && GameEntry.DataTables.IsAvailable<FruitDataRow>()
             && GameEntry.DataTables.IsAvailable<PetProduceDataRow>()
+            && GameEntry.DataTables.IsAvailable<GameplayRuleDataRow>()
             && GameEntry.Fruits != null;
     }
 
@@ -171,22 +167,34 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
             return false;
         }
 
-        int orchardSlotIndex = orchardModule.TryAcquireIdleSlot(petState.DesiredFruitCode, fruitDataRow.ProduceSeconds);
-        if (orchardSlotIndex < 0)
+        if (!orchardModule.TryGetIdleSlotIndex(out int orchardSlotIndex))
         {
             // 没有空闲果树，不执行任何逻辑也不关闭气泡
             return false;
         }
 
+        float produceSeconds = fruitDataRow.ProduceSeconds;
+        if (GameEntry.Fruits != null)
+        {
+            produceSeconds = Mathf.Max(
+                _gameplayRuleDataRow.DeliverAnimationDuration + 0.1f,
+                produceSeconds * GameEntry.Fruits.GetFruiterDurationScale(orchardSlotIndex + 1));
+        }
+
+        if (!orchardModule.TryOccupySlot(orchardSlotIndex, petState.DesiredFruitCode, produceSeconds))
+        {
+            return false;
+        }
+
         petState.OrchardSlotIndex = orchardSlotIndex;
         petState.DiningWishState = PetDiningWishState.Producing;
-        petState.RemainingDiningStageSeconds = fruitDataRow.ProduceSeconds;
+        petState.RemainingDiningStageSeconds = produceSeconds;
         petState.RemainingPostMealSeconds = 0f;
         GameEntry.PetPlacement.NotifyPlacementStateChanged();
 
         // 在果树上创建水果实体并播放生长动画
         // 生长时长 = ProduceSeconds - 送达飞行时长
-        float growDuration = Mathf.Max(0.1f, fruitDataRow.ProduceSeconds - DeliverAnimationDuration);
+        float growDuration = Mathf.Max(0.1f, produceSeconds - _gameplayRuleDataRow.DeliverAnimationDuration);
 
         // 捕获变量供闭包使用
         int capturedPetInstanceId = petInstanceId;
@@ -282,7 +290,7 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
             orchardIndex,
             tableIndex,
             fruitCode,
-            DeliverAnimationDuration,
+            _gameplayRuleDataRow.DeliverAnimationDuration,
             () => OnOrchardDeliverComplete(petInstanceId, tableIndex));
     }
 
@@ -305,7 +313,7 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
 
         petState.OrchardSlotIndex = -1;
         petState.DiningWishState = PetDiningWishState.Serving;
-        petState.RemainingDiningStageSeconds = ServingDurationSeconds;
+        petState.RemainingDiningStageSeconds = _gameplayRuleDataRow.ServingDurationSeconds;
         GameEntry.PetPlacement.NotifyPlacementStateChanged();
     }
 
@@ -377,7 +385,18 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
             return;
         }
 
-        CoinDropRequested?.Invoke(petState.InstanceId, fruitDataRow.CoinAmount);
+        int coinAmount = fruitDataRow.CoinAmount;
+        if (GameEntry.Fruits != null)
+        {
+            coinAmount += GameEntry.Fruits.GetDietCoinBonus(petState.SlotIndex + 1);
+        }
+
+        if (coinAmount <= 0)
+        {
+            return;
+        }
+
+        CoinDropRequested?.Invoke(petState.InstanceId, coinAmount);
     }
 
     /// <summary>
@@ -420,7 +439,7 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
             return;
         }
 
-        petState.RemainingPostMealSeconds = PlayAreaStaySeconds;
+        petState.RemainingPostMealSeconds = _gameplayRuleDataRow.PlayAreaStaySeconds;
         GameEntry.PetPlacement?.ResolvePostMealOutcome(petState.InstanceId);
     }
 }

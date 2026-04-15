@@ -60,6 +60,16 @@ public partial class MainUIForm
     private readonly Stack<GoldCoinItem> _goldCoinPool = new Stack<GoldCoinItem>();
 
     /// <summary>
+    /// 当前场上存活的金币点击提示 Toast 列表。
+    /// </summary>
+    private readonly List<GoldCoinToastItem> _activeGoldCoinToasts = new List<GoldCoinToastItem>();
+
+    /// <summary>
+    /// 复用的金币点击提示 Toast 池。
+    /// </summary>
+    private readonly Stack<GoldCoinToastItem> _goldCoinToastPool = new Stack<GoldCoinToastItem>();
+
+    /// <summary>
     /// 金币容器是否由运行时动态创建。
     /// </summary>
     private bool _isRuntimeCreatedGoldCoinRoot;
@@ -68,6 +78,11 @@ public partial class MainUIForm
     /// 是否已经输出过缺失金币预制体日志。
     /// </summary>
     private bool _hasLoggedMissingGoldCoinPrefab;
+
+    /// <summary>
+    /// 是否已经输出过缺失金币点击提示 Toast 预制体日志。
+    /// </summary>
+    private bool _hasLoggedMissingGoldCoinToastPrefab;
 
     /// <summary>
     /// 是否已经订阅金币相关事件。
@@ -101,6 +116,7 @@ public partial class MainUIForm
     /// </summary>
     private void CloseGoldView()
     {
+        ReleaseAllActiveGoldCoinToasts();
         ReleaseAllActiveGoldCoins();
     }
 
@@ -110,6 +126,7 @@ public partial class MainUIForm
     private void DestroyGoldView()
     {
         ReleaseGoldEventSubscription();
+        DestroyAllGoldCoinToasts();
         DestroyAllGoldCoins();
         _goldCoinRoot = null;
     }
@@ -247,6 +264,10 @@ public partial class MainUIForm
             return;
         }
 
+        // 点击瞬间先在金币当前位置生成一个上飘渐隐的 Toast，
+        // 然后金币本体继续沿原有逻辑飞向顶部金币栏。
+        ShowGoldCoinToast(coinItem);
+
         // 将 TxtJB 的屏幕坐标转到金币容器下的局部坐标
         Vector2 targetLocalPos = GetGoldTextLocalPosInCoinRoot();
         coinItem.PlayFlyToTarget(targetLocalPos);
@@ -339,8 +360,36 @@ public partial class MainUIForm
         return GetMarkerUICamera();
     }
 
+    /// <summary>
+    /// 在金币当前位置显示一次点击提示 Toast。
+    /// </summary>
+    /// <param name="coinItem">被点击的金币项。</param>
+    private void ShowGoldCoinToast(GoldCoinItem coinItem)
+    {
+        if (coinItem == null || coinItem.CoinAmount <= 0)
+        {
+            return;
+        }
+
+        GoldCoinToastItem toastItem = AcquireGoldCoinToastItem();
+        if (toastItem == null)
+        {
+            return;
+        }
+
+        Vector2 startLocalPos = Vector2.zero;
+        RectTransform coinRectTransform = coinItem.CachedRectTransform;
+        if (coinRectTransform != null)
+        {
+            startLocalPos = coinRectTransform.anchoredPosition;
+        }
+
+        toastItem.PlayToast(coinItem.CoinAmount, startLocalPos, OnGoldCoinToastComplete);
+        _activeGoldCoinToasts.Add(toastItem);
+    }
+
     // ──────────────────────────────────────────────────────────
-    //  金币 UI 容器 & 池化
+    //  金币 UI / Toast 容器 & 池化
     // ──────────────────────────────────────────────────────────
 
     /// <summary>
@@ -411,7 +460,7 @@ public partial class MainUIForm
             if (!_hasLoggedMissingGoldCoinPrefab)
             {
                 _hasLoggedMissingGoldCoinPrefab = true;
-                Log.Warning("MainUIForm can not create gold coin because prefab cache is missing.");
+                Log.Warning("MainUIForm 无法创建金币 UI，预制体缓存缺失。");
             }
 
             return null;
@@ -425,6 +474,66 @@ public partial class MainUIForm
         }
 
         return coinItem;
+    }
+
+    /// <summary>
+    /// 从池中获取或实例化一个金币点击提示 Toast 项。
+    /// </summary>
+    /// <returns>可用的 Toast 项；若资源不可用则返回 null。</returns>
+    private GoldCoinToastItem AcquireGoldCoinToastItem()
+    {
+        EnsureGoldCoinRoot();
+        if (_goldCoinRoot == null)
+        {
+            return null;
+        }
+
+        while (_goldCoinToastPool.Count > 0)
+        {
+            GoldCoinToastItem pooledItem = _goldCoinToastPool.Pop();
+            if (pooledItem == null)
+            {
+                continue;
+            }
+
+            RectTransform pooledRectTransform = pooledItem.CachedRectTransform;
+            if (pooledRectTransform != null)
+            {
+                pooledRectTransform.SetParent(_goldCoinRoot, false);
+                pooledRectTransform.SetAsLastSibling();
+            }
+
+            pooledItem.gameObject.SetActive(true);
+            return pooledItem;
+        }
+
+        if (GameEntry.GameAssets == null
+            || !GameEntry.GameAssets.TryGetGoldCoinToastPrefab(out GameObject toastPrefab)
+            || toastPrefab == null)
+        {
+            if (!_hasLoggedMissingGoldCoinToastPrefab)
+            {
+                _hasLoggedMissingGoldCoinToastPrefab = true;
+                Log.Warning("MainUIForm 无法创建金币点击提示 Toast，预制体缓存缺失。");
+            }
+
+            return null;
+        }
+
+        GameObject toastObject = Object.Instantiate(toastPrefab, _goldCoinRoot, false);
+        GoldCoinToastItem toastItem = toastObject.GetComponent<GoldCoinToastItem>();
+        if (toastItem == null)
+        {
+            toastItem = toastObject.AddComponent<GoldCoinToastItem>();
+        }
+
+        RectTransform toastRectTransform = toastItem.CachedRectTransform;
+        if (toastRectTransform != null)
+        {
+            toastRectTransform.SetAsLastSibling();
+        }
+
+        return toastItem;
     }
 
     /// <summary>
@@ -444,6 +553,31 @@ public partial class MainUIForm
     }
 
     /// <summary>
+    /// 金币点击提示 Toast 动画完成回调。
+    /// </summary>
+    /// <param name="toastItem">完成动画的 Toast 项。</param>
+    private void OnGoldCoinToastComplete(GoldCoinToastItem toastItem)
+    {
+        ReleaseGoldCoinToastItem(toastItem);
+    }
+
+    /// <summary>
+    /// 回收指定金币点击提示 Toast 到池中。
+    /// </summary>
+    /// <param name="toastItem">要回收的 Toast 项。</param>
+    private void ReleaseGoldCoinToastItem(GoldCoinToastItem toastItem)
+    {
+        if (toastItem == null)
+        {
+            return;
+        }
+
+        _activeGoldCoinToasts.Remove(toastItem);
+        toastItem.gameObject.SetActive(false);
+        _goldCoinToastPool.Push(toastItem);
+    }
+
+    /// <summary>
     /// 回收全部场上激活的金币 UI。
     /// </summary>
     private void ReleaseAllActiveGoldCoins()
@@ -459,6 +593,24 @@ public partial class MainUIForm
         }
 
         _activeGoldCoins.Clear();
+    }
+
+    /// <summary>
+    /// 回收全部场上激活的金币点击提示 Toast。
+    /// </summary>
+    private void ReleaseAllActiveGoldCoinToasts()
+    {
+        for (int i = _activeGoldCoinToasts.Count - 1; i >= 0; i--)
+        {
+            GoldCoinToastItem toastItem = _activeGoldCoinToasts[i];
+            if (toastItem != null)
+            {
+                toastItem.gameObject.SetActive(false);
+                _goldCoinToastPool.Push(toastItem);
+            }
+        }
+
+        _activeGoldCoinToasts.Clear();
     }
 
     /// <summary>
@@ -491,5 +643,30 @@ public partial class MainUIForm
         }
 
         _isRuntimeCreatedGoldCoinRoot = false;
+    }
+
+    /// <summary>
+    /// 销毁全部金币点击提示 Toast。
+    /// </summary>
+    private void DestroyAllGoldCoinToasts()
+    {
+        for (int i = 0; i < _activeGoldCoinToasts.Count; i++)
+        {
+            if (_activeGoldCoinToasts[i] != null)
+            {
+                Object.Destroy(_activeGoldCoinToasts[i].gameObject);
+            }
+        }
+
+        _activeGoldCoinToasts.Clear();
+
+        while (_goldCoinToastPool.Count > 0)
+        {
+            GoldCoinToastItem pooledItem = _goldCoinToastPool.Pop();
+            if (pooledItem != null)
+            {
+                Object.Destroy(pooledItem.gameObject);
+            }
+        }
     }
 }

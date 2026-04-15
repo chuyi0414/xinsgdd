@@ -312,14 +312,14 @@ public partial class MainUIForm
     {
         if (_queueSlotsRoot == null || _diningSeatsRoot == null || _orchardSlotsRoot == null || _hatchSlotsRoot == null)
         {
-            Log.Error("MainUIForm playfield marker initialize failed because key roots are missing.");
+            Log.Error("MainUIForm 场地标记初始化失败，关键根节点缺失。");
             return false;
         }
 
         if (_queueSlotsRoot.childCount != PlayfieldEntityModule.QueueSlotCountValue)
         {
             Log.Error(
-                "MainUIForm playfield marker initialize failed because GoPaiDui child count is '{0}', expected '{1}'.",
+                "MainUIForm 场地标记初始化失败，GoPaiDui 子节点数为 '{0}'，期望 '{1}'。",
                 _queueSlotsRoot.childCount,
                 PlayfieldEntityModule.QueueSlotCountValue);
             return false;
@@ -329,7 +329,7 @@ public partial class MainUIForm
         if (_diningSeatsRoot.childCount < tableCount)
         {
             Log.Error(
-                "MainUIForm playfield marker initialize failed because GoChiFanRoot child count is '{0}', expected at least '{1}'.",
+                "MainUIForm 场地标记初始化失败，GoChiFanRoot 子节点数为 '{0}'，期望至少 '{1}'。",
                 _diningSeatsRoot.childCount,
                 tableCount);
             return false;
@@ -339,7 +339,7 @@ public partial class MainUIForm
         if (_orchardSlotsRoot.childCount < orchardCount)
         {
             Log.Error(
-                "MainUIForm playfield marker initialize failed because GoGuoYuan child count is '{0}', expected at least '{1}'.",
+                "MainUIForm 场地标记初始化失败，GoGuoYuan 子节点数为 '{0}'，期望至少 '{1}'。",
                 _orchardSlotsRoot.childCount,
                 orchardCount);
             return false;
@@ -348,7 +348,7 @@ public partial class MainUIForm
         if (_hatchSlotsRoot.childCount != PlayfieldEntityModule.HatchSlotCountValue)
         {
             Log.Error(
-                "MainUIForm playfield marker initialize failed because GoFuHua child count is '{0}', expected '{1}'.",
+                "MainUIForm 场地标记初始化失败，GoFuHua 子节点数为 '{0}'，期望 '{1}'。",
                 _hatchSlotsRoot.childCount,
                 PlayfieldEntityModule.HatchSlotCountValue);
             return false;
@@ -829,7 +829,7 @@ public partial class MainUIForm
         }
 
         _hasLoggedMissingUICamera = true;
-        Log.Warning("MainUIForm can not find UI Camera for page switch.");
+        Log.Warning("MainUIForm 找不到 UI Camera，无法翻页。");
     }
 
     /// <summary>
@@ -843,7 +843,7 @@ public partial class MainUIForm
         }
 
         _hasLoggedMissingMainCamera = true;
-        Log.Warning("MainUIForm can not find Main Camera for playfield projection.");
+        Log.Warning("MainUIForm 找不到 Main Camera，无法投影场地实体。");
     }
 
     /// <summary>
@@ -1071,7 +1071,7 @@ public partial class MainUIForm
             if (!_hasLoggedMissingPetFoodBubblePrefab)
             {
                 _hasLoggedMissingPetFoodBubblePrefab = true;
-                Log.Warning("MainUIForm can not create pet food bubble because prefab cache is missing.");
+                Log.Warning("MainUIForm 无法创建宠物食物气泡，预制体缓存缺失。");
             }
 
             return null;

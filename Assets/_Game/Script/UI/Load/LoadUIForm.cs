@@ -20,7 +20,7 @@ public class LoadUIForm : UIFormLogic
 
         if (_btnLoad == null)
         {
-            Log.Warning("LoadUIForm can not find BtnLoad.");
+            Log.Warning("LoadUIForm 找不到 BtnLoad。");
             return;
         }
 

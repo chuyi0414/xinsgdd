@@ -112,6 +112,32 @@ public sealed class OrchardModule
         return -1;
     }
 
+    public bool TryGetIdleSlotIndex(out int index)
+    {
+        for (int i = 0; i < _slotStates.Length; i++)
+        {
+            if (_slotStates[i].IsIdle)
+            {
+                index = i;
+                return true;
+            }
+        }
+
+        index = -1;
+        return false;
+    }
+
+    public bool TryOccupySlot(int index, string fruitCode, float produceSeconds)
+    {
+        if (index < 0 || index >= _slotStates.Length || !_slotStates[index].IsIdle)
+        {
+            return false;
+        }
+
+        _slotStates[index].Occupy(fruitCode, produceSeconds);
+        return true;
+    }
+
     /// <summary>
     /// 释放指定果树位。
     /// </summary>

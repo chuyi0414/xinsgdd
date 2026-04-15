@@ -322,7 +322,7 @@ public partial class MainUIForm
             if (!_hasLoggedMissingOutputProducePrefab)
             {
                 _hasLoggedMissingOutputProducePrefab = true;
-                Log.Warning("MainUIForm can not create output produce item because prefab cache is missing.");
+                Log.Warning("MainUIForm 无法创建产出物按钮，预制体缓存缺失。");
             }
 
             return null;

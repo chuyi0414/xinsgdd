@@ -53,7 +53,7 @@ public partial class MainUIForm
         CacheArchitectureReferences();
         if (_btnArchitectureUpgrade == null)
         {
-            Log.Warning("MainUIForm can not find GoJianZhuShengJi.");
+            Log.Warning("MainUIForm 找不到 GoJianZhuShengJi。");
             return;
         }
 
@@ -99,7 +99,7 @@ public partial class MainUIForm
     {
         if (GameEntry.UI == null)
         {
-            Log.Warning("MainUIForm can not open architecture upgrade UI because UIComponent is missing.");
+            Log.Warning("MainUIForm 无法打开建筑升级界面，UIComponent 缺失。");
             return;
         }
 

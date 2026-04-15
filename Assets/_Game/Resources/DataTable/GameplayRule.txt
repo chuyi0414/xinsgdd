@@ -1,0 +1,3 @@
+#Id	Code	Name	InitialManualEggCount	MaxManualEggCount	ManualReduceSeconds	RefillDurationSeconds	ManualEggCode	GoPlayAreaProbability	PlayAreaStaySeconds	ServingDurationSeconds	DeliverAnimationDuration	PreferUnlockedFruitProbability	PrimaryProduceProbability	IntermediateProduceProbability	AdvancedProduceProbability	Description
+#唯一编号	机器码	规则名称	初始手动蛋库存	手动蛋库存上限	手动按钮减秒	自动补蛋时长	手动孵化蛋Code	去玩耍区概率	玩耍区停留秒数	上桌展示秒数	送达飞行动画秒数	偏向已解锁水果概率	初级产出概率	中级产出概率	高级产出概率	备注描述
+1	rule_default	DefaultRule	6	6	2	30	egg_universal	50	5	5	0.3	80	82	15	3	全局玩法默认参数

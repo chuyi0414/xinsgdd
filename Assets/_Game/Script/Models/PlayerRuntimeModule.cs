@@ -58,21 +58,6 @@ public sealed class PlayerRuntimeModule
     }
 
     /// <summary>
-    /// 已解锁水果桶的命中概率。
-    /// </summary>
-    private const int PreferUnlockedProbability = 80;
-
-    /// <summary>
-    /// 初级产出物命中概率。
-    /// </summary>
-    private const int PrimaryProduceProbability = 82;
-
-    /// <summary>
-    /// 中级产出物命中概率。
-    /// </summary>
-    private const int IntermediateProduceProbability = 15;
-
-    /// <summary>
     /// 概率计算统一使用 100 作为满值。
     /// </summary>
     private const int FullProbability = 100;
@@ -198,17 +183,17 @@ public sealed class PlayerRuntimeModule
     /// 孵化区建筑条目数量。
     /// 当前 UI 与孵化模块都只支持 4 个条目。
     /// </summary>
-    private const int HatchArchitectureCount = 4;
+    public const int HatchArchitectureCountValue = 4;
 
     /// <summary>
     /// 饮食区建筑条目数量。
     /// </summary>
-    private const int DietArchitectureCount = 6;
+    public const int DietArchitectureCountValue = 6;
 
     /// <summary>
     /// 农场区建筑条目数量。
     /// </summary>
-    private const int FruiterArchitectureCount = 6;
+    public const int FruiterArchitectureCountValue = 6;
 
     /// <summary>
     /// 建筑等级从 1 开始。
@@ -219,57 +204,7 @@ public sealed class PlayerRuntimeModule
     /// <summary>
     /// 建筑最大等级。
     /// </summary>
-    private const int MaxArchitectureLevel = 10;
-
-    /// <summary>
-    /// 初始已解锁的孵化区数量。
-    /// 当前默认只有 1 个孵化槽已购买。
-    /// </summary>
-    private const int InitialUnlockedHatchCount = 1;
-
-    /// <summary>
-    /// 初始已解锁的饮食区数量。
-    /// 当前运行时默认只有 1 张餐桌。
-    /// </summary>
-    private const int InitialUnlockedDietCount = 1;
-
-    /// <summary>
-    /// 初始已解锁的农场区数量。
-    /// 当前运行时默认只有 1 个果园位。
-    /// </summary>
-    private const int InitialUnlockedFruiterCount = 1;
-
-    /// <summary>
-    /// 从“当前等级”升级到“下一级”时的金币消耗。
-    /// 下标 0 对应 1 级升 2 级。
-    /// 文档只给了前缀示例，因此 5 级后的价格先沿用 5000 的占位值。
-    /// </summary>
-    private static readonly int[] ArchitectureUpgradeTransitionCosts =
-    {
-        100,
-        500,
-        2000,
-        5000,
-        5000,
-        5000,
-        5000,
-        5000,
-        5000,
-    };
-
-    /// <summary>
-    /// 顺序购买新格子的金币消耗。
-    /// 下标 0 对应 1 号位；1 号位默认已解锁，因此价格固定为 0。
-    /// </summary>
-    private static readonly int[] ArchitectureUnlockCosts =
-    {
-        0,
-        1000,
-        2000,
-        4000,
-        8000,
-        16000,
-    };
+    private const int FallbackInitialUnlockedSlotCount = 1;
 
     /// <summary>
     /// 当前会话内已解锁的水果 Code 集合。
@@ -341,19 +276,44 @@ public sealed class PlayerRuntimeModule
     /// 孵化区 4 个条目的运行时状态。
     /// 当前只有 1 号位默认解锁，其余需要顺序购买。
     /// </summary>
-    private readonly ArchitectureSlotState[] _hatchArchitectureStates = CreateArchitectureStateArray(HatchArchitectureCount);
+    private readonly ArchitectureSlotState[] _hatchArchitectureStates = CreateArchitectureStateArray(HatchArchitectureCountValue);
 
     /// <summary>
     /// 饮食区 6 个条目的运行时状态。
     /// 当前只有 1 号位默认解锁，其余需要顺序购买。
     /// </summary>
-    private readonly ArchitectureSlotState[] _dietArchitectureStates = CreateArchitectureStateArray(DietArchitectureCount);
+    private readonly ArchitectureSlotState[] _dietArchitectureStates = CreateArchitectureStateArray(DietArchitectureCountValue);
 
     /// <summary>
     /// 农场区 6 个条目的运行时状态。
     /// 当前只有 1 号位默认解锁，其余需要顺序购买。
     /// </summary>
-    private readonly ArchitectureSlotState[] _fruiterArchitectureStates = CreateArchitectureStateArray(FruiterArchitectureCount);
+    private readonly ArchitectureSlotState[] _fruiterArchitectureStates = CreateArchitectureStateArray(FruiterArchitectureCountValue);
+
+    /// <summary>
+    /// 全局玩法规则缓存。
+    /// </summary>
+    private GameplayRuleDataRow _gameplayRuleDataRow;
+
+    /// <summary>
+    /// 建筑槽位配置缓存。
+    /// Key1 为建筑类别，Key2 为 1 基槽位索引。
+    /// </summary>
+    private readonly Dictionary<ArchitectureCategory, Dictionary<int, ArchitectureSlotDataRow>> _architectureSlotRowsByCategory =
+        new Dictionary<ArchitectureCategory, Dictionary<int, ArchitectureSlotDataRow>>();
+
+    /// <summary>
+    /// 建筑升级配置缓存。
+    /// Key1 为建筑类别，Key2 为当前等级。
+    /// </summary>
+    private readonly Dictionary<ArchitectureCategory, Dictionary<int, ArchitectureUpgradeDataRow>> _architectureUpgradeRowsByCategory =
+        new Dictionary<ArchitectureCategory, Dictionary<int, ArchitectureUpgradeDataRow>>();
+
+    /// <summary>
+    /// 各建筑类别的最大等级缓存。
+    /// </summary>
+    private readonly Dictionary<ArchitectureCategory, int> _maxArchitectureLevelsByCategory =
+        new Dictionary<ArchitectureCategory, int>();
 
     /// <summary>
     /// 当前已购买的孵化槽数量，默认 1。
@@ -440,10 +400,16 @@ public sealed class PlayerRuntimeModule
     /// <returns>可供 UI 消费的只读快照。</returns>
     public ArchitectureEntryState GetArchitectureEntryState(ArchitectureCategory category, int slotIndex)
     {
+        if (!EnsureInitialized())
+        {
+            return new ArchitectureEntryState(category, slotIndex, false, 0, InitialArchitectureLevel, ArchitectureActionType.None, 0);
+        }
+
         ArchitectureSlotState slotState = GetArchitectureSlotState(category, slotIndex);
+        int maxLevel = GetMaxArchitectureLevel(category);
         if (slotState == null)
         {
-            return new ArchitectureEntryState(category, slotIndex, false, 0, MaxArchitectureLevel, ArchitectureActionType.None, 0);
+            return new ArchitectureEntryState(category, slotIndex, false, 0, maxLevel, ArchitectureActionType.None, 0);
         }
 
         ArchitectureActionType actionType = EvaluateArchitectureActionType(category, slotIndex, slotState, out int cost);
@@ -452,7 +418,7 @@ public sealed class PlayerRuntimeModule
             slotIndex,
             slotState.IsUnlocked,
             slotState.Level,
-            MaxArchitectureLevel,
+            maxLevel,
             actionType,
             cost);
     }
@@ -466,6 +432,11 @@ public sealed class PlayerRuntimeModule
     /// <returns>是否执行成功。</returns>
     public bool TryExecuteArchitectureAction(ArchitectureCategory category, int slotIndex)
     {
+        if (!EnsureInitialized())
+        {
+            return false;
+        }
+
         ArchitectureSlotState slotState = GetArchitectureSlotState(category, slotIndex);
         if (slotState == null)
         {
@@ -493,7 +464,7 @@ public sealed class PlayerRuntimeModule
                     return false;
                 }
 
-                slotState.Level = Mathf.Clamp(slotState.Level + 1, InitialArchitectureLevel, MaxArchitectureLevel);
+                slotState.Level = Mathf.Clamp(slotState.Level + 1, InitialArchitectureLevel, GetMaxArchitectureLevel(category));
                 NotifyArchitectureStateChanged();
                 return true;
 
@@ -540,7 +511,7 @@ public sealed class PlayerRuntimeModule
         if (count < _hatchSlotCount)
         {
             Log.Warning(
-                "PlayerRuntimeModule can not shrink hatch slot count from '{0}' to '{1}' at runtime.",
+                "PlayerRuntimeModule 无法在运行时将孵化槽位从 '{0}' 缩容至 '{1}'。",
                 _hatchSlotCount,
                 count);
             return;
@@ -552,6 +523,11 @@ public sealed class PlayerRuntimeModule
         }
 
         _hatchSlotCount = count;
+
+        // 孵化槽数量变化后，立即通知场地实体层刷新孵化器和蛋实体。
+        // 这里不走餐桌/果园那套容量事件，因为孵化区 marker 本来就是固定 4 个，
+        // 只需要让显示层按最新解锁数量重新显隐即可。
+        GameEntry.PlayfieldEntities?.NotifyEggStateChanged();
     }
 
     /// <summary>
@@ -569,7 +545,7 @@ public sealed class PlayerRuntimeModule
         if (count < _diningSeatCount)
         {
             Log.Warning(
-                "PlayerRuntimeModule can not shrink dining seat count from '{0}' to '{1}' at runtime.",
+                "PlayerRuntimeModule 无法在运行时将餐桌位从 '{0}' 缩容至 '{1}'。",
                 _diningSeatCount,
                 count);
             return;
@@ -614,7 +590,7 @@ public sealed class PlayerRuntimeModule
         if (count < _orchardSlotCount)
         {
             Log.Warning(
-                "PlayerRuntimeModule can not shrink orchard slot count from '{0}' to '{1}' at runtime.",
+                "PlayerRuntimeModule 无法在运行时将果树位从 '{0}' 缩容至 '{1}'。",
                 _orchardSlotCount,
                 count);
             return;
@@ -646,16 +622,52 @@ public sealed class PlayerRuntimeModule
         GoldChanged?.Invoke(_currentGold);
     }
 
+    public float GetHatchDurationScale(int slotIndex)
+    {
+        return GetArchitectureDurationScale(ArchitectureCategory.Hatch, slotIndex);
+    }
+
+    public int GetDietCoinBonus(int slotIndex)
+    {
+        return GetArchitectureEffectParam(ArchitectureCategory.Diet, slotIndex);
+    }
+
+    public float GetFruiterDurationScale(int slotIndex)
+    {
+        return GetArchitectureDurationScale(ArchitectureCategory.Fruiter, slotIndex);
+    }
+
     /// <summary>
     /// 重置建筑运行时状态。
     /// 当前版本没有存档，因此每次运行都按默认建筑进度启动。
     /// </summary>
     private void ResetArchitectureRuntimeState()
     {
-        _hatchSlotCount = InitialUnlockedHatchCount;
-        ResetArchitectureCategoryState(_hatchArchitectureStates, InitialUnlockedHatchCount);
-        ResetArchitectureCategoryState(_dietArchitectureStates, InitialUnlockedDietCount);
-        ResetArchitectureCategoryState(_fruiterArchitectureStates, InitialUnlockedFruiterCount);
+        _hatchSlotCount = FallbackInitialUnlockedSlotCount;
+        _diningSeatCount = FallbackInitialUnlockedSlotCount;
+        _orchardSlotCount = FallbackInitialUnlockedSlotCount;
+        ResetArchitectureCategoryState(_hatchArchitectureStates, FallbackInitialUnlockedSlotCount);
+        ResetArchitectureCategoryState(_dietArchitectureStates, FallbackInitialUnlockedSlotCount);
+        ResetArchitectureCategoryState(_fruiterArchitectureStates, FallbackInitialUnlockedSlotCount);
+    }
+
+    /// <summary>
+    /// 按配置表重置建筑运行时状态。
+    /// 该过程只在初始化阶段调用一次，用表数据覆盖构造阶段的兜底默认值。
+    /// </summary>
+    private void ResetArchitectureRuntimeStateFromConfig()
+    {
+        int hatchUnlockedCount = CountInitiallyUnlockedSlots(ArchitectureCategory.Hatch);
+        int dietUnlockedCount = CountInitiallyUnlockedSlots(ArchitectureCategory.Diet);
+        int fruiterUnlockedCount = CountInitiallyUnlockedSlots(ArchitectureCategory.Fruiter);
+
+        ResetArchitectureCategoryState(_hatchArchitectureStates, hatchUnlockedCount);
+        ResetArchitectureCategoryState(_dietArchitectureStates, dietUnlockedCount);
+        ResetArchitectureCategoryState(_fruiterArchitectureStates, fruiterUnlockedCount);
+
+        SetHatchSlotCount(hatchUnlockedCount);
+        SetDiningSeatCount(dietUnlockedCount);
+        SetOrchardSlotCount(fruiterUnlockedCount);
     }
 
     /// <summary>
@@ -682,6 +694,142 @@ public sealed class PlayerRuntimeModule
             slotState.IsUnlocked = isUnlocked;
             slotState.Level = isUnlocked ? InitialArchitectureLevel : 0;
         }
+    }
+
+    /// <summary>
+    /// 统计指定建筑类别的初始解锁数量。
+    /// 配置表经过前置校验后，初始解锁区间一定是连续前缀。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <returns>初始解锁数量。</returns>
+    private int CountInitiallyUnlockedSlots(ArchitectureCategory category)
+    {
+        if (!_architectureSlotRowsByCategory.TryGetValue(category, out Dictionary<int, ArchitectureSlotDataRow> rowsBySlotIndex)
+            || rowsBySlotIndex == null
+            || rowsBySlotIndex.Count == 0)
+        {
+            return FallbackInitialUnlockedSlotCount;
+        }
+
+        int unlockedCount = 0;
+        for (int slotIndex = 1; rowsBySlotIndex.TryGetValue(slotIndex, out ArchitectureSlotDataRow row) && row != null; slotIndex++)
+        {
+            if (!row.IsInitiallyUnlocked)
+            {
+                break;
+            }
+
+            unlockedCount++;
+        }
+
+        return Mathf.Max(FallbackInitialUnlockedSlotCount, unlockedCount);
+    }
+
+    private float GetArchitectureDurationScale(ArchitectureCategory category, int slotIndex)
+    {
+        int effectParam = GetArchitectureEffectParam(category, slotIndex);
+        return Mathf.Max(0.01f, 1f - (effectParam * 0.01f));
+    }
+
+    private int GetArchitectureEffectParam(ArchitectureCategory category, int slotIndex)
+    {
+        if (!EnsureInitialized())
+        {
+            return 0;
+        }
+
+        ArchitectureSlotState slotState = GetArchitectureSlotState(category, slotIndex);
+        if (slotState == null || !slotState.IsUnlocked || slotState.Level <= InitialArchitectureLevel)
+        {
+            return 0;
+        }
+
+        int effectLevel = slotState.Level - 1;
+        if (!_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<int, ArchitectureUpgradeDataRow> rowsByCurrentLevel)
+            || rowsByCurrentLevel == null
+            || !rowsByCurrentLevel.TryGetValue(effectLevel, out ArchitectureUpgradeDataRow row)
+            || row == null)
+        {
+            return 0;
+        }
+
+        return Mathf.Max(0, row.EffectParam);
+    }
+
+    /// <summary>
+    /// 获取指定建筑类别的最大等级。
+    /// 最大等级由升级表的最后一个 CurrentLevel + 1 推导得出。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <returns>最大等级。</returns>
+    private int GetMaxArchitectureLevel(ArchitectureCategory category)
+    {
+        return _maxArchitectureLevelsByCategory.TryGetValue(category, out int maxLevel)
+            ? Mathf.Max(InitialArchitectureLevel, maxLevel)
+            : InitialArchitectureLevel;
+    }
+
+    /// <summary>
+    /// 根据建筑配置表重建槽位价格、升级价格与最大等级缓存。
+    /// </summary>
+    /// <param name="slotRows">建筑槽位表行集合。</param>
+    /// <param name="upgradeRows">建筑升级表行集合。</param>
+    /// <returns>是否重建成功。</returns>
+    private bool RebuildArchitectureConfigCaches(
+        ArchitectureSlotDataRow[] slotRows,
+        ArchitectureUpgradeDataRow[] upgradeRows)
+    {
+        if (slotRows == null || slotRows.Length == 0 || upgradeRows == null || upgradeRows.Length == 0)
+        {
+            Log.Warning("PlayerRuntimeModule 无法重建建筑配置缓存，所需数据行为空。");
+            return false;
+        }
+
+        _architectureSlotRowsByCategory.Clear();
+        _architectureUpgradeRowsByCategory.Clear();
+        _maxArchitectureLevelsByCategory.Clear();
+
+        for (int i = 0; i < slotRows.Length; i++)
+        {
+            ArchitectureSlotDataRow row = slotRows[i];
+            if (row == null)
+            {
+                continue;
+            }
+
+            if (!_architectureSlotRowsByCategory.TryGetValue(row.Category, out Dictionary<int, ArchitectureSlotDataRow> rowsBySlotIndex))
+            {
+                rowsBySlotIndex = new Dictionary<int, ArchitectureSlotDataRow>();
+                _architectureSlotRowsByCategory.Add(row.Category, rowsBySlotIndex);
+            }
+
+            rowsBySlotIndex[row.SlotIndex] = row;
+        }
+
+        for (int i = 0; i < upgradeRows.Length; i++)
+        {
+            ArchitectureUpgradeDataRow row = upgradeRows[i];
+            if (row == null)
+            {
+                continue;
+            }
+
+            if (!_architectureUpgradeRowsByCategory.TryGetValue(row.Category, out Dictionary<int, ArchitectureUpgradeDataRow> rowsByCurrentLevel))
+            {
+                rowsByCurrentLevel = new Dictionary<int, ArchitectureUpgradeDataRow>();
+                _architectureUpgradeRowsByCategory.Add(row.Category, rowsByCurrentLevel);
+            }
+
+            rowsByCurrentLevel[row.CurrentLevel] = row;
+
+            int maxLevel = row.CurrentLevel + 1;
+            if (!_maxArchitectureLevelsByCategory.TryGetValue(row.Category, out int currentMaxLevel) || maxLevel > currentMaxLevel)
+            {
+                _maxArchitectureLevelsByCategory[row.Category] = maxLevel;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -747,16 +895,17 @@ public sealed class PlayerRuntimeModule
 
         if (!slotState.IsUnlocked)
         {
-            cost = GetArchitectureUnlockCost(slotIndex);
+            cost = GetArchitectureUnlockCost(category, slotIndex);
             return cost > 0 ? ArchitectureActionType.Buy : ArchitectureActionType.None;
         }
 
-        if (slotState.Level >= MaxArchitectureLevel)
+        int maxLevel = GetMaxArchitectureLevel(category);
+        if (slotState.Level >= maxLevel)
         {
             return ArchitectureActionType.Max;
         }
 
-        cost = GetArchitectureUpgradeCost(slotState.Level);
+        cost = GetArchitectureUpgradeCost(category, slotState.Level);
         return cost > 0 ? ArchitectureActionType.Upgrade : ArchitectureActionType.None;
     }
 
@@ -794,14 +943,22 @@ public sealed class PlayerRuntimeModule
     /// </summary>
     /// <param name="slotIndex">1 基索引。</param>
     /// <returns>金币消耗；非法索引返回 0。</returns>
-    private static int GetArchitectureUnlockCost(int slotIndex)
+    private int GetArchitectureUnlockCost(ArchitectureCategory category, int slotIndex)
     {
-        if (slotIndex <= 0 || slotIndex > ArchitectureUnlockCosts.Length)
+        if (slotIndex <= 0)
         {
             return 0;
         }
 
-        return ArchitectureUnlockCosts[slotIndex - 1];
+        if (!_architectureSlotRowsByCategory.TryGetValue(category, out Dictionary<int, ArchitectureSlotDataRow> rowsBySlotIndex)
+            || rowsBySlotIndex == null
+            || !rowsBySlotIndex.TryGetValue(slotIndex, out ArchitectureSlotDataRow row)
+            || row == null)
+        {
+            return 0;
+        }
+
+        return row.UnlockGold;
     }
 
     /// <summary>
@@ -809,20 +966,22 @@ public sealed class PlayerRuntimeModule
     /// </summary>
     /// <param name="currentLevel">当前等级。</param>
     /// <returns>升级消耗；已满级或等级非法时返回 0。</returns>
-    private static int GetArchitectureUpgradeCost(int currentLevel)
+    private int GetArchitectureUpgradeCost(ArchitectureCategory category, int currentLevel)
     {
-        if (currentLevel < InitialArchitectureLevel || currentLevel >= MaxArchitectureLevel)
+        if (currentLevel < InitialArchitectureLevel)
         {
             return 0;
         }
 
-        int costIndex = currentLevel - InitialArchitectureLevel;
-        if (costIndex < 0 || costIndex >= ArchitectureUpgradeTransitionCosts.Length)
+        if (!_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<int, ArchitectureUpgradeDataRow> rowsByCurrentLevel)
+            || rowsByCurrentLevel == null
+            || !rowsByCurrentLevel.TryGetValue(currentLevel, out ArchitectureUpgradeDataRow row)
+            || row == null)
         {
             return 0;
         }
 
-        return ArchitectureUpgradeTransitionCosts[costIndex];
+        return row.UpgradeGold;
     }
 
     /// <summary>
@@ -903,7 +1062,7 @@ public sealed class PlayerRuntimeModule
             || !GameEntry.DataTables.IsAvailable<PetDataRow>()
             || !GameEntry.DataTables.IsAvailable<PetProduceDataRow>())
         {
-            Log.Warning("PlayerRuntimeModule can not warmup produce catalog because required data tables are unavailable.");
+            Log.Warning("PlayerRuntimeModule 无法预热产出目录，所需数据表不可用。");
             return false;
         }
 
@@ -911,7 +1070,7 @@ public sealed class PlayerRuntimeModule
         PetProduceDataRow[] produceRows = GameEntry.DataTables.GetAllDataRows<PetProduceDataRow>();
         if (petRows == null || petRows.Length == 0 || produceRows == null || produceRows.Length == 0)
         {
-            Log.Warning("PlayerRuntimeModule can not warmup produce catalog because pet or produce table is empty.");
+            Log.Warning("PlayerRuntimeModule 无法预热产出目录，宠物或产出表为空。");
             return false;
         }
 
@@ -980,7 +1139,7 @@ public sealed class PlayerRuntimeModule
 
         if (!_produceCountsByCode.TryGetValue(produceCode, out int currentCount))
         {
-            Log.Warning("PlayerRuntimeModule can not add produce because code '{0}' is invalid.", produceCode);
+            Log.Warning("PlayerRuntimeModule 无法添加产出物，编码 '{0}' 无效。", produceCode);
             return false;
         }
 
@@ -1014,27 +1173,27 @@ public sealed class PlayerRuntimeModule
     public bool TryRollPetProduce(string petCode, out PetProduceDataRow produceDataRow)
     {
         produceDataRow = null;
-        if (!EnsureProduceCatalogInitialized() || string.IsNullOrWhiteSpace(petCode))
+        if (!EnsureInitialized() || !EnsureProduceCatalogInitialized() || string.IsNullOrWhiteSpace(petCode))
         {
             return false;
         }
 
         if (!_petIdsByCode.TryGetValue(petCode, out int petId))
         {
-            Log.Warning("PlayerRuntimeModule can not roll produce because pet code '{0}' is invalid.", petCode);
+            Log.Warning("PlayerRuntimeModule 无法抽取产出物，宠物编码 '{0}' 无效。", petCode);
             return false;
         }
 
         if (!_produceBucketsByPetId.TryGetValue(petId, out PetProduceBucket produceBucket) || produceBucket == null)
         {
-            Log.Warning("PlayerRuntimeModule can not roll produce because pet id '{0}' has no produce bucket.", petId);
+            Log.Warning("PlayerRuntimeModule 无法抽取产出物，宠物 Id '{0}' 无产出桶。", petId);
             return false;
         }
 
         produceDataRow = RollProduceByGrade(produceBucket);
         if (produceDataRow == null)
         {
-            Log.Warning("PlayerRuntimeModule can not roll produce because pet id '{0}' has an incomplete produce bucket.", petId);
+            Log.Warning("PlayerRuntimeModule 无法抽取产出物，宠物 Id '{0}' 的产出桶不完整。", petId);
             return false;
         }
 
@@ -1056,19 +1215,39 @@ public sealed class PlayerRuntimeModule
             return true;
         }
 
-        if (GameEntry.DataTables == null || !GameEntry.DataTables.IsAvailable<FruitDataRow>())
+        if (GameEntry.DataTables == null
+            || !GameEntry.DataTables.IsAvailable<FruitDataRow>()
+            || !GameEntry.DataTables.IsAvailable<GameplayRuleDataRow>()
+            || !GameEntry.DataTables.IsAvailable<ArchitectureSlotDataRow>()
+            || !GameEntry.DataTables.IsAvailable<ArchitectureUpgradeDataRow>())
         {
-            Log.Warning("PlayerRuntimeModule can not initialize because FruitDataRow table is unavailable.");
+            Log.Warning("PlayerRuntimeModule 无法初始化，所需数据表不可用。");
             return false;
         }
 
         FruitDataRow[] fruitRows = GameEntry.DataTables.GetAllDataRows<FruitDataRow>();
-        if (fruitRows == null || fruitRows.Length == 0)
+        ArchitectureSlotDataRow[] architectureSlotRows = GameEntry.DataTables.GetAllDataRows<ArchitectureSlotDataRow>();
+        ArchitectureUpgradeDataRow[] architectureUpgradeRows = GameEntry.DataTables.GetAllDataRows<ArchitectureUpgradeDataRow>();
+        GameplayRuleDataRow gameplayRuleDataRow = GameEntry.DataTables.GetDataRowByCode<GameplayRuleDataRow>(GameplayRuleDataRow.DefaultCode);
+        if (fruitRows == null
+            || fruitRows.Length == 0
+            || architectureSlotRows == null
+            || architectureSlotRows.Length == 0
+            || architectureUpgradeRows == null
+            || architectureUpgradeRows.Length == 0
+            || gameplayRuleDataRow == null)
         {
-            Log.Warning("PlayerRuntimeModule can not initialize because FruitDataRow table is empty.");
+            Log.Warning("PlayerRuntimeModule 无法初始化，所需数据行为空。");
             return false;
         }
 
+        if (!RebuildArchitectureConfigCaches(architectureSlotRows, architectureUpgradeRows))
+        {
+            Log.Warning("PlayerRuntimeModule 无法初始化，建筑配置缓存重建失败。");
+            return false;
+        }
+
+        _gameplayRuleDataRow = gameplayRuleDataRow;
         _allFruitRows = fruitRows;
         _unlockedFruitCandidates = new FruitDataRow[fruitRows.Length];
         _lockedFruitCandidates = new FruitDataRow[fruitRows.Length];
@@ -1088,6 +1267,7 @@ public sealed class PlayerRuntimeModule
             }
         }
 
+        ResetArchitectureRuntimeStateFromConfig();
         _isInitialized = true;
         _isCandidateCacheDirty = true;
         RebuildCandidateCachesIfNeeded();
@@ -1145,14 +1325,14 @@ public sealed class PlayerRuntimeModule
     public bool TryRollDiningWishFruit(out FruitDataRow fruitDataRow)
     {
         fruitDataRow = null;
-        if (!EnsureInitialized())
+        if (!EnsureInitialized() || _gameplayRuleDataRow == null)
         {
             return false;
         }
 
         RebuildCandidateCachesIfNeeded();
 
-        bool preferUnlocked = UnityEngine.Random.Range(0, 100) < PreferUnlockedProbability;
+        bool preferUnlocked = UnityEngine.Random.Range(0, FullProbability) < _gameplayRuleDataRow.PreferUnlockedFruitProbability;
         if (TryPickFruitFromBucket(preferUnlocked, out fruitDataRow))
         {
             return true;
@@ -1203,20 +1383,20 @@ public sealed class PlayerRuntimeModule
     /// </summary>
     /// <param name="produceBucket">当前宠物的产出桶。</param>
     /// <returns>命中的产出物配置；若桶不完整则返回 null。</returns>
-    private static PetProduceDataRow RollProduceByGrade(PetProduceBucket produceBucket)
+    private PetProduceDataRow RollProduceByGrade(PetProduceBucket produceBucket)
     {
-        if (produceBucket == null)
+        if (produceBucket == null || _gameplayRuleDataRow == null)
         {
             return null;
         }
 
         int roll = UnityEngine.Random.Range(0, FullProbability);
-        if (roll < PrimaryProduceProbability)
+        if (roll < _gameplayRuleDataRow.PrimaryProduceProbability)
         {
             return produceBucket.Primary;
         }
 
-        if (roll < PrimaryProduceProbability + IntermediateProduceProbability)
+        if (roll < _gameplayRuleDataRow.PrimaryProduceProbability + _gameplayRuleDataRow.IntermediateProduceProbability)
         {
             return produceBucket.Intermediate;
         }

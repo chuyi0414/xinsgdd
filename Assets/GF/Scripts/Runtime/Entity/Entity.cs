@@ -149,6 +149,13 @@ namespace UnityGameFramework.Runtime
         /// </summary>
         public void OnRecycle()
         {
+            if (m_EntityLogic == null)
+            {
+                Log.Warning("Entity '[{0}]{1}' logic has been destroyed before OnRecycle, recycle message will be ignored.", m_Id, m_EntityAssetName);
+                m_Id = 0;
+                return;
+            }
+
             try
             {
                 m_EntityLogic.OnRecycle();
@@ -168,6 +175,12 @@ namespace UnityGameFramework.Runtime
         /// <param name="userData">用户自定义数据。</param>
         public void OnShow(object userData)
         {
+            if (m_EntityLogic == null)
+            {
+                Log.Warning("Entity '[{0}]{1}' logic has been destroyed before OnShow, show message will be ignored.", m_Id, m_EntityAssetName);
+                return;
+            }
+
             ShowEntityInfo showEntityInfo = (ShowEntityInfo)userData;
             try
             {
@@ -186,6 +199,12 @@ namespace UnityGameFramework.Runtime
         /// <param name="userData">用户自定义数据。</param>
         public void OnHide(bool isShutdown, object userData)
         {
+            if (m_EntityLogic == null)
+            {
+                Log.Warning("Entity '[{0}]{1}' logic has been destroyed before OnHide, hide message will be ignored.", m_Id, m_EntityAssetName);
+                return;
+            }
+
             try
             {
                 m_EntityLogic.OnHide(isShutdown, userData);
@@ -203,6 +222,12 @@ namespace UnityGameFramework.Runtime
         /// <param name="userData">用户自定义数据。</param>
         public void OnAttached(IEntity childEntity, object userData)
         {
+            if (m_EntityLogic == null)
+            {
+                Log.Warning("Entity '[{0}]{1}' logic has been destroyed before OnAttached, attach callback will be ignored.", m_Id, m_EntityAssetName);
+                return;
+            }
+
             AttachEntityInfo attachEntityInfo = (AttachEntityInfo)userData;
             try
             {
@@ -221,6 +246,12 @@ namespace UnityGameFramework.Runtime
         /// <param name="userData">用户自定义数据。</param>
         public void OnDetached(IEntity childEntity, object userData)
         {
+            if (m_EntityLogic == null)
+            {
+                Log.Warning("Entity '[{0}]{1}' logic has been destroyed before OnDetached, detach callback will be ignored.", m_Id, m_EntityAssetName);
+                return;
+            }
+
             try
             {
                 m_EntityLogic.OnDetached(((Entity)childEntity).Logic, userData);
@@ -239,6 +270,13 @@ namespace UnityGameFramework.Runtime
         public void OnAttachTo(IEntity parentEntity, object userData)
         {
             AttachEntityInfo attachEntityInfo = (AttachEntityInfo)userData;
+            if (m_EntityLogic == null)
+            {
+                Log.Warning("Entity '[{0}]{1}' logic has been destroyed before OnAttachTo, attach-to callback will be ignored.", m_Id, m_EntityAssetName);
+                ReferencePool.Release(attachEntityInfo);
+                return;
+            }
+
             try
             {
                 m_EntityLogic.OnAttachTo(((Entity)parentEntity).Logic, attachEntityInfo.ParentTransform, attachEntityInfo.UserData);
@@ -258,6 +296,12 @@ namespace UnityGameFramework.Runtime
         /// <param name="userData">用户自定义数据。</param>
         public void OnDetachFrom(IEntity parentEntity, object userData)
         {
+            if (m_EntityLogic == null)
+            {
+                Log.Warning("Entity '[{0}]{1}' logic has been destroyed before OnDetachFrom, detach-from callback will be ignored.", m_Id, m_EntityAssetName);
+                return;
+            }
+
             try
             {
                 m_EntityLogic.OnDetachFrom(((Entity)parentEntity).Logic, userData);
@@ -275,6 +319,11 @@ namespace UnityGameFramework.Runtime
         /// <param name="realElapseSeconds">真实流逝时间，以秒为单位。</param>
         public void OnUpdate(float elapseSeconds, float realElapseSeconds)
         {
+            if (m_EntityLogic == null)
+            {
+                return;
+            }
+
             try
             {
                 m_EntityLogic.OnUpdate(elapseSeconds, realElapseSeconds);

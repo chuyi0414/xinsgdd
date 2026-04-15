@@ -14,8 +14,14 @@ public class MainProcedure : ProcedureBase
     // 流程间传递“待关闭界面”序列号的键名。
     private const string PendingCloseUIFormIdDataName = "PendingCloseUIFormId";
 
+    // 本次运行内是否已经展示过新人礼包。
+    private static bool s_hasOpenedNewcomerPackageThisSession;
+
     // 当前主界面的序列号。
     private int _mainUIFormId = 0;
+
+    // 当前新人礼包界面的序列号。
+    private int _newcomerPackageUIFormId = 0;
 
     // 记录当前是否已经订阅打开成功事件，避免重复反订阅报错。
     private bool _isListeningOpenSuccessEvent = false;
@@ -38,6 +44,13 @@ public class MainProcedure : ProcedureBase
     protected override void OnLeave(IFsm<IProcedureManager> procedureOwner, bool isShutdown)
     {
         UnsubscribeOpenSuccessEvent();
+
+        if (_newcomerPackageUIFormId > 0 && GameEntry.UI.HasUIForm(_newcomerPackageUIFormId))
+        {
+            GameEntry.UI.CloseUIForm(_newcomerPackageUIFormId);
+        }
+
+        _newcomerPackageUIFormId = 0;
 
         if (_mainUIFormId > 0 && GameEntry.UI.HasUIForm(_mainUIFormId))
         {
@@ -62,6 +75,24 @@ public class MainProcedure : ProcedureBase
 
         UnsubscribeOpenSuccessEvent();
         ClosePendingLoadUIForm();
+        TryOpenNewcomerPackageUI();
+    }
+
+    /// <summary>
+    /// 尝试在本次运行首次进入主界面后打开新人礼包。
+    /// </summary>
+    private void TryOpenNewcomerPackageUI()
+    {
+        if (s_hasOpenedNewcomerPackageThisSession || GameEntry.UI == null)
+        {
+            return;
+        }
+
+        _newcomerPackageUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.NewcomerPackageUIForm, UIFormDefine.MainGroup);
+        if (_newcomerPackageUIFormId > 0)
+        {
+            s_hasOpenedNewcomerPackageThisSession = true;
+        }
     }
 
     /// <summary>

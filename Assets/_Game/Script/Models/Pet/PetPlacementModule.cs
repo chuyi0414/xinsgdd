@@ -10,18 +10,6 @@ using UnityGameFramework.Runtime;
 public sealed class PetPlacementModule
 {
     /// <summary>
-    /// 宠物吃完后进入玩耍区的概率。
-    /// 剩余概率直接走离场逻辑。
-    /// </summary>
-    private const int GoPlayAreaProbability = 50;
-
-    /// <summary>
-    /// 宠物进入玩耍区后的停留秒数。
-    /// 到时后再次做 50/50 去向判定。
-    /// </summary>
-    private const float PlayAreaStaySeconds = 5f;
-
-    /// <summary>
     /// 餐桌位数量默认值。
     /// 实际运行时数量由 Initialize 方法从 PlayerRuntimeModule 读取。
     /// </summary>
@@ -54,6 +42,18 @@ public sealed class PetPlacementModule
     private int _nextInstanceId = 1;
 
     /// <summary>
+    /// 全局玩法规则缓存。
+    /// </summary>
+    private GameplayRuleDataRow _gameplayRuleDataRow;
+
+    /// <summary>
+    /// 按品质预热好的宠物候选缓存。
+    /// 运行时孵化时直接命中对应数组，避免临时 List 分配。
+    /// </summary>
+    private readonly Dictionary<QualityType, PetDataRow[]> _petCandidatesByQuality =
+        new Dictionary<QualityType, PetDataRow[]>();
+
+    /// <summary>
     /// 宠物站位变化事件。
     /// UI 层可通过它延迟重建一次展示缓存，避免在每帧轮询宠物列表。
     /// </summary>
@@ -67,6 +67,76 @@ public sealed class PetPlacementModule
     public void Initialize(int seatCount)
     {
         EnsureDiningSeatCapacity(seatCount);
+    }
+
+    /// <summary>
+    /// 预热按品质分组的宠物候选缓存。
+    /// 该过程在数据表注册阶段执行一次，后续孵化逻辑只读缓存数组。
+    /// </summary>
+    /// <returns>是否预热成功。</returns>
+    public bool WarmupPetSelectionCatalog()
+    {
+        if (GameEntry.DataTables == null || !GameEntry.DataTables.IsAvailable<PetDataRow>())
+        {
+            Log.Warning("PetPlacementModule can not warmup pet selection catalog because PetDataTable is unavailable.");
+            return false;
+        }
+
+        PetDataRow[] petRows = GameEntry.DataTables.GetAllDataRows<PetDataRow>();
+        if (petRows == null || petRows.Length == 0)
+        {
+            Log.Warning("PetPlacementModule can not warmup pet selection catalog because PetDataTable is empty.");
+            return false;
+        }
+
+        Dictionary<QualityType, List<PetDataRow>> candidateListsByQuality = new Dictionary<QualityType, List<PetDataRow>>();
+        _petCandidatesByQuality.Clear();
+
+        for (int i = 0; i < petRows.Length; i++)
+        {
+            PetDataRow petRow = petRows[i];
+            if (petRow == null || string.IsNullOrWhiteSpace(petRow.Code))
+            {
+                continue;
+            }
+
+            if (!candidateListsByQuality.TryGetValue(petRow.Quality, out List<PetDataRow> candidates))
+            {
+                candidates = new List<PetDataRow>();
+                candidateListsByQuality.Add(petRow.Quality, candidates);
+            }
+
+            candidates.Add(petRow);
+        }
+
+        foreach (KeyValuePair<QualityType, List<PetDataRow>> pair in candidateListsByQuality)
+        {
+            if (pair.Value == null || pair.Value.Count == 0)
+            {
+                continue;
+            }
+
+            _petCandidatesByQuality[pair.Key] = pair.Value.ToArray();
+        }
+
+        return _petCandidatesByQuality.Count > 0;
+    }
+
+    /// <summary>
+    /// 预热玩法规则缓存。
+    /// 规则表注册完成后调用一次，避免运行时重复查表。
+    /// </summary>
+    /// <returns>是否命中有效规则。</returns>
+    public bool WarmupGameplayRuleCache()
+    {
+        if (GameEntry.DataTables == null || !GameEntry.DataTables.IsAvailable<GameplayRuleDataRow>())
+        {
+            _gameplayRuleDataRow = null;
+            return false;
+        }
+
+        _gameplayRuleDataRow = GameEntry.DataTables.GetDataRowByCode<GameplayRuleDataRow>(GameplayRuleDataRow.DefaultCode);
+        return _gameplayRuleDataRow != null;
     }
 
     /// <summary>
@@ -217,42 +287,31 @@ public sealed class PetPlacementModule
             return CreatePetState(petCode, petQuality, PetPlacementType.Queue, queueSlotIndex, hatchSlotIndex, out petState);
         }
 
-        Log.Warning("PetPlacementModule can not place pet '{0}' because dining seats and queue slots are both full.", petCode);
+        Log.Warning("PetPlacementModule 无法放置宠物 '{0}'，餐桌和排队位均已满。", petCode);
         return false;
     }
 
     /// <summary>
     /// 按品质随机挑选一只宠物。
     /// </summary>
-    private static bool TryPickPetCodeByQuality(QualityType petQuality, out string petCode)
+    private bool TryPickPetCodeByQuality(QualityType petQuality, out string petCode)
     {
         petCode = null;
-        PetDataRow[] petRows = GameEntry.DataTables.GetAllDataRows<PetDataRow>();
-        if (petRows == null || petRows.Length == 0)
+        if (_petCandidatesByQuality.Count == 0 && !WarmupPetSelectionCatalog())
         {
-            Log.Error("PetPlacementModule can not pick pet because PetDataTable is empty.");
+            Log.Error("PetPlacementModule 无法挑选宠物，宠物选择目录不可用。");
             return false;
         }
 
-        List<PetDataRow> candidates = new List<PetDataRow>();
-        for (int i = 0; i < petRows.Length; i++)
+        if (!_petCandidatesByQuality.TryGetValue(petQuality, out PetDataRow[] candidates)
+            || candidates == null
+            || candidates.Length == 0)
         {
-            PetDataRow petRow = petRows[i];
-            if (petRow == null || petRow.Quality != petQuality)
-            {
-                continue;
-            }
-
-            candidates.Add(petRow);
-        }
-
-        if (candidates.Count == 0)
-        {
-            Log.Error("PetPlacementModule can not pick pet because quality '{0}' has no candidates.", petQuality);
+            Log.Error("PetPlacementModule 无法挑选宠物，品质 '{0}' 无候选宠物。", petQuality);
             return false;
         }
 
-        PetDataRow selectedPet = candidates[UnityEngine.Random.Range(0, candidates.Count)];
+        PetDataRow selectedPet = candidates[UnityEngine.Random.Range(0, candidates.Length)];
         petCode = selectedPet.Code;
         return true;
     }
@@ -320,14 +379,14 @@ public sealed class PetPlacementModule
         petState = null;
         if (string.IsNullOrWhiteSpace(petCode))
         {
-            Log.Warning("PetPlacementModule can not create pet because pet code is empty.");
+            Log.Warning("PetPlacementModule 无法创建宠物，宠物编码为空。");
             return false;
         }
 
         int instanceId = AcquireInstanceId();
         if (instanceId <= 0)
         {
-            Log.Error("PetPlacementModule can not create pet because instance id is invalid.");
+            Log.Error("PetPlacementModule 无法创建宠物，实例 Id 无效。");
             return false;
         }
 
@@ -408,6 +467,13 @@ public sealed class PetPlacementModule
             return;
         }
 
+        if (!TryGetGameplayRuleDataRow(out GameplayRuleDataRow gameplayRuleDataRow))
+        {
+            Log.Warning("PetPlacementModule can not resolve post meal outcome because GameplayRuleDataRow is unavailable.");
+            BeginLeaving(petState);
+            return;
+        }
+
         bool releasedDiningSeat = ReleasePlacementSlotIfNeeded(petState);
         if (releasedDiningSeat)
         {
@@ -419,7 +485,8 @@ public sealed class PetPlacementModule
         petState.PendingSpawnHatchSlotIndex = -1;
 
         int playAreaCount = GameEntry.PlayfieldEntities != null ? GameEntry.PlayfieldEntities.PlayAreaCount : 0;
-        bool goPlayArea = playAreaCount > 0 && UnityEngine.Random.Range(0, 100) < GoPlayAreaProbability;
+        bool goPlayArea = playAreaCount > 0
+            && UnityEngine.Random.Range(0, 100) < gameplayRuleDataRow.GoPlayAreaProbability;
         if (goPlayArea)
         {
             petState.PlacementType = PetPlacementType.PlayArea;
@@ -496,6 +563,7 @@ public sealed class PetPlacementModule
             queuedPet.DiningWishState = PetDiningWishState.None;
             queuedPet.DesiredFruitCode = null;
             queuedPet.PendingSpawnHatchSlotIndex = -1;
+            queuedPet.PendingPromoteToDining = true;
             AssignDiningWishFruitIfNeeded(queuedPet);
             promotedAnyPet = true;
         }
@@ -516,7 +584,29 @@ public sealed class PetPlacementModule
             return;
         }
 
-        petState.RemainingPostMealSeconds = PlayAreaStaySeconds;
+        if (!TryGetGameplayRuleDataRow(out GameplayRuleDataRow gameplayRuleDataRow))
+        {
+            return;
+        }
+
+        petState.RemainingPostMealSeconds = gameplayRuleDataRow.PlayAreaStaySeconds;
+    }
+
+    /// <summary>
+    /// 获取全局玩法规则缓存。
+    /// 缓存缺失时会尝试从数据表模块回填一次。
+    /// </summary>
+    /// <param name="gameplayRuleDataRow">命中的玩法规则行。</param>
+    /// <returns>是否命中有效规则。</returns>
+    private bool TryGetGameplayRuleDataRow(out GameplayRuleDataRow gameplayRuleDataRow)
+    {
+        if (_gameplayRuleDataRow == null)
+        {
+            WarmupGameplayRuleCache();
+        }
+
+        gameplayRuleDataRow = _gameplayRuleDataRow;
+        return gameplayRuleDataRow != null;
     }
 
     /// <summary>
@@ -703,7 +793,7 @@ public sealed class PetPlacementModule
     {
         if (_nextInstanceId >= int.MaxValue)
         {
-            Log.Error("PetPlacementModule has run out of instance ids.");
+            Log.Error("PetPlacementModule 实例 Id 已耗尽。");
             return 0;
         }
 

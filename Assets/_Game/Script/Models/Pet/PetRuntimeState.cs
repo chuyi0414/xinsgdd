@@ -77,4 +77,11 @@ public sealed class PetRuntimeState
     /// 仅在 Producing 阶段有效，生产完成后重置为 -1。
     /// </summary>
     public int OrchardSlotIndex { get; internal set; } = -1;
+
+    /// <summary>
+    /// 排队宠物被补位到餐桌时，是否需要执行一次入座移动动画。
+    /// 仅在 PromoteQueuePetsIfPossible 中置 true，在真正发起 MoveToWorldPosition 后清 false。
+    /// 解决：购买新餐桌时排队宠物直接 AttachEntity 瞬移的 Bug。
+    /// </summary>
+    public bool PendingPromoteToDining { get; internal set; }
 }

@@ -7,6 +7,12 @@ using UnityGameFramework.Runtime;
 public sealed class EggEntityLogic : EntityLogic
 {
     /// <summary>
+    /// 蛋实体渲染顺序。
+    /// 必须高于孵化器，保证蛋永远压在孵化器上层显示。
+    /// </summary>
+    private const int EggSortingOrder = 10;
+
+    /// <summary>
     /// 蛋实体的精灵渲染器。
     /// </summary>
     private SpriteRenderer _spriteRenderer;
@@ -83,10 +89,16 @@ public sealed class EggEntityLogic : EntityLogic
         if (_spriteRenderer == null)
         {
             _spriteRenderer = GetComponentInChildren<SpriteRenderer>(true);
-            if (_spriteRenderer != null)
+        }
+
+        if (_spriteRenderer != null)
+        {
+            if (_defaultSprite == null)
             {
                 _defaultSprite = _spriteRenderer.sprite;
             }
+
+            _spriteRenderer.sortingOrder = EggSortingOrder;
         }
     }
 

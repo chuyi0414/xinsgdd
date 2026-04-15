@@ -10,6 +10,11 @@ public static class EntityDefine
     public const string EggGroup = "Item";
 
     /// <summary>
+    /// 孵化器实体所在分组。
+    /// </summary>
+    public const string IncubatorGroup = "Environment";
+
+    /// <summary>
     /// 桌子实体所在分组。
     /// </summary>
     public const string TableGroup = "Environment";
@@ -33,6 +38,11 @@ public static class EntityDefine
     /// 蛋实体资源名。
     /// </summary>
     public static readonly string EggEntity = AssetPath.GetEntity("Egg/EggEntity");
+
+    /// <summary>
+    /// 孵化器实体资源名。
+    /// </summary>
+    public static readonly string IncubatorEntity = AssetPath.GetEntity("Egg/IncubatorEntity");
 
     /// <summary>
     /// 桌子实体资源名。

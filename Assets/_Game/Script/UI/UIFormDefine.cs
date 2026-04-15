@@ -26,6 +26,16 @@ public static class UIFormDefine
     public static readonly string MainUIForm = AssetPath.GetUI("Main/MainUIForm");
 
     /// <summary>
+    /// 新人礼包界面资源名。
+    /// </summary>
+    public static readonly string NewcomerPackageUIForm = AssetPath.GetUI("NewcomerPackage/NewcomerPackageUIform");
+
+    /// <summary>
+    /// 购买蛋界面资源名。
+    /// </summary>
+    public static readonly string PurchaseEggsUIForm = AssetPath.GetUI("Eggs/PurchaseEggsUIForm");
+
+    /// <summary>
     /// 建筑升级界面资源名。
     /// </summary>
     public static readonly string ArchitectureUpgradeUIForm = AssetPath.GetUI("Architecture/ArchitectureUpgradeUIForm");

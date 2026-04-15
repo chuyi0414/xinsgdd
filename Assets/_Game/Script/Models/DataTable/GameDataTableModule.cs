@@ -31,6 +31,21 @@ public sealed class GameDataTableModule
     private static readonly string PetProduceDataTableAssetName = AssetPath.GetDataTable("PetProduce");
 
     /// <summary>
+    /// 全局玩法规则表资源路径。
+    /// </summary>
+    private static readonly string GameplayRuleDataTableAssetName = AssetPath.GetDataTable("GameplayRule");
+
+    /// <summary>
+    /// 建筑槽位配置表资源路径。
+    /// </summary>
+    private static readonly string ArchitectureSlotDataTableAssetName = AssetPath.GetDataTable("ArchitectureSlot");
+
+    /// <summary>
+    /// 建筑升级配置表资源路径。
+    /// </summary>
+    private static readonly string ArchitectureUpgradeDataTableAssetName = AssetPath.GetDataTable("ArchitectureUpgrade");
+
+    /// <summary>
     /// 已注册的数据表缓存，按行类型索引。
     /// </summary>
     private readonly Dictionary<Type, object> _dataTables = new Dictionary<Type, object>();
@@ -57,7 +72,10 @@ public sealed class GameDataTableModule
     public bool IsReady => IsAvailable<EggDataRow>()
         && IsAvailable<PetDataRow>()
         && IsAvailable<FruitDataRow>()
-        && IsAvailable<PetProduceDataRow>();
+        && IsAvailable<PetProduceDataRow>()
+        && IsAvailable<GameplayRuleDataRow>()
+        && IsAvailable<ArchitectureSlotDataRow>()
+        && IsAvailable<ArchitectureUpgradeDataRow>();
 
     /// <summary>
     /// 启动全部必需业务数据表加载。
@@ -71,6 +89,9 @@ public sealed class GameDataTableModule
         BeginLoadPetDataTable();
         BeginLoadFruitDataTable();
         BeginLoadPetProduceDataTable();
+        BeginLoadGameplayRuleDataTable();
+        BeginLoadArchitectureSlotDataTable();
+        BeginLoadArchitectureUpgradeDataTable();
 
         NotifyLoadStateChanged();
     }
@@ -391,6 +412,84 @@ public sealed class GameDataTableModule
     }
 
     /// <summary>
+    /// 开始加载全局玩法规则表。
+    /// </summary>
+    private void BeginLoadGameplayRuleDataTable()
+    {
+        if (IsAvailable<GameplayRuleDataRow>())
+        {
+            return;
+        }
+
+        IDataTable<GameplayRuleDataRow> gameplayRuleDataTable = EnsureDataTable<GameplayRuleDataRow>();
+        if (gameplayRuleDataTable == null)
+        {
+            Log.Error("创建全局玩法规则表失败。");
+            return;
+        }
+
+        if (gameplayRuleDataTable.Count > 0)
+        {
+            TryRegisterGameplayRuleDataTable(gameplayRuleDataTable);
+            return;
+        }
+
+        ((GameFramework.DataTable.DataTableBase)gameplayRuleDataTable).ReadData(GameplayRuleDataTableAssetName);
+    }
+
+    /// <summary>
+    /// 开始加载建筑槽位配置表。
+    /// </summary>
+    private void BeginLoadArchitectureSlotDataTable()
+    {
+        if (IsAvailable<ArchitectureSlotDataRow>())
+        {
+            return;
+        }
+
+        IDataTable<ArchitectureSlotDataRow> architectureSlotDataTable = EnsureDataTable<ArchitectureSlotDataRow>();
+        if (architectureSlotDataTable == null)
+        {
+            Log.Error("创建建筑槽位配置表失败。");
+            return;
+        }
+
+        if (architectureSlotDataTable.Count > 0)
+        {
+            TryRegisterArchitectureSlotDataTable(architectureSlotDataTable);
+            return;
+        }
+
+        ((GameFramework.DataTable.DataTableBase)architectureSlotDataTable).ReadData(ArchitectureSlotDataTableAssetName);
+    }
+
+    /// <summary>
+    /// 开始加载建筑升级配置表。
+    /// </summary>
+    private void BeginLoadArchitectureUpgradeDataTable()
+    {
+        if (IsAvailable<ArchitectureUpgradeDataRow>())
+        {
+            return;
+        }
+
+        IDataTable<ArchitectureUpgradeDataRow> architectureUpgradeDataTable = EnsureDataTable<ArchitectureUpgradeDataRow>();
+        if (architectureUpgradeDataTable == null)
+        {
+            Log.Error("创建建筑升级配置表失败。");
+            return;
+        }
+
+        if (architectureUpgradeDataTable.Count > 0)
+        {
+            TryRegisterArchitectureUpgradeDataTable(architectureUpgradeDataTable);
+            return;
+        }
+
+        ((GameFramework.DataTable.DataTableBase)architectureUpgradeDataTable).ReadData(ArchitectureUpgradeDataTableAssetName);
+    }
+
+    /// <summary>
     /// 数据表加载成功回调。
     /// </summary>
     private void OnLoadDataTableSuccess(object sender, GameEventArgs e)
@@ -416,6 +515,18 @@ public sealed class GameDataTableModule
         else if (string.Equals(ne.DataTableAssetName, PetProduceDataTableAssetName, StringComparison.Ordinal))
         {
             TryRegisterPetProduceDataTable(GameEntry.DataTable.GetDataTable<PetProduceDataRow>());
+        }
+        else if (string.Equals(ne.DataTableAssetName, GameplayRuleDataTableAssetName, StringComparison.Ordinal))
+        {
+            TryRegisterGameplayRuleDataTable(GameEntry.DataTable.GetDataTable<GameplayRuleDataRow>());
+        }
+        else if (string.Equals(ne.DataTableAssetName, ArchitectureSlotDataTableAssetName, StringComparison.Ordinal))
+        {
+            TryRegisterArchitectureSlotDataTable(GameEntry.DataTable.GetDataTable<ArchitectureSlotDataRow>());
+        }
+        else if (string.Equals(ne.DataTableAssetName, ArchitectureUpgradeDataTableAssetName, StringComparison.Ordinal))
+        {
+            TryRegisterArchitectureUpgradeDataTable(GameEntry.DataTable.GetDataTable<ArchitectureUpgradeDataRow>());
         }
     }
 
@@ -450,6 +561,21 @@ public sealed class GameDataTableModule
             Log.Error("加载宠物产出数据表失败：{0}", ne.ErrorMessage);
             Clear<PetProduceDataRow>();
         }
+        else if (string.Equals(ne.DataTableAssetName, GameplayRuleDataTableAssetName, StringComparison.Ordinal))
+        {
+            Log.Error("加载全局玩法规则表失败：{0}", ne.ErrorMessage);
+            Clear<GameplayRuleDataRow>();
+        }
+        else if (string.Equals(ne.DataTableAssetName, ArchitectureSlotDataTableAssetName, StringComparison.Ordinal))
+        {
+            Log.Error("加载建筑槽位配置表失败：{0}", ne.ErrorMessage);
+            Clear<ArchitectureSlotDataRow>();
+        }
+        else if (string.Equals(ne.DataTableAssetName, ArchitectureUpgradeDataTableAssetName, StringComparison.Ordinal))
+        {
+            Log.Error("加载建筑升级配置表失败：{0}", ne.ErrorMessage);
+            Clear<ArchitectureUpgradeDataRow>();
+        }
     }
 
     /// <summary>
@@ -463,14 +589,7 @@ public sealed class GameDataTableModule
             return false;
         }
 
-        if (GameEntry.EggHatch == null)
-        {
-            Log.Error("EggHatchComponent 未挂载，无法初始化孵化运行时状态。");
-            return false;
-        }
-
-        GameEntry.EggHatch.EnsureInitialized();
-        return true;
+        return TryWarmupEggHatchRuntimeState();
     }
 
     /// <summary>
@@ -487,6 +606,13 @@ public sealed class GameDataTableModule
         if (!Register(petDataTable))
         {
             Log.Error("宠物系统数据表注册失败。");
+            return false;
+        }
+
+        if (GameEntry.PetPlacement != null && !GameEntry.PetPlacement.WarmupPetSelectionCatalog())
+        {
+            Log.Error("宠物挑选缓存初始化失败。");
+            Clear<PetDataRow>();
             return false;
         }
 
@@ -509,16 +635,16 @@ public sealed class GameDataTableModule
             return false;
         }
 
-        if (GameEntry.Fruits != null && !GameEntry.Fruits.EnsureInitialized())
+        if (!TryWarmupPlayerRuntimeState())
         {
-            Log.Error("水果运行时模块初始化失败。");
-            Clear<FruitDataRow>();
             return false;
         }
 
-        // Fruit 表与 PetProduce 表是异步加载的，
-        // 任一方先完成时都主动触发一次点餐组件初始化尝试。
-        GameEntry.PetDiningOrders?.EnsureInitialized();
+        if (!TryWarmupPetDiningRuntimeState())
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -538,9 +664,138 @@ public sealed class GameDataTableModule
             return false;
         }
 
-        // PetProduce 表到位后再次尝试初始化点餐组件，
-        // 覆盖 Fruit 表更早注册完成的场景。
-        GameEntry.PetDiningOrders?.EnsureInitialized();
+        if (!TryWarmupPetDiningRuntimeState())
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 注册全局玩法规则表到通用模块。
+    /// </summary>
+    private bool TryRegisterGameplayRuleDataTable(IDataTable<GameplayRuleDataRow> gameplayRuleDataTable)
+    {
+        if (!ValidateGameplayRuleDataRows(gameplayRuleDataTable))
+        {
+            Clear<GameplayRuleDataRow>();
+            return false;
+        }
+
+        if (!Register(gameplayRuleDataTable))
+        {
+            Log.Error("全局玩法规则表注册失败。");
+            return false;
+        }
+
+        GameEntry.PetPlacement?.WarmupGameplayRuleCache();
+
+        if (!TryWarmupEggHatchRuntimeState())
+        {
+            return false;
+        }
+
+        if (!TryWarmupPlayerRuntimeState())
+        {
+            return false;
+        }
+
+        if (!TryWarmupPetDiningRuntimeState())
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 注册建筑槽位配置表到通用模块。
+    /// </summary>
+    private bool TryRegisterArchitectureSlotDataTable(IDataTable<ArchitectureSlotDataRow> architectureSlotDataTable)
+    {
+        if (!ValidateArchitectureSlotDataRows(architectureSlotDataTable))
+        {
+            Clear<ArchitectureSlotDataRow>();
+            return false;
+        }
+
+        if (!Register(architectureSlotDataTable))
+        {
+            Log.Error("建筑槽位配置表注册失败。");
+            return false;
+        }
+
+        return TryWarmupPlayerRuntimeState();
+    }
+
+    /// <summary>
+    /// 注册建筑升级配置表到通用模块。
+    /// </summary>
+    private bool TryRegisterArchitectureUpgradeDataTable(IDataTable<ArchitectureUpgradeDataRow> architectureUpgradeDataTable)
+    {
+        if (!ValidateArchitectureUpgradeDataRows(architectureUpgradeDataTable))
+        {
+            Clear<ArchitectureUpgradeDataRow>();
+            return false;
+        }
+
+        if (!Register(architectureUpgradeDataTable))
+        {
+            Log.Error("建筑升级配置表注册失败。");
+            return false;
+        }
+
+        return TryWarmupPlayerRuntimeState();
+    }
+
+    /// <summary>
+    /// 当蛋表与玩法规则表都准备好后，初始化蛋孵化运行时缓存。
+    /// </summary>
+    /// <returns>是否初始化成功。</returns>
+    private bool TryWarmupEggHatchRuntimeState()
+    {
+        if (!IsAvailable<EggDataRow>() || !IsAvailable<GameplayRuleDataRow>())
+        {
+            return true;
+        }
+
+        if (GameEntry.EggHatch == null)
+        {
+            Log.Error("EggHatchComponent 未挂载，无法初始化孵化运行时状态。");
+            Clear<EggDataRow>();
+            return false;
+        }
+
+        GameEntry.EggHatch.EnsureInitialized();
+        if (!GameEntry.EggHatch.IsAvailable)
+        {
+            Log.Error("孵化运行时模块初始化失败。");
+            Clear<EggDataRow>();
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 当水果表、玩法规则表与建筑配置表都准备好后，初始化玩家运行时缓存。
+    /// </summary>
+    /// <returns>是否初始化成功。</returns>
+    private bool TryWarmupPlayerRuntimeState()
+    {
+        if (!ArePlayerRuntimeTablesReady())
+        {
+            return true;
+        }
+
+        if (GameEntry.Fruits == null || !GameEntry.Fruits.EnsureInitialized())
+        {
+            Log.Error("玩家运行时模块初始化失败。");
+            Clear<FruitDataRow>();
+            return false;
+        }
+
         return true;
     }
 
@@ -552,7 +807,6 @@ public sealed class GameDataTableModule
     {
         if (!IsAvailable<PetDataRow>() || !IsAvailable<PetProduceDataRow>())
         {
-            // 允许异步加载顺序未完成时先跳过，待另一个表注册成功后再重试。
             return true;
         }
 
@@ -569,6 +823,291 @@ public sealed class GameDataTableModule
             Log.Error("宠物产出运行时缓存初始化失败。");
             Clear<PetProduceDataRow>();
             return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 当点餐流程依赖的全部表都准备好后，初始化点餐运行时缓存。
+    /// </summary>
+    /// <returns>是否初始化成功。</returns>
+    private bool TryWarmupPetDiningRuntimeState()
+    {
+        if (!ArePetDiningRuntimeTablesReady())
+        {
+            return true;
+        }
+
+        if (GameEntry.Fruits == null || !GameEntry.Fruits.EnsureInitialized())
+        {
+            Log.Error("玩家运行时模块尚未就绪，无法初始化点餐运行时模块。");
+            Clear<FruitDataRow>();
+            return false;
+        }
+
+        if (GameEntry.PetDiningOrders == null)
+        {
+            Log.Error("PetDiningOrderComponent 未挂载，无法初始化点餐运行时模块。");
+            Clear<PetProduceDataRow>();
+            return false;
+        }
+
+        GameEntry.PetDiningOrders.EnsureInitialized();
+        if (!GameEntry.PetDiningOrders.IsAvailable)
+        {
+            Log.Error("点餐运行时模块初始化失败。");
+            Clear<PetProduceDataRow>();
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 玩家运行时模块所需表是否已全部就绪。
+    /// </summary>
+    private bool ArePlayerRuntimeTablesReady()
+    {
+        return IsAvailable<FruitDataRow>()
+            && IsAvailable<GameplayRuleDataRow>()
+            && IsAvailable<ArchitectureSlotDataRow>()
+            && IsAvailable<ArchitectureUpgradeDataRow>();
+    }
+
+    /// <summary>
+    /// 点餐运行时模块所需表是否已全部就绪。
+    /// </summary>
+    private bool ArePetDiningRuntimeTablesReady()
+    {
+        return ArePlayerRuntimeTablesReady()
+            && IsAvailable<PetProduceDataRow>();
+    }
+
+    /// <summary>
+    /// 校验玩法规则表是否满足运行时约束。
+    /// </summary>
+    private static bool ValidateGameplayRuleDataRows(IDataTable<GameplayRuleDataRow> gameplayRuleDataTable)
+    {
+        if (gameplayRuleDataTable == null)
+        {
+            Log.Error("校验玩法规则表失败，数据表为空。");
+            return false;
+        }
+
+        GameplayRuleDataRow[] rows = gameplayRuleDataTable.GetAllDataRows();
+        if (rows == null || rows.Length != 1)
+        {
+            Log.Error("校验玩法规则表失败，必须且只能存在 1 行配置。");
+            return false;
+        }
+
+        GameplayRuleDataRow row = rows[0];
+        if (row == null)
+        {
+            Log.Error("校验玩法规则表失败，存在空行。");
+            return false;
+        }
+
+        if (!string.Equals(row.Code, GameplayRuleDataRow.DefaultCode, StringComparison.Ordinal))
+        {
+            Log.Error("校验玩法规则表失败，唯一配置行的 Code 必须为 '{0}'。", GameplayRuleDataRow.DefaultCode);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 校验建筑槽位配置表。
+    /// </summary>
+    private static bool ValidateArchitectureSlotDataRows(IDataTable<ArchitectureSlotDataRow> architectureSlotDataTable)
+    {
+        if (architectureSlotDataTable == null)
+        {
+            Log.Error("校验建筑槽位配置表失败，数据表为空。");
+            return false;
+        }
+
+        ArchitectureSlotDataRow[] rows = architectureSlotDataTable.GetAllDataRows();
+        if (rows == null || rows.Length == 0)
+        {
+            Log.Error("校验建筑槽位配置表失败，数据表为空。");
+            return false;
+        }
+
+        Dictionary<PlayerRuntimeModule.ArchitectureCategory, ArchitectureSlotDataRow[]> rowsByCategory =
+            new Dictionary<PlayerRuntimeModule.ArchitectureCategory, ArchitectureSlotDataRow[]>
+            {
+                {
+                    PlayerRuntimeModule.ArchitectureCategory.Hatch,
+                    new ArchitectureSlotDataRow[PlayerRuntimeModule.HatchArchitectureCountValue]
+                },
+                {
+                    PlayerRuntimeModule.ArchitectureCategory.Diet,
+                    new ArchitectureSlotDataRow[PlayerRuntimeModule.DietArchitectureCountValue]
+                },
+                {
+                    PlayerRuntimeModule.ArchitectureCategory.Fruiter,
+                    new ArchitectureSlotDataRow[PlayerRuntimeModule.FruiterArchitectureCountValue]
+                },
+            };
+
+        for (int i = 0; i < rows.Length; i++)
+        {
+            ArchitectureSlotDataRow row = rows[i];
+            if (row == null)
+            {
+                Log.Error("校验建筑槽位配置表失败，存在空行。");
+                return false;
+            }
+
+            if (!rowsByCategory.TryGetValue(row.Category, out ArchitectureSlotDataRow[] categoryRows))
+            {
+                Log.Error("校验建筑槽位配置表失败，存在不支持的建筑类别 '{0}'。", row.Category);
+                return false;
+            }
+
+            if (row.SlotIndex <= 0 || row.SlotIndex > categoryRows.Length)
+            {
+                Log.Error(
+                    "校验建筑槽位配置表失败，类别 '{0}' 的 SlotIndex '{1}' 超出当前项目支持上限 '{2}'。",
+                    row.Category,
+                    row.SlotIndex,
+                    categoryRows.Length);
+                return false;
+            }
+
+            if (categoryRows[row.SlotIndex - 1] != null)
+            {
+                Log.Error("校验建筑槽位配置表失败，类别 '{0}' 的 SlotIndex '{1}' 重复。", row.Category, row.SlotIndex);
+                return false;
+            }
+
+            categoryRows[row.SlotIndex - 1] = row;
+        }
+
+        foreach (KeyValuePair<PlayerRuntimeModule.ArchitectureCategory, ArchitectureSlotDataRow[]> pair in rowsByCategory)
+        {
+            ArchitectureSlotDataRow[] categoryRows = pair.Value;
+            bool foundLockedSlot = false;
+            for (int i = 0; i < categoryRows.Length; i++)
+            {
+                ArchitectureSlotDataRow row = categoryRows[i];
+                if (row == null)
+                {
+                    Log.Error("校验建筑槽位配置表失败，类别 '{0}' 缺少 SlotIndex '{1}' 的配置。", pair.Key, i + 1);
+                    return false;
+                }
+
+                if (!row.IsInitiallyUnlocked)
+                {
+                    foundLockedSlot = true;
+                    continue;
+                }
+
+                if (foundLockedSlot)
+                {
+                    Log.Error("校验建筑槽位配置表失败，类别 '{0}' 的初始解锁配置必须是连续前缀。", pair.Key);
+                    return false;
+                }
+            }
+
+            if (!categoryRows[0].IsInitiallyUnlocked)
+            {
+                Log.Error("校验建筑槽位配置表失败，类别 '{0}' 的 1 号位必须默认解锁。", pair.Key);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 校验建筑升级配置表。
+    /// </summary>
+    private static bool ValidateArchitectureUpgradeDataRows(IDataTable<ArchitectureUpgradeDataRow> architectureUpgradeDataTable)
+    {
+        if (architectureUpgradeDataTable == null)
+        {
+            Log.Error("校验建筑升级配置表失败，数据表为空。");
+            return false;
+        }
+
+        ArchitectureUpgradeDataRow[] rows = architectureUpgradeDataTable.GetAllDataRows();
+        if (rows == null || rows.Length == 0)
+        {
+            Log.Error("校验建筑升级配置表失败，数据表为空。");
+            return false;
+        }
+
+        Dictionary<PlayerRuntimeModule.ArchitectureCategory, HashSet<int>> levelsByCategory =
+            new Dictionary<PlayerRuntimeModule.ArchitectureCategory, HashSet<int>>();
+        Dictionary<PlayerRuntimeModule.ArchitectureCategory, int> maxLevelByCategory =
+            new Dictionary<PlayerRuntimeModule.ArchitectureCategory, int>();
+
+        for (int i = 0; i < rows.Length; i++)
+        {
+            ArchitectureUpgradeDataRow row = rows[i];
+            if (row == null)
+            {
+                Log.Error("校验建筑升级配置表失败，存在空行。");
+                return false;
+            }
+
+            if (row.EffectParam < 0)
+            {
+                Log.Error("校验建筑升级配置表失败，类别 '{0}' 的 CurrentLevel '{1}' 存在非法 EffectParam '{2}'。", row.Category, row.CurrentLevel, row.EffectParam);
+                return false;
+            }
+
+            if (!levelsByCategory.TryGetValue(row.Category, out HashSet<int> levels))
+            {
+                levels = new HashSet<int>();
+                levelsByCategory.Add(row.Category, levels);
+                maxLevelByCategory[row.Category] = 0;
+            }
+
+            if (!levels.Add(row.CurrentLevel))
+            {
+                Log.Error("校验建筑升级配置表失败，类别 '{0}' 的 CurrentLevel '{1}' 重复。", row.Category, row.CurrentLevel);
+                return false;
+            }
+
+            if (row.CurrentLevel > maxLevelByCategory[row.Category])
+            {
+                maxLevelByCategory[row.Category] = row.CurrentLevel;
+            }
+        }
+
+        PlayerRuntimeModule.ArchitectureCategory[] categories =
+        {
+            PlayerRuntimeModule.ArchitectureCategory.Hatch,
+            PlayerRuntimeModule.ArchitectureCategory.Diet,
+            PlayerRuntimeModule.ArchitectureCategory.Fruiter,
+        };
+
+        for (int i = 0; i < categories.Length; i++)
+        {
+            PlayerRuntimeModule.ArchitectureCategory category = categories[i];
+            if (!levelsByCategory.TryGetValue(category, out HashSet<int> levels)
+                || !maxLevelByCategory.TryGetValue(category, out int maxCurrentLevel)
+                || levels == null
+                || levels.Count == 0
+                || maxCurrentLevel <= 0)
+            {
+                Log.Error("校验建筑升级配置表失败，类别 '{0}' 没有任何升级配置。", category);
+                return false;
+            }
+
+            for (int level = 1; level <= maxCurrentLevel; level++)
+            {
+                if (!levels.Contains(level))
+                {
+                    Log.Error("校验建筑升级配置表失败，类别 '{0}' 缺少 CurrentLevel '{1}' 的升级配置。", category, level);
+                    return false;
+                }
+            }
         }
 
         return true;

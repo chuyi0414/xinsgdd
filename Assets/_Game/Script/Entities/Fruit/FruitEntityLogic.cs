@@ -162,15 +162,19 @@ public sealed class FruitEntityLogic : EntityLogic
     {
         KillDeliverTween();
 
-        // 送达前先脱离父实体，这样才能在世界坐标下自由移动
+        // 送达前先脱离父实体，这样才能在世界坐标下自由移动。
+        // 这里绝对不能再把实体挂到 null 根节点。
+        // 原因是 UGF 的实体实例默认都应该处于 EntityComponent 的托管树下，
+        // 一旦挂到场景根节点，退出游戏或切场景时就可能被 Unity 提前销毁，
+        // 但 EntityManager 仍然以为这个实体还活着，最终在 Shutdown -> OnHide 阶段触发 MissingReferenceException。
+        // DetachEntity 之后，EntityLogic.OnDetachFrom 的基类实现会把节点恢复到 OnInit 时缓存的原始父节点，
+        // 也就是对应的 EntityGroup 根节点，因此这里不再额外改父节点，只保留当前世界坐标即可。
         if (Entity != null && Entity.Id > 0 && GameEntry.Entity != null)
         {
             Entity parentEntity = GameEntry.Entity.GetParentEntity(Entity.Id);
             if (parentEntity != null)
             {
                 GameEntry.Entity.DetachEntity(Entity.Id);
-                // 脱离后保持当前世界位置与缩放
-                CachedTransform.SetParent(null, true);
             }
         }
 

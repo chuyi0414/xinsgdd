@@ -36,7 +36,6 @@ public partial class MainUIForm : UIFormLogic
     [SerializeField]
     private RectTransform _goYiDong;
     // 背景三页静态容器，位于 Canvas_Back 下。
-    [SerializeField]
     private RectTransform _backgroundPageRoot;
     // 左页根节点。
     [SerializeField]
@@ -83,7 +82,7 @@ public partial class MainUIForm : UIFormLogic
         }
         else
         {
-            Log.Warning("MainUIForm can not find BtnLeft.");
+            Log.Warning("MainUIForm 找不到 BtnLeft。");
         }
 
         if (_btnRight != null)
@@ -92,7 +91,7 @@ public partial class MainUIForm : UIFormLogic
         }
         else
         {
-            Log.Warning("MainUIForm can not find BtnRight.");
+            Log.Warning("MainUIForm 找不到 BtnRight。");
         }
 
         base.OnInit(userData);

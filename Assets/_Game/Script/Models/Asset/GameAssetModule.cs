@@ -53,6 +53,11 @@ public sealed class GameAssetModule
         /// 产出物 UI 预制体资源。
         /// </summary>
         OutputProducePrefab = 7,
+
+        /// <summary>
+        /// 金币点击提示 Toast 预制体资源。
+        /// </summary>
+        GoldCoinToastPrefab = 8,
     }
 
     /// <summary>
@@ -69,6 +74,11 @@ public sealed class GameAssetModule
     /// 产出物按钮预制体的统一资源路径。
     /// </summary>
     private static readonly string OutputProducePrefabPath = AssetPath.GetUI("Output/OutputBtn");
+
+    /// <summary>
+    /// 金币点击提示 Toast 预制体的统一资源路径。
+    /// </summary>
+    private static readonly string GoldCoinToastPrefabPath = AssetPath.GetUI("Toast/GoldCoinToast");
 
     /// <summary>
     /// 单次资源加载任务的上下文数据。
@@ -170,6 +180,11 @@ public sealed class GameAssetModule
     private readonly HashSet<string> _loadingOutputProducePrefabPaths = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
+    /// 当前仍在加载中的金币点击提示 Toast 预制体路径集合。
+    /// </summary>
+    private readonly HashSet<string> _loadingGoldCoinToastPrefabPaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
     /// 统一复用的资源加载回调函数集。
     /// </summary>
     private readonly LoadAssetCallbacks _loadAssetCallbacks;
@@ -210,6 +225,11 @@ public sealed class GameAssetModule
     private int _pendingOutputProducePrefabCount;
 
     /// <summary>
+    /// 当前待完成的金币点击提示 Toast 预制体加载数量。
+    /// </summary>
+    private int _pendingGoldCoinToastPrefabCount;
+
+    /// <summary>
     /// 是否已经发起过蛋图标预加载。
     /// </summary>
     private bool _eggPreloadRequested;
@@ -243,6 +263,11 @@ public sealed class GameAssetModule
     /// 是否已经发起过产出物 UI 预制体预热。
     /// </summary>
     private bool _outputProducePrefabPreloadRequested;
+
+    /// <summary>
+    /// 是否已经发起过金币点击提示 Toast 预制体预热。
+    /// </summary>
+    private bool _goldCoinToastPrefabPreloadRequested;
 
     /// <summary>
     /// 蛋图标预加载是否已经完成。
@@ -280,6 +305,11 @@ public sealed class GameAssetModule
     private bool _outputProducePrefabPreloadCompleted;
 
     /// <summary>
+    /// 金币点击提示 Toast 预制体预热是否已经完成。
+    /// </summary>
+    private bool _goldCoinToastPrefabPreloadCompleted;
+
+    /// <summary>
     /// 已预热缓存的宠物实体预制体。
     /// </summary>
     private GameObject _petEntityPrefab;
@@ -298,6 +328,11 @@ public sealed class GameAssetModule
     /// 已预热缓存的产出物 UI 预制体。
     /// </summary>
     private GameObject _outputProducePrefab;
+
+    /// <summary>
+    /// 已预热缓存的金币点击提示 Toast 预制体。
+    /// </summary>
+    private GameObject _goldCoinToastPrefab;
 
     /// <summary>
     /// 预加载过程中是否出现过失败。
@@ -332,7 +367,8 @@ public sealed class GameAssetModule
         && _petEntityPrefabPreloadCompleted
         && _petFoodBubblePrefabPreloadCompleted
         && _goldCoinPrefabPreloadCompleted
-        && _outputProducePrefabPreloadCompleted;
+        && _outputProducePrefabPreloadCompleted
+        && _goldCoinToastPrefabPreloadCompleted;
 
     /// <summary>
     /// 当前是否已经出现预加载失败。
@@ -370,6 +406,11 @@ public sealed class GameAssetModule
         if (!_outputProducePrefabPreloadRequested)
         {
             BeginPreloadOutputProducePrefab();
+        }
+
+        if (!_goldCoinToastPrefabPreloadRequested)
+        {
+            BeginPreloadGoldCoinToastPrefab();
         }
 
         if (GameEntry.DataTables == null)
@@ -469,6 +510,17 @@ public sealed class GameAssetModule
     {
         outputProducePrefab = _outputProducePrefab;
         return outputProducePrefab != null;
+    }
+
+    /// <summary>
+    /// 获取金币点击提示 Toast 预制体缓存。
+    /// </summary>
+    /// <param name="goldCoinToastPrefab">命中的预制体资源。</param>
+    /// <returns>是否命中缓存。</returns>
+    public bool TryGetGoldCoinToastPrefab(out GameObject goldCoinToastPrefab)
+    {
+        goldCoinToastPrefab = _goldCoinToastPrefab;
+        return goldCoinToastPrefab != null;
     }
 
     /// <summary>
@@ -664,6 +716,30 @@ public sealed class GameAssetModule
     }
 
     /// <summary>
+    /// 预热金币点击提示 Toast 预制体资源。
+    /// </summary>
+    private void BeginPreloadGoldCoinToastPrefab()
+    {
+        _goldCoinToastPrefabPreloadRequested = true;
+        _goldCoinToastPrefabPreloadCompleted = false;
+
+        string prefabPath = GoldCoinToastPrefabPath;
+        if (_goldCoinToastPrefab != null || _loadingGoldCoinToastPrefabPaths.Contains(prefabPath))
+        {
+            UpdatePreloadCompletionState();
+            NotifyPreloadStateChanged();
+            return;
+        }
+
+        if (!TryLoadAsset(prefabPath, typeof(GameObject), PreloadAssetKind.GoldCoinToastPrefab))
+        {
+            RegisterFailure(Utility.Text.Format("预热金币点击提示 Toast 预制体失败，无法开始加载资源，Path='{0}'。", prefabPath));
+            UpdatePreloadCompletionState();
+            NotifyPreloadStateChanged();
+        }
+    }
+
+    /// <summary>
     /// 为单条蛋表记录启动图标加载。
     /// 已缓存或已在加载中的路径会直接跳过。
     /// </summary>
@@ -802,6 +878,11 @@ public sealed class GameAssetModule
                 _loadingOutputProducePrefabPaths.Add(assetPath);
                 _pendingOutputProducePrefabCount++;
                 break;
+
+            case PreloadAssetKind.GoldCoinToastPrefab:
+                _loadingGoldCoinToastPrefabPaths.Add(assetPath);
+                _pendingGoldCoinToastPrefabCount++;
+                break;
         }
 
         resourceManager.LoadAsset(assetPath, assetType, _loadAssetCallbacks, loadInfo);
@@ -863,6 +944,12 @@ public sealed class GameAssetModule
                 _loadingOutputProducePrefabPaths.Remove(loadInfo.AssetPath);
                 _pendingOutputProducePrefabCount = Mathf.Max(0, _pendingOutputProducePrefabCount - 1);
                 HandleOutputProducePrefabLoaded(loadInfo.AssetPath, asset as GameObject);
+                break;
+
+            case PreloadAssetKind.GoldCoinToastPrefab:
+                _loadingGoldCoinToastPrefabPaths.Remove(loadInfo.AssetPath);
+                _pendingGoldCoinToastPrefabCount = Mathf.Max(0, _pendingGoldCoinToastPrefabCount - 1);
+                HandleGoldCoinToastPrefabLoaded(loadInfo.AssetPath, asset as GameObject);
                 break;
         }
 
@@ -929,6 +1016,12 @@ public sealed class GameAssetModule
             _loadingOutputProducePrefabPaths.Remove(loadInfo.AssetPath);
             _pendingOutputProducePrefabCount = Mathf.Max(0, _pendingOutputProducePrefabCount - 1);
             RegisterFailure(Utility.Text.Format("产出物 UI 预制体预热失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
+        }
+        else if (loadInfo.AssetKind == PreloadAssetKind.GoldCoinToastPrefab)
+        {
+            _loadingGoldCoinToastPrefabPaths.Remove(loadInfo.AssetPath);
+            _pendingGoldCoinToastPrefabCount = Mathf.Max(0, _pendingGoldCoinToastPrefabCount - 1);
+            RegisterFailure(Utility.Text.Format("金币点击提示 Toast 预制体预热失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
         }
 
         UpdatePreloadCompletionState();
@@ -1050,6 +1143,22 @@ public sealed class GameAssetModule
     }
 
     /// <summary>
+    /// 处理金币点击提示 Toast 预制体预热完成。
+    /// </summary>
+    /// <param name="assetPath">预制体路径。</param>
+    /// <param name="goldCoinToastPrefab">命中的预制体资源。</param>
+    private void HandleGoldCoinToastPrefabLoaded(string assetPath, GameObject goldCoinToastPrefab)
+    {
+        if (goldCoinToastPrefab == null)
+        {
+            RegisterFailure(Utility.Text.Format("金币点击提示 Toast 预制体预热失败，资源类型不是 GameObject，Path='{0}'。", assetPath));
+            return;
+        }
+
+        _goldCoinToastPrefab = goldCoinToastPrefab;
+    }
+
+    /// <summary>
     /// 记录某条宠物表对应的动画校验信息。
     /// </summary>
     private void AddPetValidationInfo(PetDataRow row)
@@ -1162,6 +1271,11 @@ public sealed class GameAssetModule
         if (_outputProducePrefabPreloadRequested && _pendingOutputProducePrefabCount <= 0)
         {
             _outputProducePrefabPreloadCompleted = true;
+        }
+
+        if (_goldCoinToastPrefabPreloadRequested && _pendingGoldCoinToastPrefabCount <= 0)
+        {
+            _goldCoinToastPrefabPreloadCompleted = true;
         }
     }
 

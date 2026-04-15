@@ -289,14 +289,14 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     {
         if (_contentRoot == null)
         {
-            Log.Error("ArchitectureUpgradeUIForm initialize failed because Content root is missing.");
+            Log.Error("ArchitectureUpgradeUIForm 初始化失败，Content 根节点缺失。");
             return false;
         }
 
         if (_contentRoot.childCount != ExpectedEntryCount)
         {
             Log.Error(
-                "ArchitectureUpgradeUIForm initialize failed because Content child count is '{0}', expected '{1}'.",
+                "ArchitectureUpgradeUIForm 初始化失败，Content 子节点数为 '{0}'，期望 '{1}'。",
                 _contentRoot.childCount,
                 ExpectedEntryCount);
             return false;
@@ -308,13 +308,13 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
             RectTransform entryRoot = _contentRoot.GetChild(i) as RectTransform;
             if (entryRoot == null)
             {
-                Log.Error("ArchitectureUpgradeUIForm initialize failed because entry root '{0}' is invalid.", i);
+                Log.Error("ArchitectureUpgradeUIForm 初始化失败，条目根节点 '{0}' 无效。", i);
                 return false;
             }
 
             if (!TryParseEntryIdentity(entryRoot.name, out PlayerRuntimeModule.ArchitectureCategory category, out int slotIndex))
             {
-                Log.Error("ArchitectureUpgradeUIForm initialize failed because entry name '{0}' is invalid.", entryRoot.name);
+                Log.Error("ArchitectureUpgradeUIForm 初始化失败，条目名称 '{0}' 无效。", entryRoot.name);
                 return false;
             }
 
@@ -335,14 +335,14 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
                 || levelViewport == null
                 || indicatorRoot == null)
             {
-                Log.Error("ArchitectureUpgradeUIForm initialize failed because entry '{0}' is missing key nodes.", entryRoot.name);
+                Log.Error("ArchitectureUpgradeUIForm 初始化失败，条目 '{0}' 缺少关键节点。", entryRoot.name);
                 return false;
             }
 
             if (indicatorRoot.childCount != ExpectedLevelIndicatorCount)
             {
                 Log.Error(
-                    "ArchitectureUpgradeUIForm initialize failed because entry '{0}' level indicator count is '{1}', expected '{2}'.",
+                    "ArchitectureUpgradeUIForm 初始化失败，条目 '{0}' 等级指示器数量为 '{1}'，期望 '{2}'。",
                     entryRoot.name,
                     indicatorRoot.childCount,
                     ExpectedLevelIndicatorCount);
