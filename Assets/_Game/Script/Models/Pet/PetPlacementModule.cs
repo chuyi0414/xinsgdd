@@ -268,7 +268,19 @@ public sealed class PetPlacementModule
             return false;
         }
 
-        return TryPlacePet(petCode, petQuality, hatchSlotIndex, out petState);
+        if (!TryPlacePet(petCode, petQuality, hatchSlotIndex, out petState))
+        {
+            return false;
+        }
+
+        // 宠物孵化成功后，立即把当前宠物编码写入玩家运行时图鉴缓存。
+        // 这样宠物图鉴界面下次打开时，就能直接把该宠物显示为已解锁状态。
+        if (GameEntry.Fruits != null)
+        {
+            GameEntry.Fruits.TryUnlockPet(petCode);
+        }
+
+        return true;
     }
 
     /// <summary>

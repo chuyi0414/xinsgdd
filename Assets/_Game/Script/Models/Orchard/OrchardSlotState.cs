@@ -55,7 +55,10 @@ public sealed class OrchardSlotState
 
     /// <summary>
     /// 逐帧推进生产倒计时。
-    /// 到期后自动释放果树。
+    /// 到期后自动标记可收取。
+    /// 注意：这里故意不自动 Release，
+    /// 因为果树的逻辑占用必须与场景中的水果视觉生命周期保持同步。
+    /// 如果倒计时一到就立刻释放，会重新引入“逻辑空闲但视觉仍存在”的状态反同步问题。
     /// </summary>
     /// <param name="deltaTime">本帧推进秒数。</param>
     public void Tick(float deltaTime)
@@ -68,7 +71,10 @@ public sealed class OrchardSlotState
         RemainingProduceSeconds -= deltaTime;
         if (RemainingProduceSeconds <= 0f)
         {
-            Release();
+            // 生产完成后只把剩余时间钳到 0，并标记为可收取。
+            // 真正释放槽位必须由外部在送达成功、失败回滚或超时善后时显式调用。
+            RemainingProduceSeconds = 0f;
+            IsReadyToCollect = true;
         }
     }
 

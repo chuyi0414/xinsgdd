@@ -224,6 +224,16 @@ public sealed class PetEntityLogic : EntityLogic
         if (_skeletonAnimation == null)
         {
             _skeletonAnimation = GetComponentInChildren<SkeletonAnimation>(true);
+
+            // 首次缓存时设置排序层，避免每次换宠物重复赋值。
+            if (_skeletonAnimation != null)
+            {
+                MeshRenderer meshRenderer = _skeletonAnimation.GetComponent<MeshRenderer>();
+                if (meshRenderer != null)
+                {
+                    meshRenderer.sortingLayerName = "Pet";
+                }
+            }
         }
 
         if (_skeletonAnimation == null && !_hasLoggedMissingSkeletonAnimation)
@@ -260,12 +270,12 @@ public sealed class PetEntityLogic : EntityLogic
         SkeletonDataAsset skeletonDataAsset = null;
         if (GameEntry.GameAssets != null)
         {
-            GameEntry.GameAssets.TryGetPetSkeletonDataAsset(petDataRow.SkeletonDataPath, out skeletonDataAsset);
+            GameEntry.GameAssets.TryGetPetSkeletonDataAsset(petDataRow.EntitySkeletonDataPath, out skeletonDataAsset);
         }
 
         if (skeletonDataAsset == null)
         {
-            Log.Warning("PetEntityLogic can not find cached skeleton data by path '{0}'.", petDataRow.SkeletonDataPath);
+            Log.Warning("PetEntityLogic can not find cached entity skeleton data by path '{0}'.", petDataRow.EntitySkeletonDataPath);
             return;
         }
 

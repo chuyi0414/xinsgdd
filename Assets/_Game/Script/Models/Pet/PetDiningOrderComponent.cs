@@ -44,6 +44,8 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
     /// </summary>
     private GameplayRuleDataRow _gameplayRuleDataRow;
 
+    private const float ProducingFallbackToleranceSeconds = 1f;
+
     /// <summary>
     /// 当前组件是否可用。
     /// </summary>
@@ -181,16 +183,15 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
                 produceSeconds * GameEntry.Fruits.GetFruiterDurationScale(orchardSlotIndex + 1));
         }
 
-        if (!orchardModule.TryOccupySlot(orchardSlotIndex, petState.DesiredFruitCode, produceSeconds))
+        // 生产超时要略大于理论生产时长。
+        // 这里额外加一个容差，专门兜底动画回调丢失、实体显示失败等异常链路，
+        // 防止宠物长期卡死在 Producing 状态。
+        float producingTimeoutSeconds = produceSeconds + ProducingFallbackToleranceSeconds;
+
+        if (!orchardModule.TryOccupySlot(orchardSlotIndex, petState.DesiredFruitCode, producingTimeoutSeconds))
         {
             return false;
         }
-
-        petState.OrchardSlotIndex = orchardSlotIndex;
-        petState.DiningWishState = PetDiningWishState.Producing;
-        petState.RemainingDiningStageSeconds = produceSeconds;
-        petState.RemainingPostMealSeconds = 0f;
-        GameEntry.PetPlacement.NotifyPlacementStateChanged();
 
         // 在果树上创建水果实体并播放生长动画
         // 生长时长 = ProduceSeconds - 送达飞行时长
@@ -202,11 +203,28 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
         int capturedTableIndex = petState.SlotIndex;
         string capturedFruitCode = petState.DesiredFruitCode;
 
-        GameEntry.PlayfieldEntities?.TryShowOrchardFruit(
-            orchardSlotIndex,
-            petState.DesiredFruitCode,
-            growDuration,
-            () => OnOrchardGrowComplete(capturedPetInstanceId, capturedOrchardIndex, capturedTableIndex, capturedFruitCode));
+        // 先尝试把果树水果实体真正提交到场景。
+        // 只有这一步成功，后续才允许切换宠物状态并关闭气泡。
+        if (GameEntry.PlayfieldEntities == null
+            || !GameEntry.PlayfieldEntities.TryShowOrchardFruit(
+                orchardSlotIndex,
+                petState.DesiredFruitCode,
+                growDuration,
+                () => OnOrchardGrowComplete(capturedPetInstanceId, capturedOrchardIndex, capturedTableIndex, capturedFruitCode)))
+        {
+            // 果树水果实体提交失败时，必须立即释放刚刚占用的果树位。
+            // 这里不能把宠物切到 Producing，否则会出现气泡消失但桌上没食物的假状态。
+            orchardModule.ReleaseSlot(orchardSlotIndex);
+            return false;
+        }
+
+        // 到这里说明果树水果已经成功进入显示/生长链路，
+        // 现在才可以安全写入 Producing 状态并让 UI 按规则隐藏气泡。
+        petState.OrchardSlotIndex = orchardSlotIndex;
+        petState.DiningWishState = PetDiningWishState.Producing;
+        petState.RemainingDiningStageSeconds = producingTimeoutSeconds;
+        petState.RemainingPostMealSeconds = 0f;
+        GameEntry.PetPlacement.NotifyPlacementStateChanged();
 
         return true;
     }
@@ -272,7 +290,12 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
     private void UpdateProducingOrder(PetRuntimeState petState, float deltaTime)
     {
         petState.RemainingDiningStageSeconds -= deltaTime;
-        // 动画回调会驱动状态转换，这里不再主动转 Serving
+        if (petState.RemainingDiningStageSeconds > 0f)
+        {
+            return;
+        }
+
+        HandleProducingOrderTimeout(petState);
     }
 
     /// <summary>
@@ -286,19 +309,21 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
             return;
         }
 
+        // 送达完成回调会把“桌面水果是否真正显示成功”的结果回传回来，
+        // 由上层统一决定进入 Serving 还是整单回滚到 Pending。
         GameEntry.PlayfieldEntities.BeginOrchardFruitDelivery(
             orchardIndex,
             tableIndex,
             fruitCode,
             _gameplayRuleDataRow.DeliverAnimationDuration,
-            () => OnOrchardDeliverComplete(petInstanceId, tableIndex));
+            deliveredToTable => OnOrchardDeliverComplete(petInstanceId, orchardIndex, tableIndex, deliveredToTable));
     }
 
     /// <summary>
     /// 果树水果送达飞行动画完成回调。
     /// 水果已在桌上显示，切换到 Serving 阶段。
     /// </summary>
-    private void OnOrchardDeliverComplete(int petInstanceId, int tableIndex)
+    private void OnOrchardDeliverComplete(int petInstanceId, int orchardIndex, int tableIndex, bool deliveredToTable)
     {
         if (GameEntry.PetPlacement == null)
         {
@@ -306,15 +331,103 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
         }
 
         PetRuntimeState petState = GameEntry.PetPlacement.GetPetStateByInstanceId(petInstanceId);
-        if (petState == null || petState.DiningWishState != PetDiningWishState.Producing)
+        // 二次校验当前宠物是否仍然对应这一次点餐链路。
+        // 如果中途已经被超时回滚或状态重置，迟到的旧回调必须直接丢弃，
+        // 否则会误清理新订单或把宠物推进到错误状态。
+        if (petState == null
+            || petState.DiningWishState != PetDiningWishState.Producing
+            || petState.OrchardSlotIndex != orchardIndex
+            || petState.SlotIndex != tableIndex)
         {
             return;
+        }
+
+        if (!deliveredToTable)
+        {
+            // deliveredToTable == false 的语义是：飞行动画虽然结束，
+            // 但桌面水果实体没有成功显示。
+            // 这里必须整单回滚，否则会再次出现宠物霸占桌位但桌上无食物的错误状态。
+            CleanupDiningOrderArtifacts(orchardIndex, tableIndex);
+            RestorePendingDiningWish(petState);
+            GameEntry.PetPlacement.NotifyPlacementStateChanged();
+            return;
+        }
+
+        // 桌面水果已经显示成功，果树侧的职责到此结束。
+        // 现在可以安全释放果树占用，并把宠物推进到 Serving 阶段。
+        if (orchardIndex >= 0)
+        {
+            GameEntry.Orchards?.ReleaseSlot(orchardIndex);
         }
 
         petState.OrchardSlotIndex = -1;
         petState.DiningWishState = PetDiningWishState.Serving;
         petState.RemainingDiningStageSeconds = _gameplayRuleDataRow.ServingDurationSeconds;
         GameEntry.PetPlacement.NotifyPlacementStateChanged();
+    }
+
+    /// <summary>
+    /// 处理 Producing 阶段超时。
+    /// 当生长动画、送达动画或实体显示回调链路异常中断时，
+    /// 这里负责清理残留并把宠物恢复到 Pending，避免桌位永久卡死。
+    /// </summary>
+    /// <param name="petState">当前超时的宠物运行时状态。</param>
+    private void HandleProducingOrderTimeout(PetRuntimeState petState)
+    {
+        if (petState == null || petState.DiningWishState != PetDiningWishState.Producing)
+        {
+            return;
+        }
+
+        // 超时后的善后必须同时处理视觉残留与逻辑残留，
+        // 然后再把宠物恢复为 Pending，让气泡重新可见。
+        CleanupDiningOrderArtifacts(petState.OrchardSlotIndex, petState.SlotIndex);
+        RestorePendingDiningWish(petState);
+        GameEntry.PetPlacement?.NotifyPlacementStateChanged();
+    }
+
+    /// <summary>
+    /// 清理一次点餐流程可能残留的果树水果、桌面水果以及果树占用。
+    /// 该方法只负责做显式善后，不直接修改宠物自身状态。
+    /// </summary>
+    /// <param name="orchardIndex">需要清理的果树索引，传负数表示跳过果树侧清理。</param>
+    /// <param name="tableIndex">需要清理的桌位索引，传负数表示跳过桌面侧清理。</param>
+    private void CleanupDiningOrderArtifacts(int orchardIndex, int tableIndex)
+    {
+        if (orchardIndex >= 0)
+        {
+            // 果树侧残留要同时清理“视觉实体 + 逻辑占用”，
+            // 否则后续新订单会因为占用状态不一致再次出错。
+            GameEntry.PlayfieldEntities?.HideOrchardFruit(orchardIndex);
+            GameEntry.Orchards?.ReleaseSlot(orchardIndex);
+        }
+
+        if (tableIndex >= 0)
+        {
+            // 桌面侧只要有残留水果，也必须一并移除，
+            // 避免旧订单的视觉结果污染新订单。
+            GameEntry.PlayfieldEntities?.HideDiningFruit(tableIndex);
+        }
+    }
+
+    /// <summary>
+    /// 将宠物点餐状态恢复为 Pending。
+    /// 恢复后 UI 层会重新生成对应气泡，允许玩家再次发起点餐。
+    /// </summary>
+    /// <param name="petState">需要回滚的宠物运行时状态。</param>
+    private static void RestorePendingDiningWish(PetRuntimeState petState)
+    {
+        if (petState == null)
+        {
+            return;
+        }
+
+        // 这里要把 Producing/Serving 过程中写入的临时状态全部清空，
+        // 确保后续重新点餐时不会读到脏数据。
+        petState.OrchardSlotIndex = -1;
+        petState.DiningWishState = PetDiningWishState.Pending;
+        petState.RemainingDiningStageSeconds = 0f;
+        petState.RemainingPostMealSeconds = 0f;
     }
 
     /// <summary>

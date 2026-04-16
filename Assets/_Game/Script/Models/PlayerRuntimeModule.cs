@@ -212,6 +212,12 @@ public sealed class PlayerRuntimeModule
     private readonly HashSet<string> _unlockedFruitCodes = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
+    /// 当前会话内已解锁的宠物 Code 集合。
+    /// 宠物孵化成功后会写入这里，供宠物图鉴界面直接查询当前解锁状态。
+    /// </summary>
+    private readonly HashSet<string> _unlockedPetCodes = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
     /// 当前已缓存的全部水果行。
     /// </summary>
     private FruitDataRow[] _allFruitRows = Array.Empty<FruitDataRow>();
@@ -1252,6 +1258,7 @@ public sealed class PlayerRuntimeModule
         _unlockedFruitCandidates = new FruitDataRow[fruitRows.Length];
         _lockedFruitCandidates = new FruitDataRow[fruitRows.Length];
         _unlockedFruitCodes.Clear();
+        _unlockedPetCodes.Clear();
 
         for (int i = 0; i < fruitRows.Length; i++)
         {
@@ -1315,6 +1322,90 @@ public sealed class PlayerRuntimeModule
 
         _isCandidateCacheDirty = true;
         return true;
+    }
+
+    /// <summary>
+    /// 判断指定宠物在当前会话内是否已解锁。
+    /// </summary>
+    /// <param name="petCode">宠物 Code。</param>
+    /// <returns>是否已解锁。</returns>
+    public bool IsPetUnlocked(string petCode)
+    {
+        if (!EnsureInitialized() || string.IsNullOrWhiteSpace(petCode))
+        {
+            return false;
+        }
+
+        return _unlockedPetCodes.Contains(petCode);
+    }
+
+    /// <summary>
+    /// 在当前会话内解锁指定宠物。
+    /// </summary>
+    /// <param name="petCode">宠物 Code。</param>
+    /// <returns>是否成功解锁。</returns>
+    public bool TryUnlockPet(string petCode)
+    {
+        if (!EnsureInitialized() || string.IsNullOrWhiteSpace(petCode))
+        {
+            return false;
+        }
+
+        PetDataRow petRow = GameEntry.DataTables.GetDataRowByCode<PetDataRow>(petCode);
+        if (petRow == null)
+        {
+            Log.Warning("PlayerRuntimeModule can not unlock pet because code '{0}' is invalid.", petCode);
+            return false;
+        }
+
+        if (!_unlockedPetCodes.Add(petCode))
+        {
+            return true;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 原子购买接口：校验数据行存在 → 校验未解锁 → 校验金币充足 → 扣金币 → 解锁水果。
+    /// UI 层只需调用此单一接口即可完成完整购买事务，无需自行拆分扣款与解锁。
+    /// </summary>
+    /// <param name="fruitCode">水果 Code。</param>
+    /// <returns>是否购买成功。</returns>
+    public bool TryPurchaseFruit(string fruitCode)
+    {
+        if (!EnsureInitialized() || string.IsNullOrWhiteSpace(fruitCode))
+        {
+            return false;
+        }
+
+        FruitDataRow fruitRow = GameEntry.DataTables.GetDataRowByCode<FruitDataRow>(fruitCode);
+        if (fruitRow == null)
+        {
+            Log.Warning("PlayerRuntimeModule 无法购买水果，编码 '{0}' 无效。", fruitCode);
+            return false;
+        }
+
+        // 已默认解锁或已运行时解锁的水果不允许重复购买
+        if (fruitRow.IsUnlocked || IsFruitUnlocked(fruitCode))
+        {
+            return false;
+        }
+
+        // 解锁金币必须大于 0（数据表校验保证了这一点，此处做防御性检查）
+        if (fruitRow.UnlockGold <= 0)
+        {
+            return false;
+        }
+
+        // 扣金币失败说明余额不足
+        if (!TryConsumeGold(fruitRow.UnlockGold))
+        {
+            return false;
+        }
+
+        // 扣款成功，执行解锁
+        return TryUnlockFruit(fruitCode);
     }
 
     /// <summary>

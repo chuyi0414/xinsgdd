@@ -9,19 +9,32 @@ using UnityGameFramework.Runtime;
 public partial class MainUIForm : UIFormLogic
 {
     /// <summary>
-    /// 左页索引。
+    /// 主界面分页槽位。
+    /// 这里不再用单一整数表示“左中右”，
+    /// 因为当前页面已经扩展为“左/中/右/下”四个离散槽位。
     /// </summary>
-    private const int LeftPageIndex = -1;
+    private enum MainPageSlot
+    {
+        /// <summary>
+        /// 左页。
+        /// </summary>
+        Left = 0,
 
-    /// <summary>
-    /// 中页索引。
-    /// </summary>
-    private const int CenterPageIndex = 0;
+        /// <summary>
+        /// 中页。
+        /// </summary>
+        Center = 1,
 
-    /// <summary>
-    /// 右页索引。
-    /// </summary>
-    private const int RightPageIndex = 1;
+        /// <summary>
+        /// 右页。
+        /// </summary>
+        Right = 2,
+
+        /// <summary>
+        /// 下页。
+        /// </summary>
+        Below = 3,
+    }
 
     // 左边按钮
     [SerializeField]
@@ -29,6 +42,34 @@ public partial class MainUIForm : UIFormLogic
     // 右边按钮
     [SerializeField]
     private Button _btnRight;
+    // 下方页面回到中页的上翻按钮。
+    // 这个按钮是全局悬浮按钮，默认隐藏，仅在 Below 页显示。
+    [SerializeField]
+    private Button _btnUp;
+    // 每日一关按钮。点击后切到下方页面。
+    [SerializeField]
+    private Button _btnDailyChallenge;
+    // 水果图鉴按钮。用户在 Inspector 中自行拖入 GOSGTJ 上的 Button 组件。
+    [SerializeField]
+    private Button _btnFruitTJ;
+    // 宠物图鉴按钮。用户在 Inspector 中自行拖入 GOCWTJ 上的 Button 组件。
+    [SerializeField]
+    private Button _btnPetTJ;
+    // 每日一关附属 UI：GoTX 根节点。进入每日一关时隐藏，返回中页动画结束后恢复。
+    [SerializeField]
+    private GameObject _goTX;
+    // 每日一关附属 UI：GoJB 根节点。进入每日一关时隐藏，返回中页动画结束后恢复。
+    [SerializeField]
+    private GameObject _goJB;
+    // 每日一关附属 UI：GOCWTJ 根节点。进入每日一关时隐藏，返回中页动画结束后恢复。
+    [SerializeField]
+    private GameObject _goCWTJ;
+    // 当前是否处于"每日一关附属 UI 已隐藏"状态。
+    // 进入每日一关时置 true，返回中页动画结束后置 false。
+    private bool _isDailyChallengeAuxiliaryUiHidden;
+    // 点击 BtnUp 后，是否需要在回中页动画结束后恢复附属 UI。
+    // 这个标记跨越切页动画期间，确保恢复时机在动画完成而不是点击瞬间。
+    private bool _pendingRestoreDailyChallengeAuxiliaryUi;
     // 分页可视区域，未手动绑定时默认取 GoYiDong 的父节点。
     [SerializeField]
     private RectTransform _pageViewport;
@@ -46,6 +87,9 @@ public partial class MainUIForm : UIFormLogic
     // 右页根节点。
     [SerializeField]
     private RectTransform _pageRight;
+    // 下页根节点。
+    [SerializeField]
+    private RectTransform _pageBelow;
     // 切页动画时长。
     [SerializeField]
     private float _switchDuration = 0.2f;
@@ -56,14 +100,20 @@ public partial class MainUIForm : UIFormLogic
     private Tweener _switchTween;
 
     /// <summary>
-    /// 当前所在页索引。
+    /// 当前所在页槽位。
     /// </summary>
-    private int _currentPageIndex = CenterPageIndex;
+    private MainPageSlot _currentPageSlot = MainPageSlot.Center;
 
     /// <summary>
     /// 上一次记录的可视区域宽度。
     /// </summary>
     private float _cachedViewportWidth = -1f;
+
+    /// <summary>
+    /// 上一次记录的可视区域高度。
+    /// 下页分页依赖这个高度来计算纵向位移。
+    /// </summary>
+    private float _cachedViewportHeight = -1f;
 
     /// <summary>
     /// 当前是否处于切页动画中。
@@ -76,6 +126,8 @@ public partial class MainUIForm : UIFormLogic
     protected override void OnInit(object userData)
     {
         CacheReferences();
+        _isDailyChallengeAuxiliaryUiHidden = false;
+        _pendingRestoreDailyChallengeAuxiliaryUi = false;
         if (_btnLeft != null)
         {
             _btnLeft.onClick.AddListener(OnBtnLeft);
@@ -94,6 +146,38 @@ public partial class MainUIForm : UIFormLogic
             Log.Warning("MainUIForm 找不到 BtnRight。");
         }
 
+        if (_btnUp != null)
+        {
+            _btnUp.onClick.AddListener(OnBtnUp);
+        }
+        else
+        {
+            Log.Warning("MainUIForm 找不到 BtnUp。");
+        }
+
+        if (_btnDailyChallenge != null)
+        {
+            _btnDailyChallenge.onClick.AddListener(OnBtnDailyChallenge);
+        }
+        else
+        {
+            Log.Warning("MainUIForm 找不到 GoDailyChallenge。");
+        }
+
+        if (_btnFruitTJ != null)
+        {
+            _btnFruitTJ.onClick.AddListener(OnBtnFruitTJ);
+        }
+
+        if (_btnPetTJ != null)
+        {
+            _btnPetTJ.onClick.AddListener(OnBtnPetTJ);
+        }
+        else
+        {
+            Log.Warning("MainUIForm 缺少宠物图鉴按钮引用，请在 Inspector 中把 GOCWTJ 上的 Button 组件拖入 _btnPetTJ。");
+        }
+
         base.OnInit(userData);
         RefreshPageLayout(true);
         UpdateButtonState();
@@ -102,6 +186,9 @@ public partial class MainUIForm : UIFormLogic
         InitializeGoldView();
         InitializeProduceView();
         InitializeArchitectureView();
+        InitializeDailyChallengeView();
+        InitializeFruitTJView();
+        InitializePetTJView();
     }
 
     /// <summary>
@@ -110,6 +197,8 @@ public partial class MainUIForm : UIFormLogic
     protected override void OnOpen(object userData)
     {
         base.OnOpen(userData);
+        _isDailyChallengeAuxiliaryUiHidden = false;
+        _pendingRestoreDailyChallengeAuxiliaryUi = false;
         RefreshPageLayout(true);
         UpdateButtonState();
         OpenHatchView();
@@ -117,6 +206,7 @@ public partial class MainUIForm : UIFormLogic
         OpenGoldView();
         OpenProduceView();
         OpenArchitectureView();
+        OpenDailyChallengeView();
     }
 
     /// <summary>
@@ -130,6 +220,9 @@ public partial class MainUIForm : UIFormLogic
         CloseGoldView();
         CloseProduceView();
         CloseArchitectureView();
+        CloseDailyChallengeView();
+        CloseFruitTJView();
+        ClosePetTJView();
         base.OnClose(isShutdown, userData);
     }
 
@@ -161,11 +254,34 @@ public partial class MainUIForm : UIFormLogic
             _btnRight.onClick.RemoveListener(OnBtnRight);
         }
 
+        if (_btnUp != null)
+        {
+            _btnUp.onClick.RemoveListener(OnBtnUp);
+        }
+
+        if (_btnDailyChallenge != null)
+        {
+            _btnDailyChallenge.onClick.RemoveListener(OnBtnDailyChallenge);
+        }
+
+        if (_btnFruitTJ != null)
+        {
+            _btnFruitTJ.onClick.RemoveListener(OnBtnFruitTJ);
+        }
+
+        if (_btnPetTJ != null)
+        {
+            _btnPetTJ.onClick.RemoveListener(OnBtnPetTJ);
+        }
+
         DestroyHatchView();
         DestroyPetPlacementView();
         DestroyGoldView();
         DestroyProduceView();
         DestroyArchitectureView();
+        DestroyDailyChallengeView();
+        DestroyFruitTJView();
+        DestroyPetTJView();
     }
 
     /// <summary>
@@ -173,7 +289,16 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     private void OnBtnRight()
     {
-        SwitchToPage(_currentPageIndex + 1);
+        if (_currentPageSlot == MainPageSlot.Left)
+        {
+            SwitchToPage(MainPageSlot.Center);
+            return;
+        }
+
+        if (_currentPageSlot == MainPageSlot.Center)
+        {
+            SwitchToPage(MainPageSlot.Right);
+        }
     }
 
     /// <summary>
@@ -181,7 +306,45 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     private void OnBtnLeft()
     {
-        SwitchToPage(_currentPageIndex - 1);
+        if (_currentPageSlot == MainPageSlot.Right)
+        {
+            SwitchToPage(MainPageSlot.Center);
+            return;
+        }
+
+        if (_currentPageSlot == MainPageSlot.Center)
+        {
+            SwitchToPage(MainPageSlot.Left);
+        }
+    }
+
+    /// <summary>
+    /// 上翻按钮点击逻辑。
+    /// 只在下页可见，用来从 BJBelow 返回 BJ。
+    /// </summary>
+    private void OnBtnUp()
+    {
+        if (_currentPageSlot == MainPageSlot.Below)
+        {
+            CloseDailyChallengeUIForm();
+            _pendingRestoreDailyChallengeAuxiliaryUi = true;
+            SwitchToPage(MainPageSlot.Center);
+        }
+    }
+
+    /// <summary>
+    /// 每日一关按钮点击逻辑。
+    /// 从中页向下翻到 BJBelow。
+    /// </summary>
+    private void OnBtnDailyChallenge()
+    {
+        if (_currentPageSlot == MainPageSlot.Center)
+        {
+            _pendingRestoreDailyChallengeAuxiliaryUi = false;
+            SetDailyChallengeAuxiliaryUiHidden(true);
+            SwitchToPage(MainPageSlot.Below);
+            ScheduleDailyChallengeUIFormOpenAfterSwitch();
+        }
     }
 
     /// <summary>
@@ -198,33 +361,12 @@ public partial class MainUIForm : UIFormLogic
     }
 
     /// <summary>
-    /// 缓存界面上会用到的节点引用，未在 Inspector 绑定时按约定名称自动查找。
+    /// 缓存界面上会用到的节点引用。
+    /// 除 Canvas_Back 背景容器需要运行时跨 Canvas 查找外，
+    /// 其余引用全部由用户在 Inspector 中手动拖入。
     /// </summary>
     private void CacheReferences()
     {
-        if (_btnLeft == null)
-        {
-            Transform btnLeft = transform.Find("BtnLeft");
-            if (btnLeft != null)
-            {
-                _btnLeft = btnLeft.GetComponent<Button>();
-            }
-        }
-
-        if (_btnRight == null)
-        {
-            Transform btnRight = transform.Find("BtnRight");
-            if (btnRight != null)
-            {
-                _btnRight = btnRight.GetComponent<Button>();
-            }
-        }
-
-        if (_goYiDong == null)
-        {
-            _goYiDong = transform.Find("GoYiDong") as RectTransform;
-        }
-
         if (_backgroundPageRoot == null)
         {
             Canvas rootCanvas = GetComponentInParent<Canvas>();
@@ -246,41 +388,13 @@ public partial class MainUIForm : UIFormLogic
             }
         }
 
-        if (_pageCenter == null && _goYiDong != null)
-        {
-            _pageCenter = _goYiDong.Find("BJ") as RectTransform;
-        }
-
-        if (_pageLeft == null && _goYiDong != null)
-        {
-            _pageLeft = _goYiDong.Find("BJLeft") as RectTransform;
-        }
-
-        if (_pageRight == null && _goYiDong != null)
-        {
-            _pageRight = _goYiDong.Find("BJRight") as RectTransform;
-        }
-
-        if (_pageViewport == null)
-        {
-            RectTransform parentRectTransform = _goYiDong != null ? _goYiDong.parent as RectTransform : null;
-            if (parentRectTransform != null && parentRectTransform != _goYiDong)
-            {
-                _pageViewport = parentRectTransform;
-            }
-            else
-            {
-                _pageViewport = CachedTransform as RectTransform;
-            }
-        }
-
         CacheHatchReferences();
         CachePetPlacementReferences();
         CacheArchitectureReferences();
     }
 
     /// <summary>
-    /// 根据当前可视宽度刷新三页的摆放位置，并让分页容器保持在当前页。
+    /// 根据当前可视区域尺寸刷新四页的摆放位置，并让分页容器保持在当前页。
     /// </summary>
     private void RefreshPageLayout(bool force)
     {
@@ -292,12 +406,15 @@ public partial class MainUIForm : UIFormLogic
         }
 
         float viewportWidth = _pageViewport.rect.width;
-        if (viewportWidth <= 0f)
+        float viewportHeight = _pageViewport.rect.height;
+        if (viewportWidth <= 0f || viewportHeight <= 0f)
         {
             return;
         }
 
-        if (!force && Mathf.Approximately(_cachedViewportWidth, viewportWidth))
+        if (!force
+            && Mathf.Approximately(_cachedViewportWidth, viewportWidth)
+            && Mathf.Approximately(_cachedViewportHeight, viewportHeight))
         {
             return;
         }
@@ -310,14 +427,17 @@ public partial class MainUIForm : UIFormLogic
         // 避免切到左/右页后改分辨率又被重置回中间。
         _goYiDong.offsetMin = Vector2.zero;
         _goYiDong.offsetMax = Vector2.zero;
-
+    
         _cachedViewportWidth = viewportWidth;
-        SetPageOffset(_pageLeft, -viewportWidth);
-        SetPageOffset(_pageCenter, 0f);
-        SetPageOffset(_pageRight, viewportWidth);
-        SetContainerOffset(GetPageOffset(_currentPageIndex));
-        SetBackgroundContainerOffset(GetPageOffset(_currentPageIndex));
-        ApplyMainCameraOffset(GetMainCameraPageOffset(_currentPageIndex));
+        _cachedViewportHeight = viewportHeight;
+        SetPageOffset(_pageLeft, new Vector2(-viewportWidth, 0f));
+        SetPageOffset(_pageCenter, Vector2.zero);
+        SetPageOffset(_pageRight, new Vector2(viewportWidth, 0f));
+        SetPageOffset(_pageBelow, new Vector2(0f, -viewportHeight));
+        SyncBackgroundPageLayout(viewportWidth, viewportHeight);
+        SetContainerOffset(GetPageOffset(_currentPageSlot));
+        SetBackgroundContainerOffset(GetPageOffset(_currentPageSlot));
+        ApplyMainCameraOffset(GetMainCameraPageOffset(_currentPageSlot));
         Canvas.ForceUpdateCanvases();
 
         StopSwitchTween();
@@ -329,8 +449,8 @@ public partial class MainUIForm : UIFormLogic
     /// <summary>
     /// 切换到指定页。
     /// </summary>
-    /// <param name="targetPageIndex">目标页索引。</param>
-    private void SwitchToPage(int targetPageIndex)
+    /// <param name="targetPageSlot">目标页槽位。</param>
+    private void SwitchToPage(MainPageSlot targetPageSlot)
     {
         CacheReferences();
         if (_goYiDong == null || _pageViewport == null)
@@ -344,29 +464,30 @@ public partial class MainUIForm : UIFormLogic
             return;
         }
 
-        int clampedPageIndex = Mathf.Clamp(targetPageIndex, LeftPageIndex, RightPageIndex);
-        if (clampedPageIndex == _currentPageIndex && !_isSwitching)
+        if (targetPageSlot == _currentPageSlot && !_isSwitching)
         {
             return;
         }
 
-        _currentPageIndex = clampedPageIndex;
-        float targetOffsetX = GetPageOffset(_currentPageIndex);
-        float targetMainCameraOffsetX = GetMainCameraPageOffset(_currentPageIndex);
+        _currentPageSlot = targetPageSlot;
+        Vector2 targetOffset = GetPageOffset(_currentPageSlot);
+        Vector2 targetMainCameraOffset = GetMainCameraPageOffset(_currentPageSlot);
 
-        StopSwitchTween();
+        StopSwitchTween(true);
         if (_switchDuration <= 0f)
         {
-            SetContainerOffset(targetOffsetX);
-            SetBackgroundContainerOffset(targetOffsetX);
-            ApplyMainCameraOffset(targetMainCameraOffsetX);
+            SetContainerOffset(targetOffset);
+            SetBackgroundContainerOffset(targetOffset);
+            ApplyMainCameraOffset(targetMainCameraOffset);
+            TryCompletePendingDailyChallengeAuxiliaryUiRestore();
             UpdateButtonState();
+            HandleDailyChallengePageArrived();
             return;
         }
 
-        float startContainerOffsetX = _goYiDong.anchoredPosition.x;
-        float startBackgroundOffsetX = _backgroundPageRoot != null ? _backgroundPageRoot.anchoredPosition.x : startContainerOffsetX;
-        float startMainCameraOffsetX = CurrentMainCameraOffsetX;
+        Vector2 startContainerOffset = _goYiDong.anchoredPosition;
+        Vector2 startBackgroundOffset = _backgroundPageRoot != null ? _backgroundPageRoot.anchoredPosition : startContainerOffset;
+        Vector2 startMainCameraOffset = CurrentMainCameraOffset;
         _isSwitching = true;
         UpdateButtonState();
 
@@ -374,12 +495,12 @@ public partial class MainUIForm : UIFormLogic
                 () => 0f,
                 progress =>
                 {
-                    float containerOffsetX = Mathf.LerpUnclamped(startContainerOffsetX, targetOffsetX, progress);
-                    float backgroundOffsetX = Mathf.LerpUnclamped(startBackgroundOffsetX, targetOffsetX, progress);
-                    float mainCameraOffsetX = Mathf.LerpUnclamped(startMainCameraOffsetX, targetMainCameraOffsetX, progress);
-                    SetContainerOffset(containerOffsetX);
-                    SetBackgroundContainerOffset(backgroundOffsetX);
-                    ApplyMainCameraOffset(mainCameraOffsetX);
+                    Vector2 containerOffset = Vector2.LerpUnclamped(startContainerOffset, targetOffset, progress);
+                    Vector2 backgroundOffset = Vector2.LerpUnclamped(startBackgroundOffset, targetOffset, progress);
+                    Vector2 mainCameraOffset = Vector2.LerpUnclamped(startMainCameraOffset, targetMainCameraOffset, progress);
+                    SetContainerOffset(containerOffset);
+                    SetBackgroundContainerOffset(backgroundOffset);
+                    ApplyMainCameraOffset(mainCameraOffset);
                 },
                 1f,
                 _switchDuration)
@@ -393,18 +514,20 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     private void OnSwitchTweenComplete()
     {
-        SetContainerOffset(GetPageOffset(_currentPageIndex));
-        SetBackgroundContainerOffset(GetPageOffset(_currentPageIndex));
-        ApplyMainCameraOffset(GetMainCameraPageOffset(_currentPageIndex));
+        SetContainerOffset(GetPageOffset(_currentPageSlot));
+        SetBackgroundContainerOffset(GetPageOffset(_currentPageSlot));
+        ApplyMainCameraOffset(GetMainCameraPageOffset(_currentPageSlot));
         _isSwitching = false;
         _switchTween = null;
+        TryCompletePendingDailyChallengeAuxiliaryUiRestore();
         UpdateButtonState();
+        HandleDailyChallengePageArrived();
     }
 
     /// <summary>
     /// 停止当前切页补间。
     /// </summary>
-    private void StopSwitchTween()
+    private void StopSwitchTween(bool preserveDailyChallengeAuxiliaryUiRestoreState = false)
     {
         if (_switchTween != null)
         {
@@ -413,65 +536,159 @@ public partial class MainUIForm : UIFormLogic
         }
 
         _isSwitching = false;
+        ResetDailyChallengeTransitionState();
+
+        if (!preserveDailyChallengeAuxiliaryUiRestoreState)
+        {
+            TryCompletePendingDailyChallengeAuxiliaryUiRestore();
+        }
     }
 
     /// <summary>
-    /// 设置单页相对分页原点的横向偏移。
+    /// 设置每日一关附属 UI 的隐藏状态，并立即刷新显隐。
+    /// </summary>
+    /// <param name="isHidden">true 隐藏附属 UI，false 恢复显示。</param>
+    private void SetDailyChallengeAuxiliaryUiHidden(bool isHidden)
+    {
+        _isDailyChallengeAuxiliaryUiHidden = isHidden;
+        UpdateDailyChallengeAuxiliaryUiVisibility();
+    }
+
+    /// <summary>
+    /// 尝试完成待执行的附属 UI 恢复。
+    /// 只有在 BtnUp 点击后、且回中页动画已抵达 Center 时才真正恢复。
+    /// </summary>
+    private void TryCompletePendingDailyChallengeAuxiliaryUiRestore()
+    {
+        if (!_pendingRestoreDailyChallengeAuxiliaryUi || _currentPageSlot != MainPageSlot.Center)
+        {
+            return;
+        }
+
+        _pendingRestoreDailyChallengeAuxiliaryUi = false;
+        SetDailyChallengeAuxiliaryUiHidden(false);
+    }
+
+    /// <summary>
+    /// 根据当前隐藏状态，统一刷新每日一关附属 UI 的显隐。
+    /// 控制的节点：BtnLeft、BtnRight、GoTX、GOSGTJ、GOCWTJ、GoJB。
+    /// </summary>
+    private void UpdateDailyChallengeAuxiliaryUiVisibility()
+    {
+        bool isVisible = !_isDailyChallengeAuxiliaryUiHidden;
+        SetNodeActive(_btnLeft != null ? _btnLeft.gameObject : null, isVisible);
+        SetNodeActive(_btnRight != null ? _btnRight.gameObject : null, isVisible);
+        SetNodeActive(_goTX, isVisible);
+        SetNodeActive(_btnFruitTJ != null ? _btnFruitTJ.gameObject : null, isVisible);
+        SetNodeActive(_goCWTJ, isVisible);
+        SetNodeActive(_goJB, isVisible);
+    }
+
+    /// <summary>
+    /// 安全设置节点激活状态，跳过空引用和重复赋值。
+    /// </summary>
+    /// <param name="node">目标节点，允许为 null。</param>
+    /// <param name="isActive">是否激活。</param>
+    private static void SetNodeActive(GameObject node, bool isActive)
+    {
+        if (node == null || node.activeSelf == isActive)
+        {
+            return;
+        }
+
+        node.SetActive(isActive);
+    }
+
+    /// <summary>
+    /// 设置单页相对分页原点的二维偏移。
     /// </summary>
     /// <param name="page">页面节点。</param>
-    /// <param name="offsetX">横向偏移。</param>
-    private static void SetPageOffset(RectTransform page, float offsetX)
+    /// <param name="offset">页面在分页容器中的目标偏移。</param>
+    private static void SetPageOffset(RectTransform page, Vector2 offset)
     {
         if (page == null)
         {
             return;
         }
 
-        Vector2 anchoredPosition = page.anchoredPosition;
-        page.anchoredPosition = new Vector2(offsetX, anchoredPosition.y);
+        page.anchoredPosition = offset;
     }
 
     /// <summary>
-    /// 设置分页容器的横向偏移。
+    /// 设置分页容器的二维偏移。
     /// </summary>
-    /// <param name="offsetX">横向偏移。</param>
-    private void SetContainerOffset(float offsetX)
+    /// <param name="offset">容器目标偏移。</param>
+    private void SetContainerOffset(Vector2 offset)
     {
         if (_goYiDong == null)
         {
             return;
         }
 
-        Vector2 anchoredPosition = _goYiDong.anchoredPosition;
-        _goYiDong.anchoredPosition = new Vector2(offsetX, anchoredPosition.y);
+        _goYiDong.anchoredPosition = offset;
     }
 
     /// <summary>
-    /// 设置 Canvas_Back 背景分页容器的横向偏移，使背景页与前景页同步滑动。
+    /// 设置 Canvas_Back 背景分页容器的二维偏移，使背景页与前景页同步滑动。
     /// </summary>
-    private void SetBackgroundContainerOffset(float offsetX)
+    private void SetBackgroundContainerOffset(Vector2 offset)
     {
         if (_backgroundPageRoot == null)
         {
             return;
         }
 
-        Vector2 anchoredPosition = _backgroundPageRoot.anchoredPosition;
-        _backgroundPageRoot.anchoredPosition = new Vector2(offsetX, anchoredPosition.y);
+        _backgroundPageRoot.anchoredPosition = offset;
+    }
+
+    /// <summary>
+    /// 按当前可视区域尺寸同步 Canvas_Back 背景分页节点的摆放位置。
+    /// </summary>
+    /// <param name="viewportWidth">当前可视区域宽度。</param>
+    /// <param name="viewportHeight">当前可视区域高度。</param>
+    private void SyncBackgroundPageLayout(float viewportWidth, float viewportHeight)
+    {
+        if (_backgroundPageRoot == null)
+        {
+            return;
+        }
+
+        RectTransform backgroundPageLeft = _backgroundPageRoot.Find("BJLeft") as RectTransform;
+        RectTransform backgroundPageCenter = _backgroundPageRoot.Find("BJ") as RectTransform;
+        RectTransform backgroundPageRight = _backgroundPageRoot.Find("BJRight") as RectTransform;
+        RectTransform backgroundPageBelow = _backgroundPageRoot.Find("BJBelow") as RectTransform;
+
+        SetPageOffset(backgroundPageLeft, new Vector2(-viewportWidth, 0f));
+        SetPageOffset(backgroundPageCenter, Vector2.zero);
+        SetPageOffset(backgroundPageRight, new Vector2(viewportWidth, 0f));
+        SetPageOffset(backgroundPageBelow, new Vector2(0f, -viewportHeight));
     }
 
     /// <summary>
     /// 获取指定页在容器上的目标偏移。
     /// </summary>
-    /// <param name="pageIndex">页索引。</param>
-    /// <returns>目标横向偏移。</returns>
-    private float GetPageOffset(int pageIndex)
+    /// <param name="pageSlot">目标页槽位。</param>
+    /// <returns>目标二维偏移。</returns>
+    private Vector2 GetPageOffset(MainPageSlot pageSlot)
     {
-        return -pageIndex * _cachedViewportWidth;
+        switch (pageSlot)
+        {
+            case MainPageSlot.Left:
+                return new Vector2(_cachedViewportWidth, 0f);
+
+            case MainPageSlot.Right:
+                return new Vector2(-_cachedViewportWidth, 0f);
+
+            case MainPageSlot.Below:
+                return new Vector2(0f, _cachedViewportHeight);
+
+            default:
+                return Vector2.zero;
+        }
     }
 
     /// <summary>
-    /// 三页始终保持激活，仅通过移动分页容器控制显示区域。
+    /// 四页始终保持激活，仅通过移动分页容器控制显示区域。
     /// </summary>
     private void UpdatePageVisibility()
     {
@@ -479,6 +696,7 @@ public partial class MainUIForm : UIFormLogic
         SetPageVisible(_pageLeft, true);
         SetPageVisible(_pageCenter, true);
         SetPageVisible(_pageRight, true);
+        SetPageVisible(_pageBelow, true);
     }
 
     /// <summary>
@@ -501,15 +719,34 @@ public partial class MainUIForm : UIFormLogic
     {
         UpdatePageVisibility();
         UpdateGoYouWanVisibility();
+        UpdateDailyChallengeAuxiliaryUiVisibility();
 
         if (_btnLeft != null)
         {
-            _btnLeft.interactable = !_isSwitching && _currentPageIndex > LeftPageIndex;
+            _btnLeft.interactable = !_isSwitching
+                && (_currentPageSlot == MainPageSlot.Center || _currentPageSlot == MainPageSlot.Right);
         }
 
         if (_btnRight != null)
         {
-            _btnRight.interactable = !_isSwitching && _currentPageIndex < RightPageIndex;
+            _btnRight.interactable = !_isSwitching
+                && (_currentPageSlot == MainPageSlot.Center || _currentPageSlot == MainPageSlot.Left);
+        }
+
+        if (_btnUp != null)
+        {
+            bool shouldShowBtnUp = _currentPageSlot == MainPageSlot.Below;
+            if (_btnUp.gameObject.activeSelf != shouldShowBtnUp)
+            {
+                _btnUp.gameObject.SetActive(shouldShowBtnUp);
+            }
+
+            _btnUp.interactable = !_isSwitching && shouldShowBtnUp;
+        }
+
+        if (_btnDailyChallenge != null)
+        {
+            _btnDailyChallenge.interactable = !_isSwitching && _currentPageSlot == MainPageSlot.Center;
         }
     }
 }

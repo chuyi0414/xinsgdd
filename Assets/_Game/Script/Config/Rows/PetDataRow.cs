@@ -15,7 +15,7 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
     /// <summary>
     /// 数据表固定列数。
     /// </summary>
-    private const int ColumnCount = 10;
+    private const int ColumnCount = 11;
 
     /// <summary>
     /// 合法宠物 Code 的前缀。
@@ -48,9 +48,16 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
     public QualityType Quality { get; private set; }
 
     /// <summary>
-    /// Spine SkeletonData 资源路径。
+    /// 实体使用的 Spine SkeletonData 资源路径。
+    /// 场景里的宠物实体只读取这条路径。
     /// </summary>
-    public string SkeletonDataPath { get; private set; }
+    public string EntitySkeletonDataPath { get; private set; }
+
+    /// <summary>
+    /// UI 使用的 Spine SkeletonData 资源路径。
+    /// 图鉴、详情面板等 UI 角色只读取这条路径。
+    /// </summary>
+    public string UiSkeletonDataPath { get; private set; }
 
     /// <summary>
     /// 待机动画名。
@@ -124,36 +131,43 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        string skeletonDataPath = columns[4].Trim();
-        if (string.IsNullOrWhiteSpace(skeletonDataPath))
+        string entitySkeletonDataPath = columns[4].Trim();
+        if (string.IsNullOrWhiteSpace(entitySkeletonDataPath))
         {
-            Log.Warning("PetDataRow parse failed because SkeletonDataPath is empty, code '{0}'.", code);
+            Log.Warning("PetDataRow parse failed because EntitySkeletonDataPath is empty, code '{0}'.", code);
             return false;
         }
 
-        string idleAnimationName = columns[5].Trim();
+        string uiSkeletonDataPath = columns[5].Trim();
+        if (string.IsNullOrWhiteSpace(uiSkeletonDataPath))
+        {
+            Log.Warning("PetDataRow parse failed because UiSkeletonDataPath is empty, code '{0}'.", code);
+            return false;
+        }
+
+        string idleAnimationName = columns[6].Trim();
         if (string.IsNullOrWhiteSpace(idleAnimationName))
         {
             Log.Warning("PetDataRow parse failed because IdleAnimationName is empty, code '{0}'.", code);
             return false;
         }
 
-        string moveAnimationName = columns[6].Trim();
+        string moveAnimationName = columns[7].Trim();
         if (string.IsNullOrWhiteSpace(moveAnimationName))
         {
             Log.Warning("PetDataRow parse failed because MoveAnimationName is empty, code '{0}'.", code);
             return false;
         }
 
-        if (!Enum.TryParse(columns[7].Trim(), true, out PetAttributeType attributeType) || !Enum.IsDefined(typeof(PetAttributeType), attributeType))
+        if (!Enum.TryParse(columns[8].Trim(), true, out PetAttributeType attributeType) || !Enum.IsDefined(typeof(PetAttributeType), attributeType))
         {
-            Log.Warning("PetDataRow parse failed because AttributeType '{0}' is invalid, code '{1}'.", columns[7], code);
+            Log.Warning("PetDataRow parse failed because AttributeType '{0}' is invalid, code '{1}'.", columns[8], code);
             return false;
         }
 
-        if (!int.TryParse(columns[8], out int attributeValue))
+        if (!int.TryParse(columns[9], out int attributeValue))
         {
-            Log.Warning("PetDataRow parse failed because AttributeValue '{0}' is invalid, code '{1}'.", columns[8], code);
+            Log.Warning("PetDataRow parse failed because AttributeValue '{0}' is invalid, code '{1}'.", columns[9], code);
             return false;
         }
 
@@ -173,12 +187,13 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
         Code = code;
         Name = name;
         Quality = quality;
-        SkeletonDataPath = skeletonDataPath;
+        EntitySkeletonDataPath = entitySkeletonDataPath;
+        UiSkeletonDataPath = uiSkeletonDataPath;
         IdleAnimationName = idleAnimationName;
         MoveAnimationName = moveAnimationName;
         AttributeType = attributeType;
         AttributeValue = attributeValue;
-        Description = columns[9].Trim();
+        Description = columns[10].Trim();
         return true;
     }
 

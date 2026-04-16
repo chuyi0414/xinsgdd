@@ -313,24 +313,29 @@ public sealed class PlayfieldEntityModule
             || string.IsNullOrWhiteSpace(fruitCode)
             || GameEntry.Entity == null)
         {
+            // 基础参数或实体系统无效时，不允许发起桌面水果显示。
             return false;
         }
 
         int currentEntityId = _diningFruitEntityIds[tableIndex];
         if (IsEntityLoaded(currentEntityId) || IsEntityLoading(currentEntityId))
         {
+            // 同一张桌子在任一时刻只允许存在一个水果实体，
+            // 这里返回 false 的语义是“桌面显示链路未成功建立”。
             return false;
         }
 
         int tableEntityId = _tableEntityIds[tableIndex];
         if (!IsEntityLoaded(tableEntityId) || !TryGetEntityLogic(tableEntityId, out TableEntityLogic tableEntityLogic))
         {
+            // 桌位实体自己都还没准备好时，不能把水果挂上去。
             return false;
         }
 
         int fruitEntityId = AcquireEntityId();
         if (fruitEntityId <= 0)
         {
+            // 运行时实体 Id 申请失败，说明这次显示请求没有真正提交成功。
             return false;
         }
 
@@ -361,6 +366,7 @@ public sealed class PlayfieldEntityModule
         }
 
         _diningFruitEntityIds[tableIndex] = 0;
+        // 先清本地记录，再隐藏实体，避免异步回调阶段继续读到旧 Id。
         HideEntityIfNeeded(entityId);
     }
 
@@ -379,24 +385,28 @@ public sealed class PlayfieldEntityModule
             || string.IsNullOrWhiteSpace(fruitCode)
             || GameEntry.Entity == null)
         {
+            // 果树索引非法、水果码为空、实体系统不可用时，直接拒绝进入果树生长链路。
             return false;
         }
 
         int currentEntityId = _orchardFruitEntityIds[orchardIndex];
         if (IsEntityLoaded(currentEntityId) || IsEntityLoading(currentEntityId))
         {
+            // 同一棵果树同一时刻不允许重复挂两个水果实体。
             return false;
         }
 
         int orchardEntityId = _orchardEntityIds[orchardIndex];
         if (!IsEntityLoaded(orchardEntityId))
         {
+            // 果树实体还未加载完成时，水果无法正确挂接到果树节点。
             return false;
         }
 
         int fruitEntityId = AcquireEntityId();
         if (fruitEntityId <= 0)
         {
+            // 实体 Id 申请失败意味着这次果树水果显示没有真正发起。
             return false;
         }
 
@@ -407,6 +417,7 @@ public sealed class PlayfieldEntityModule
         FruitEntityData fruitData = new FruitEntityData(-1, fruitCode, orchardWorldPos, orchardIndex);
 
         // 临时存储生长参数，在 OnShowEntitySuccess 中取出执行动画
+        // 这里不直接播动画，是因为实体要等真正 Show 成功后才能拿到对应逻辑对象。
         _pendingOrchardGrow[fruitEntityId] = new OrchardGrowRequest(growDuration, onGrowComplete);
 
         GameEntry.Entity.ShowEntity<FruitEntityLogic>(
@@ -424,20 +435,23 @@ public sealed class PlayfieldEntityModule
     /// <param name="tableIndex">目标桌位索引。</param>
     /// <param name="fruitCode">水果 Code。</param>
     /// <param name="deliverDuration">飞行动画时长（秒）。</param>
-    /// <param name="onDeliverComplete">送达完成回调（桌上水果已显示后触发）。</param>
-    public void BeginOrchardFruitDelivery(int orchardIndex, int tableIndex, string fruitCode, float deliverDuration, System.Action onDeliverComplete)
+    /// <param name="onDeliverComplete">送达完成回调。参数为 true 表示桌上水果已真正显示成功，false 表示桌面显示链路失败。</param>
+    public void BeginOrchardFruitDelivery(int orchardIndex, int tableIndex, string fruitCode, float deliverDuration, System.Action<bool> onDeliverComplete)
     {
         if (orchardIndex < 0 || orchardIndex >= _orchardFruitEntityIds.Length || !HasValidMarkerSnapshot)
         {
-            onDeliverComplete?.Invoke();
+            // Marker 快照无效时，连飞行目标都无法计算，直接按失败回传。
+            onDeliverComplete?.Invoke(false);
             return;
         }
 
         int fruitEntityId = _orchardFruitEntityIds[orchardIndex];
         if (!TryGetEntityLogic(fruitEntityId, out FruitEntityLogic fruitEntityLogic))
         {
+            // 果树水果逻辑对象已经丢失时，说明这次送达链路无法继续。
+            // 这里先清理果树残留，再把失败结果回传给上层回滚状态机。
             HideOrchardFruit(orchardIndex);
-            onDeliverComplete?.Invoke();
+            onDeliverComplete?.Invoke(false);
             return;
         }
 
@@ -450,17 +464,19 @@ public sealed class PlayfieldEntityModule
         int capturedOrchardIndex = orchardIndex;
         int capturedTableIndex = tableIndex;
         string capturedFruitCode = fruitCode;
-        System.Action capturedCallback = onDeliverComplete;
+        System.Action<bool> capturedCallback = onDeliverComplete;
 
         fruitEntityLogic.PlayDeliverAnimation(deliverTarget, deliverDuration, () =>
         {
             // 飞到边界后隐藏果树水果
+            // 这一步表示果树阶段已经结束，视觉上不应继续保留果树上的水果。
             HideOrchardFruit(capturedOrchardIndex);
 
             // 直接在桌子上显示水果
-            TryShowDiningFruit(capturedTableIndex, capturedFruitCode);
+            // 这里的 bool 结果就是整个送达链最终要回传给点餐状态机的“真成功”定义。
+            bool didShowDiningFruit = TryShowDiningFruit(capturedTableIndex, capturedFruitCode);
 
-            capturedCallback?.Invoke();
+            capturedCallback?.Invoke(didShowDiningFruit);
         });
     }
 
@@ -482,6 +498,7 @@ public sealed class PlayfieldEntityModule
         }
 
         _orchardFruitEntityIds[orchardIndex] = 0;
+        // 生长完成回调参数也要一起清掉，避免旧水果实体释放后仍残留脏请求。
         _pendingOrchardGrow.Remove(entityId);
         HideEntityIfNeeded(entityId);
     }

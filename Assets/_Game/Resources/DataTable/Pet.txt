@@ -1,7 +1,7 @@
-#Id	Code	Name	Quality	SkeletonDataPath	IdleAnimationName	MoveAnimationName	AttributeType	AttributeValue	Description
-#唯一编号	机器码	显示名称	宠物品质	SkeletonData资源路径	待机动画名	移动动画名	属性类型	属性数值	备注描述
-1	pet_lulu	史莱姆	Normal	Arts/Pet/LuLu/GW_Lulu_1001_SkeletonData	Attack1	Jump	ScoreBase	1	蹦蹦跳跳的水滴状粘液小怪物
-2	pet_shuxiaoxiao	树小小	Rare	Arts/Pet/Shuxiaoxiao/GW_Shuxiaoxiao_1002_SkeletonData	Attack	Move	ScoreBase	2	受到魔法石影响的树妖
-3	pet_papagui	爬爬龟	Epic	Arts/Pet/Papagui/GW_Papagui_1003_SkeletonData	Attack	Move	ScoreBase	3	移动缓慢，喜欢吃苹果
-4	pet_duoduoshou	多多兽	Legendary	Arts/Pet/Duoduoshou/BOOS_Duoduoshou_001_SkeletonData	Attack	Walk	ScoreBase	4	黄色独眼变异兽
-5	pet_miemieyang	咩咩羊	Mythic	Arts/Pet/Miemieyang/MS_Miemieyang_001_SkeletonData	Idle	Idle	ScoreBase	5	拥有治愈之力的绵羊
+#Id	Code	Name	Quality	EntitySkeletonDataPath	UiSkeletonDataPath	IdleAnimationName	MoveAnimationName	AttributeType	AttributeValue	Description
+#唯一编号	机器码	显示名称	宠物品质	实体SkeletonData资源路径	UI SkeletonData资源路径	待机动画名	移动动画名	属性类型	属性数值	备注描述
+1	pet_lulu	史莱姆	Normal	Arts/Pet/LuLu/GW_Lulu_1001_SkeletonData	Arts/Pet/LuLu/GW_Lulu_1001_SkeletonDataUI	Attack1	Jump	ScoreBase	1	蹦蹦跳跳的水滴状粘液小怪物
+2	pet_shuxiaoxiao	树小小	Rare	Arts/Pet/Shuxiaoxiao/GW_Shuxiaoxiao_1002_SkeletonData	Arts/Pet/Shuxiaoxiao/GW_Shuxiaoxiao_1002_SkeletonDataUI	Attack	Move	ScoreBase	2	受到魔法石影响的树妖
+3	pet_papagui	爬爬龟	Epic	Arts/Pet/Papagui/GW_Papagui_1003_SkeletonData	Arts/Pet/Papagui/GW_Papagui_1003_SkeletonDataUI	Attack	Move	ScoreBase	3	移动缓慢，喜欢吃苹果
+4	pet_duoduoshou	多多兽	Legendary	Arts/Pet/Duoduoshou/BOOS_Duoduoshou_001_SkeletonData	Arts/Pet/Duoduoshou/BOOS_Duoduoshou_001_SkeletonDataUI	Attack	Walk	ScoreBase	4	黄色独眼变异兽
+5	pet_miemieyang	咩咩羊	Mythic	Arts/Pet/Miemieyang/MS_Miemieyang_001_SkeletonData	Arts/Pet/Miemieyang/MS_Miemieyang_001_SkeletonDataUI	Idle	Idle	ScoreBase	5	拥有治愈之力的绵羊

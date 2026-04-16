@@ -39,4 +39,19 @@ public static class UIFormDefine
     /// 建筑升级界面资源名。
     /// </summary>
     public static readonly string ArchitectureUpgradeUIForm = AssetPath.GetUI("Architecture/ArchitectureUpgradeUIForm");
+
+    /// <summary>
+    /// 每日一关界面资源名。
+    /// </summary>
+    public static readonly string DailyChallengeUIForm = AssetPath.GetUI("DailyChallenge/DailyChallengeUIForm");
+
+    /// <summary>
+    /// 水果图鉴界面资源名。
+    /// </summary>
+    public static readonly string FruitTJUIForm = AssetPath.GetUI("Fruit/FruitTJUIForm");
+
+    /// <summary>
+    /// 宠物图鉴界面资源名。
+    /// </summary>
+    public static readonly string PetTJUIForm = AssetPath.GetUI("Pet/PetTJUIForm");
 }

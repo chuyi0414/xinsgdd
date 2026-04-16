@@ -768,27 +768,46 @@ public sealed class GameAssetModule
     /// </summary>
     private void StartLoadPetSkeletonData(PetDataRow row)
     {
-        if (row == null || string.IsNullOrWhiteSpace(row.SkeletonDataPath))
+        if (row == null)
+        {
+            RegisterFailure("预加载宠物 SkeletonData 失败，宠物表存在空行。");
+            return;
+        }
+
+        StartLoadPetSkeletonDataPath(row, row.EntitySkeletonDataPath);
+        StartLoadPetSkeletonDataPath(row, row.UiSkeletonDataPath);
+    }
+
+    /// <summary>
+    /// 按指定路径启动一次宠物 SkeletonData 加载。
+    /// 实体路径和 UI 路径共用此方法，避免复制两套几乎一样的逻辑。
+    /// 如果两条路径相同，缓存集合和加载中集合会自动去重。
+    /// </summary>
+    /// <param name="row">当前宠物表行。</param>
+    /// <param name="skeletonDataPath">本次要加载的 SkeletonData 路径。</param>
+    private void StartLoadPetSkeletonDataPath(PetDataRow row, string skeletonDataPath)
+    {
+        if (string.IsNullOrWhiteSpace(skeletonDataPath))
         {
             RegisterFailure("预加载宠物 SkeletonData 失败，宠物表存在空 SkeletonDataPath。");
             return;
         }
 
-        AddPetValidationInfo(row);
-        if (_petSkeletonDataAssetsByPath.TryGetValue(row.SkeletonDataPath, out SkeletonDataAsset cachedSkeletonDataAsset) && cachedSkeletonDataAsset != null)
+        AddPetValidationInfo(row, skeletonDataPath);
+        if (_petSkeletonDataAssetsByPath.TryGetValue(skeletonDataPath, out SkeletonDataAsset cachedSkeletonDataAsset) && cachedSkeletonDataAsset != null)
         {
-            ValidatePetSkeletonData(row.SkeletonDataPath, cachedSkeletonDataAsset);
+            ValidatePetSkeletonData(skeletonDataPath, cachedSkeletonDataAsset);
             return;
         }
 
-        if (_loadingPetAssetPaths.Contains(row.SkeletonDataPath))
+        if (_loadingPetAssetPaths.Contains(skeletonDataPath))
         {
             return;
         }
 
-        if (!TryLoadAsset(row.SkeletonDataPath, typeof(SkeletonDataAsset), PreloadAssetKind.PetSkeletonData))
+        if (!TryLoadAsset(skeletonDataPath, typeof(SkeletonDataAsset), PreloadAssetKind.PetSkeletonData))
         {
-            RegisterFailure(Utility.Text.Format("预加载宠物 SkeletonData 失败，无法开始加载资源，Code='{0}'，Path='{1}'。", row.Code, row.SkeletonDataPath));
+            RegisterFailure(Utility.Text.Format("预加载宠物 SkeletonData 失败，无法开始加载资源，Code='{0}'，Path='{1}'。", row.Code, skeletonDataPath));
         }
     }
 
@@ -1159,19 +1178,34 @@ public sealed class GameAssetModule
     }
 
     /// <summary>
-    /// 记录某条宠物表对应的动画校验信息。
+    /// 为指定路径登记动画校验信息。
+    /// 如果实体路径和 UI 路径恰好相同，这里会主动去重，避免同一只宠物重复登记。
     /// </summary>
-    private void AddPetValidationInfo(PetDataRow row)
+    /// <param name="row">当前宠物表行。</param>
+    /// <param name="skeletonDataPath">要挂载校验信息的 SkeletonData 路径。</param>
+    private void AddPetValidationInfo(PetDataRow row, string skeletonDataPath)
     {
-        if (row == null || string.IsNullOrWhiteSpace(row.SkeletonDataPath))
+        if (row == null || string.IsNullOrWhiteSpace(skeletonDataPath))
         {
             return;
         }
 
-        if (!_petValidationInfosByPath.TryGetValue(row.SkeletonDataPath, out List<PetSkeletonValidationInfo> validationInfos))
+        if (!_petValidationInfosByPath.TryGetValue(skeletonDataPath, out List<PetSkeletonValidationInfo> validationInfos))
         {
             validationInfos = new List<PetSkeletonValidationInfo>();
-            _petValidationInfosByPath.Add(row.SkeletonDataPath, validationInfos);
+            _petValidationInfosByPath.Add(skeletonDataPath, validationInfos);
+        }
+
+        for (int i = 0; i < validationInfos.Count; i++)
+        {
+            PetSkeletonValidationInfo existingInfo = validationInfos[i];
+            if (existingInfo != null
+                && string.Equals(existingInfo.PetCode, row.Code, StringComparison.Ordinal)
+                && string.Equals(existingInfo.IdleAnimationName, row.IdleAnimationName, StringComparison.Ordinal)
+                && string.Equals(existingInfo.MoveAnimationName, row.MoveAnimationName, StringComparison.Ordinal))
+            {
+                return;
+            }
         }
 
         validationInfos.Add(new PetSkeletonValidationInfo

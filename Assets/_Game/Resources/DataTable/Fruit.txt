@@ -10,3 +10,11 @@
 8	fruit_wax_apple	莲雾	false	Arts/Fruit/FruitTJ/WP_10006	8000	80	800	16
 9	fruit_lemon	柠檬	false	Arts/Fruit/FruitTJ/WP_10007	9000	80	900	18
 10	fruit_avocado	牛油果	false	Arts/Fruit/FruitTJ/WP_10008	10000	80	1000	20
+11	fruit_dragon_fruit	火龙果	false	Arts/Fruit/FruitTJ/WP_10009	20000	80	2000	22
+12	fruit_peach	仙桃	false	Arts/Fruit/FruitTJ/WP_10011	30000	80	3000	24
+13	fruit_cactus_pear	仙人掌果子	false	Arts/Fruit/FruitTJ/WP_10012	40000	80	4000	26
+14	fruit_cherry	樱桃	false	Arts/Fruit/FruitTJ/WP_10013	50000	80	5000	28
+15	fruit_mango	芒果	false	Arts/Fruit/WP_10014	60000	80	6000	30
+16	fruit_durian	榴莲	false	Arts/Fruit/FruitTJ/WP_10015	70000	80	7000	32
+17	fruit_fig	无花果	false	Arts/Fruit/FruitTJ/WP_10016	80000	80	8000	34
+18	fruit_lychee	荔枝	false	Arts/Fruit/FruitTJ/WP_10019	90000	80	9000	36

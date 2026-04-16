@@ -103,9 +103,10 @@ public partial class MainUIForm
     private bool _hasCachedMainCameraBase;
 
     /// <summary>
-    /// 当前主相机相对中页的横向偏移。
+    /// 当前主相机相对中页的二维偏移。
+    /// X 对应左右分页，Y 对应下方分页。
     /// </summary>
-    private float _currentMainCameraOffsetX;
+    private Vector2 _currentMainCameraOffset;
 
     /// <summary>
     /// 是否已经输出过缺失 UI 相机日志。
@@ -710,23 +711,23 @@ public partial class MainUIForm
     }
 
     /// <summary>
-    /// 当前主相机相对中页的横向偏移。
+    /// 当前主相机相对中页的二维偏移。
     /// </summary>
-    private float CurrentMainCameraOffsetX => _currentMainCameraOffsetX;
+    private Vector2 CurrentMainCameraOffset => _currentMainCameraOffset;
 
     /// <summary>
-    /// 获取指定页对应的主相机横向偏移。
+    /// 获取指定页对应的主相机二维偏移。
     /// 这里使用与实体建场一致的“UI 标记点投影到世界”的换算方式，
     /// 确保翻页时移动的是主相机，而不是重设实体世界坐标。
     /// </summary>
-    private float GetMainCameraPageOffset(int pageIndex)
+    private Vector2 GetMainCameraPageOffset(MainPageSlot pageSlot)
     {
         Camera worldCamera = GetPlayfieldWorldCamera();
         Camera uiCamera = GetMarkerUICamera();
-        RectTransform targetPage = GetPageRootByIndex(pageIndex);
+        RectTransform targetPage = GetPageRootBySlot(pageSlot);
         if (worldCamera == null || uiCamera == null || _pageCenter == null || targetPage == null)
         {
-            return 0f;
+            return Vector2.zero;
         }
 
         float worldDistance = Mathf.Abs(EntityWorldZ - worldCamera.transform.position.z);
@@ -737,13 +738,15 @@ public partial class MainUIForm
             new Vector3(centerScreenPoint.x, centerScreenPoint.y, worldDistance));
         Vector3 targetWorldPoint = worldCamera.ScreenToWorldPoint(
             new Vector3(targetScreenPoint.x, targetScreenPoint.y, worldDistance));
-        return targetWorldPoint.x - centerWorldPoint.x;
+        return new Vector2(
+            targetWorldPoint.x - centerWorldPoint.x,
+            targetWorldPoint.y - centerWorldPoint.y);
     }
 
     /// <summary>
-    /// 应用主相机的分页横向偏移。
+    /// 应用主相机的分页二维偏移。
     /// </summary>
-    private bool ApplyMainCameraOffset(float offsetX)
+    private bool ApplyMainCameraOffset(Vector2 offset)
     {
         Camera mainCamera = GetPlayfieldWorldCamera();
         if (mainCamera == null)
@@ -753,13 +756,14 @@ public partial class MainUIForm
 
         if (!_hasCachedMainCameraBase)
         {
-            _centerMainCameraPosition = mainCamera.transform.position - new Vector3(_currentMainCameraOffsetX, 0f, 0f);
+            _centerMainCameraPosition = mainCamera.transform.position - new Vector3(_currentMainCameraOffset.x, _currentMainCameraOffset.y, 0f);
             _hasCachedMainCameraBase = true;
         }
 
-        _currentMainCameraOffsetX = offsetX;
+        _currentMainCameraOffset = offset;
         Vector3 cameraPosition = _centerMainCameraPosition;
-        cameraPosition.x += offsetX;
+        cameraPosition.x += offset.x;
+        cameraPosition.y += offset.y;
         mainCamera.transform.position = cameraPosition;
         return true;
     }
@@ -776,22 +780,25 @@ public partial class MainUIForm
             return;
         }
 
-        _centerMainCameraPosition = mainCamera.transform.position - new Vector3(_currentMainCameraOffsetX, 0f, 0f);
+        _centerMainCameraPosition = mainCamera.transform.position - new Vector3(_currentMainCameraOffset.x, _currentMainCameraOffset.y, 0f);
         _hasCachedMainCameraBase = true;
     }
 
     /// <summary>
-    /// 根据页索引获取对应页根节点。
+    /// 根据页槽位获取对应页根节点。
     /// </summary>
-    private RectTransform GetPageRootByIndex(int pageIndex)
+    private RectTransform GetPageRootBySlot(MainPageSlot pageSlot)
     {
-        switch (pageIndex)
+        switch (pageSlot)
         {
-            case LeftPageIndex:
+            case MainPageSlot.Left:
                 return _pageLeft;
 
-            case RightPageIndex:
+            case MainPageSlot.Right:
                 return _pageRight;
+
+            case MainPageSlot.Below:
+                return _pageBelow;
 
             default:
                 return _pageCenter;
