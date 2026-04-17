@@ -29,7 +29,6 @@ public class LoadProcedure : ProcedureBase
         SubscribeDataTableStateEvents();
         SubscribeAssetPreloadEvents();
         _loadUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.LoadUIForm, UIFormDefine.MainGroup);
-        RefreshLoadButtonState(CanEnterMain());
         GameEntry.DataTables?.BeginLoadRequiredDataTables();
         GameEntry.GameAssets?.BeginPreloadRequiredAssets();
 
@@ -137,7 +136,6 @@ public class LoadProcedure : ProcedureBase
     private void OnDataTableLoadStateChanged()
     {
         GameEntry.GameAssets?.BeginPreloadRequiredAssets();
-        RefreshLoadButtonState(CanEnterMain());
     }
 
     /// <summary>
@@ -156,7 +154,6 @@ public class LoadProcedure : ProcedureBase
     /// </summary>
     private void OnAssetPreloadStateChanged()
     {
-        RefreshLoadButtonState(CanEnterMain());
     }
 
     /// <summary>

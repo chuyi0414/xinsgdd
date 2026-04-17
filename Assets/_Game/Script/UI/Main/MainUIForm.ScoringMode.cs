@@ -1,7 +1,13 @@
-using UnityGameFramework.Runtime;
+﻿using UnityGameFramework.Runtime;
 
 public partial class MainUIForm
 {
+    /// <summary>
+    /// 每日一关本地预览使用的默认关卡资源路径。
+    /// 当前先固定到 bbl1，后续接云端后再由外部下发实际关卡路径。
+    /// </summary>
+    private const string DailyChallengeDefaultLevelAssetPath = "Configs/Levels/bbl1";
+
     /// <summary>
     /// 当前已打开的每日一关窗体序列号。
     /// 为 0 表示当前没有活动中的每日一关界面实例。
@@ -15,12 +21,20 @@ public partial class MainUIForm
     private bool _pendingOpenDailyChallengeUIForm;
 
     /// <summary>
+    /// 消除卡片控制器。
+    /// 生成出来的消除卡片实体应该由 MainUIForm 持有，
+    /// 不能挂在 DailyChallengeUIForm 自己身上，否则点击开始后关窗会把棋盘一起清掉。
+    /// </summary>
+    private EliminateCardController _eliminateCardController;
+
+    /// <summary>
     /// 初始化每日一关相关的运行时状态。
     /// </summary>
     private void InitializeDailyChallengeView()
     {
         _dailyChallengeUIFormId = 0;
         ResetDailyChallengeTransitionState();
+        _eliminateCardController = new EliminateCardController();
     }
 
     /// <summary>
@@ -37,6 +51,7 @@ public partial class MainUIForm
     private void CloseDailyChallengeView()
     {
         CloseDailyChallengeUIForm();
+        ClearDailyChallengeBoardPreview();
     }
 
     /// <summary>
@@ -45,7 +60,9 @@ public partial class MainUIForm
     private void DestroyDailyChallengeView()
     {
         ResetDailyChallengeTransitionState();
+        ClearDailyChallengeBoardPreview();
         _dailyChallengeUIFormId = 0;
+        _eliminateCardController = null;
     }
 
     /// <summary>
@@ -120,6 +137,47 @@ public partial class MainUIForm
         }
 
         _dailyChallengeUIFormId = 0;
+    }
+
+    /// <summary>
+    /// 供 DailyChallengeUIForm 调用的“开始关卡预览”入口。
+    /// 这里由 MainUIForm 接管生成逻辑，确保关窗后棋盘实体仍然保留在 Below 页。
+    /// </summary>
+    /// <param name="levelAssetPath">要加载的关卡资源路径；为空时回退到默认测试关卡。</param>
+    /// <returns>是否成功开始生成棋盘。</returns>
+    public bool TryStartDailyChallengePreviewFromUIForm(string levelAssetPath)
+    {
+        if (_currentPageSlot != MainPageSlot.Below)
+        {
+            Log.Warning("MainUIForm can not start daily challenge preview because current page is not Below.");
+            return false;
+        }
+
+        if (_eliminateCardController == null)
+        {
+            _eliminateCardController = new EliminateCardController();
+        }
+
+        string targetLevelAssetPath = string.IsNullOrWhiteSpace(levelAssetPath)
+            ? DailyChallengeDefaultLevelAssetPath
+            : levelAssetPath.Trim();
+        EliminateCardPreviewResult result = _eliminateCardController.RebuildPreview(targetLevelAssetPath);
+        if (!result.IsSuccess)
+        {
+            Log.Warning("MainUIForm daily challenge preview failed: {0}", result.ErrorMessage);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 清理每日一关当前预览棋盘。
+    /// 返回中页、关闭主界面或重建棋盘前都走同一个收口入口。
+    /// </summary>
+    private void ClearDailyChallengeBoardPreview()
+    {
+        _eliminateCardController?.Dispose();
     }
 
     /// <summary>

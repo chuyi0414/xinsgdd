@@ -19,8 +19,8 @@ MonoBehaviour:
     assetLoadType: 1
     compressDataPackage: 0
     VideoUrl: 
-    relativeDST: 
-    DST: C:\Users\ChuYi\Desktop\Unity\xm\sgdd\
+    relativeDST: C:/Users/ChuYi/Desktop/weixinxiaochengxu/xinsgdd
+    DST: C:/Users/ChuYi/Desktop/weixinxiaochengxu/xinsgdd
     StreamCDN: 
     bundleHashLength: 32
     bundlePathIdentifier: StreamingAssets;
@@ -52,22 +52,22 @@ MonoBehaviour:
     AutoProfile: 0
     ScriptOnly: 0
     Il2CppOptimizeSize: 1
-    profilingFuncs: 1
-    Webgl2: 0
-    fbslim: 0
+    profilingFuncs: 0
+    Webgl2: 1
+    fbslim: 1
     DeleteStreamingAssets: 1
     ProfilingMemory: 0
-    CleanBuild: 0
+    CleanBuild: 1
     CustomNodePath: 
-    autoAdaptScreen: 0
-    showMonitorSuggestModal: 1
+    autoAdaptScreen: 1
+    showMonitorSuggestModal: 0
     enableProfileStats: 0
     enableRenderAnalysis: 0
     enablePerfAnalysis: 0
     iOSAutoGCInterval: 10000
-    enableIOSPerformancePlus: 0
-    enableiOSMetal: 0
-    enableEmscriptenGLX: 0
+    enableIOSPerformancePlus: 1
+    enableiOSMetal: 1
+    enableEmscriptenGLX: 1
     brotliMT: 1
     enableWasm2023: 0
   CompressTexture:

@@ -541,7 +541,7 @@ public class SafeAreaAdapter : MonoBehaviour
 #if UNITY_EDITOR
         // 编辑器非运行态默认不自动改 RectTransform，只有显式开启模拟安全区域时才允许预览，
         // 避免单纯切换 Game 分辨率就把布局结果持久化到资源。
-        if (!Application.isPlaying && !(adaptMode == SafeAreaMode.ForceStandard && simulateSafeAreaInEditor))
+        if (!Application.isPlaying && !simulateSafeAreaInEditor)
         {
             return;
         }
@@ -858,7 +858,7 @@ public class SafeAreaAdapter : MonoBehaviour
 
         // 编辑器模拟模式
 #if UNITY_EDITOR
-        if (simulateSafeAreaInEditor && adaptMode == SafeAreaMode.ForceStandard)
+        if (simulateSafeAreaInEditor && (adaptMode == SafeAreaMode.ForceStandard || adaptMode == SafeAreaMode.ForceWeChat))
         {
             // 计算模拟的安全区域
             float left = simulatedLeftInset;

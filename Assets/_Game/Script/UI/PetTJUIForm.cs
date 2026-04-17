@@ -316,16 +316,6 @@ public sealed class PetTJUIForm : UIFormLogic
     private Sprite _unselectedTabSprite;
 
     /// <summary>
-    /// 选中态文字颜色。
-    /// </summary>
-    private Color _selectedTabTextColor;
-
-    /// <summary>
-    /// 未选中态文字颜色。
-    /// </summary>
-    private Color _unselectedTabTextColor;
-
-    /// <summary>
     /// 是否已经缓存到选中态文字颜色。
     /// </summary>
     private bool _hasSelectedTabTextColor;
@@ -630,25 +620,6 @@ public sealed class PetTJUIForm : UIFormLogic
                 }
             }
         }
-
-        if (!_hasSelectedTabTextColor && _qualityTabs[0] != null && _qualityTabs[0].Text != null)
-        {
-            _selectedTabTextColor = _qualityTabs[0].Text.color;
-            _hasSelectedTabTextColor = true;
-        }
-
-        if (!_hasUnselectedTabTextColor)
-        {
-            for (int i = 1; i < _qualityTabs.Length; i++)
-            {
-                if (_qualityTabs[i] != null && _qualityTabs[i].Text != null)
-                {
-                    _unselectedTabTextColor = _qualityTabs[i].Text.color;
-                    _hasUnselectedTabTextColor = true;
-                    break;
-                }
-            }
-        }
     }
 
     /// <summary>
@@ -744,9 +715,6 @@ public sealed class PetTJUIForm : UIFormLogic
     /// </summary>
     private void RefreshTabs()
     {
-        Color selectedTextColor = _hasSelectedTabTextColor ? _selectedTabTextColor : Color.white;
-        Color unselectedTextColor = _hasUnselectedTabTextColor ? _unselectedTabTextColor : selectedTextColor;
-
         for (int i = 0; i < _qualityTabs.Length; i++)
         {
             QualityTabView tab = _qualityTabs[i];
@@ -768,10 +736,6 @@ public sealed class PetTJUIForm : UIFormLogic
                 }
             }
 
-            if (tab.Text != null)
-            {
-                tab.Text.color = isSelected ? selectedTextColor : unselectedTextColor;
-            }
 
             if (tab.Button != null)
             {

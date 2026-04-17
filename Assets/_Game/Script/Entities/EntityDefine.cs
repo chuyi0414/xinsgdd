@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// 实体定义。
 /// 统一维护常用实体资源名与实体组名，避免业务层散落硬编码字符串。
 /// </summary>
@@ -35,6 +35,12 @@ public static class EntityDefine
     public const string FruitGroup = "Item";
 
     /// <summary>
+    /// 消除卡片实体所在分组。
+    /// 与主场景已有 Item 组隔离，避免临时预览卡片和常驻场地实体混池。
+    /// </summary>
+    public const string EliminateCardGroup = "EliminateCard";
+
+    /// <summary>
     /// 蛋实体资源名。
     /// </summary>
     public static readonly string EggEntity = AssetPath.GetEntity("Egg/EggEntity");
@@ -63,4 +69,14 @@ public static class EntityDefine
     /// 餐桌水果实体资源名。
     /// </summary>
     public static readonly string FruitEntity = AssetPath.GetEntity("Pet/FruitEntity");
+
+    /// <summary>
+    /// 消除卡片实体资源名。
+    /// </summary>
+    public static readonly string EliminateCardEntity = AssetPath.GetEntity("Card/CardEntity");
+
+    /// <summary>
+    /// 消除区域实体资源名。
+    /// </summary>
+    public static readonly string EliminateTheAreaEntity = AssetPath.GetEntity("Eliminate/EliminateTheAreaEntity");
 }

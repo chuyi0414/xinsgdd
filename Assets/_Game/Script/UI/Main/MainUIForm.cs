@@ -67,6 +67,11 @@ public partial class MainUIForm : UIFormLogic
     // 当前是否处于"每日一关附属 UI 已隐藏"状态。
     // 进入每日一关时置 true，返回中页动画结束后置 false。
     private bool _isDailyChallengeAuxiliaryUiHidden;
+    // 战斗期间强制隐藏 BtnUp 的标记。
+    // 由 DailyChallengeUIForm.OnBtnStartLevel 设置为 true，
+    // 由 RestoreDailyChallengeView 重置为 false。
+    // 此标记优先级高于 _currentPageSlot == Below 的常规显示逻辑。
+    private bool _forceHideBtnUp;
     // 点击 BtnUp 后，是否需要在回中页动画结束后恢复附属 UI。
     // 这个标记跨越切页动画期间，确保恢复时机在动画完成而不是点击瞬间。
     private bool _pendingRestoreDailyChallengeAuxiliaryUi;
@@ -327,6 +332,7 @@ public partial class MainUIForm : UIFormLogic
         if (_currentPageSlot == MainPageSlot.Below)
         {
             CloseDailyChallengeUIForm();
+            ClearDailyChallengeBoardPreview();
             _pendingRestoreDailyChallengeAuxiliaryUi = true;
             SwitchToPage(MainPageSlot.Center);
         }
@@ -735,7 +741,8 @@ public partial class MainUIForm : UIFormLogic
 
         if (_btnUp != null)
         {
-            bool shouldShowBtnUp = _currentPageSlot == MainPageSlot.Below;
+            // _forceHideBtnUp 为 true 时强制隐藏 BtnUp，忽略当前页槽位。
+            bool shouldShowBtnUp = !_forceHideBtnUp && _currentPageSlot == MainPageSlot.Below;
             if (_btnUp.gameObject.activeSelf != shouldShowBtnUp)
             {
                 _btnUp.gameObject.SetActive(shouldShowBtnUp);
@@ -748,5 +755,39 @@ public partial class MainUIForm : UIFormLogic
         {
             _btnDailyChallenge.interactable = !_isSwitching && _currentPageSlot == MainPageSlot.Center;
         }
+    }
+
+    /// <summary>
+    /// 设置 BtnUp 的强制隐藏状态。
+    /// 由 DailyChallengeUIForm.OnBtnStartLevel 调用，战斗期间隐藏上翻按钮。
+    /// </summary>
+    /// <param name="visible">true 显示 BtnUp（恢复常规逻辑），false 强制隐藏。</param>
+    public void SetBtnUpVisible(bool visible)
+    {
+        _forceHideBtnUp = !visible;
+        if (_btnUp != null && _forceHideBtnUp)
+        {
+            _btnUp.gameObject.SetActive(false);
+        }
+        else
+        {
+            UpdateButtonState();
+        }
+    }
+
+    /// <summary>
+    /// 从战斗流程返回后恢复每日一关视图。
+    /// 由 MainProcedure.OnEnter 在检测到 ReturningFromCombat 标记时调用。
+    /// 导航到 Below 页并打开 DailyChallengeUIForm，同时恢复 BtnUp 显示。
+    /// </summary>
+    public void RestoreDailyChallengeView()
+    {
+        _forceHideBtnUp = false;
+        _pendingRestoreDailyChallengeAuxiliaryUi = false;
+        // 清理战斗前生成的消除卡片与 EliminateTheAreaEntity，避免残留在场景中。
+        ClearDailyChallengeBoardPreview();
+        SetDailyChallengeAuxiliaryUiHidden(true);
+        SwitchToPage(MainPageSlot.Below);
+        ScheduleDailyChallengeUIFormOpenAfterSwitch();
     }
 }

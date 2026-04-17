@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using GameFramework;
 using GameFramework.Resource;
@@ -58,6 +58,11 @@ public sealed class GameAssetModule
         /// 金币点击提示 Toast 预制体资源。
         /// </summary>
         GoldCoinToastPrefab = 8,
+
+        /// <summary>
+        /// 每日一关本地预览关卡文本资源。
+        /// </summary>
+        DailyChallengeLevelText = 9,
     }
 
     /// <summary>
@@ -79,6 +84,15 @@ public sealed class GameAssetModule
     /// 金币点击提示 Toast 预制体的统一资源路径。
     /// </summary>
     private static readonly string GoldCoinToastPrefabPath = AssetPath.GetUI("Toast/GoldCoinToast");
+
+    /// <summary>
+    /// 每日一关本地预览关卡资源路径集合。
+    /// 第一阶段只迁入一份 bbl1 作为预览验证关卡，后续扩充时继续往这里追加即可。
+    /// </summary>
+    private static readonly string[] DailyChallengeLevelAssetPaths =
+    {
+        "Configs/Levels/bbl1",
+    };
 
     /// <summary>
     /// 单次资源加载任务的上下文数据。
@@ -140,6 +154,18 @@ public sealed class GameAssetModule
     private readonly Dictionary<string, Sprite> _fruitSpritesByCode = new Dictionary<string, Sprite>(StringComparer.Ordinal);
 
     /// <summary>
+    /// 已缓存的消除卡图，按精灵名索引。
+    /// 当前直接复用水果图预加载链路，把 IconPath 末尾的文件名反向索引成卡图名。
+    /// 例如：Arts/Fruit/FruitTJ/WP_80001 -> WP_80001。
+    /// </summary>
+    private readonly Dictionary<string, Sprite> _eliminateCardSpritesByName = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 已缓存的每日一关本地预览关卡文本，按资源路径索引。
+    /// </summary>
+    private readonly Dictionary<string, TextAsset> _dailyChallengeLevelTextsByPath = new Dictionary<string, TextAsset>(StringComparer.Ordinal);
+
+    /// <summary>
     /// 每个 SkeletonData 路径对应的动画校验信息集合。
     /// </summary>
     private readonly Dictionary<string, List<PetSkeletonValidationInfo>> _petValidationInfosByPath = new Dictionary<string, List<PetSkeletonValidationInfo>>(StringComparer.Ordinal);
@@ -183,6 +209,11 @@ public sealed class GameAssetModule
     /// 当前仍在加载中的金币点击提示 Toast 预制体路径集合。
     /// </summary>
     private readonly HashSet<string> _loadingGoldCoinToastPrefabPaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 当前仍在加载中的每日一关关卡文本路径集合。
+    /// </summary>
+    private readonly HashSet<string> _loadingDailyChallengeLevelTextPaths = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// 统一复用的资源加载回调函数集。
@@ -230,6 +261,11 @@ public sealed class GameAssetModule
     private int _pendingGoldCoinToastPrefabCount;
 
     /// <summary>
+    /// 当前待完成的每日一关关卡文本加载数量。
+    /// </summary>
+    private int _pendingDailyChallengeLevelTextCount;
+
+    /// <summary>
     /// 是否已经发起过蛋图标预加载。
     /// </summary>
     private bool _eggPreloadRequested;
@@ -270,6 +306,11 @@ public sealed class GameAssetModule
     private bool _goldCoinToastPrefabPreloadRequested;
 
     /// <summary>
+    /// 是否已经发起过每日一关关卡文本预加载。
+    /// </summary>
+    private bool _dailyChallengeLevelTextPreloadRequested;
+
+    /// <summary>
     /// 蛋图标预加载是否已经完成。
     /// </summary>
     private bool _eggPreloadCompleted;
@@ -308,6 +349,11 @@ public sealed class GameAssetModule
     /// 金币点击提示 Toast 预制体预热是否已经完成。
     /// </summary>
     private bool _goldCoinToastPrefabPreloadCompleted;
+
+    /// <summary>
+    /// 每日一关关卡文本预加载是否已经完成。
+    /// </summary>
+    private bool _dailyChallengeLevelTextPreloadCompleted;
 
     /// <summary>
     /// 已预热缓存的宠物实体预制体。
@@ -368,7 +414,8 @@ public sealed class GameAssetModule
         && _petFoodBubblePrefabPreloadCompleted
         && _goldCoinPrefabPreloadCompleted
         && _outputProducePrefabPreloadCompleted
-        && _goldCoinToastPrefabPreloadCompleted;
+        && _goldCoinToastPrefabPreloadCompleted
+        && _dailyChallengeLevelTextPreloadCompleted;
 
     /// <summary>
     /// 当前是否已经出现预加载失败。
@@ -388,6 +435,11 @@ public sealed class GameAssetModule
     /// </summary>
     public void BeginPreloadRequiredAssets()
     {
+        if (!_dailyChallengeLevelTextPreloadRequested)
+        {
+            BeginPreloadDailyChallengeLevelTexts();
+        }
+
         if (!_petEntityPrefabPreloadRequested)
         {
             BeginPreloadPetEntityPrefab();
@@ -477,6 +529,41 @@ public sealed class GameAssetModule
         }
 
         return _fruitSpritesByCode.TryGetValue(fruitCode, out sprite) && sprite != null;
+    }
+
+    /// <summary>
+    /// 获取消除卡图缓存。
+    /// 当前按精灵名读取，例如 WP_80001。
+    /// </summary>
+    /// <param name="spriteName">卡图精灵名。</param>
+    /// <param name="sprite">命中的图标资源。</param>
+    /// <returns>是否命中缓存。</returns>
+    public bool TryGetEliminateCardSprite(string spriteName, out Sprite sprite)
+    {
+        if (string.IsNullOrWhiteSpace(spriteName))
+        {
+            sprite = null;
+            return false;
+        }
+
+        return _eliminateCardSpritesByName.TryGetValue(spriteName.Trim(), out sprite) && sprite != null;
+    }
+
+    /// <summary>
+    /// 获取每日一关本地预览关卡文本缓存。
+    /// </summary>
+    /// <param name="assetPath">关卡资源路径。</param>
+    /// <param name="levelText">命中的文本资源。</param>
+    /// <returns>是否命中缓存。</returns>
+    public bool TryGetDailyChallengeLevelText(string assetPath, out TextAsset levelText)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath))
+        {
+            levelText = null;
+            return false;
+        }
+
+        return _dailyChallengeLevelTextsByPath.TryGetValue(assetPath.Trim(), out levelText) && levelText != null;
     }
 
     /// <summary>
@@ -614,6 +701,46 @@ public sealed class GameAssetModule
             }
 
             StartLoadFruitSprite(row);
+        }
+
+        UpdatePreloadCompletionState();
+        NotifyPreloadStateChanged();
+    }
+
+    /// <summary>
+    /// 预加载每日一关本地预览关卡文本。
+    /// 当前只迁入一份 bbl1；后续如果要扩充多关预览，只需要把路径继续加到常量数组里。
+    /// </summary>
+    private void BeginPreloadDailyChallengeLevelTexts()
+    {
+        _dailyChallengeLevelTextPreloadRequested = true;
+        _dailyChallengeLevelTextPreloadCompleted = false;
+
+        if (DailyChallengeLevelAssetPaths == null || DailyChallengeLevelAssetPaths.Length == 0)
+        {
+            UpdatePreloadCompletionState();
+            NotifyPreloadStateChanged();
+            return;
+        }
+
+        for (int i = 0; i < DailyChallengeLevelAssetPaths.Length; i++)
+        {
+            string assetPath = DailyChallengeLevelAssetPaths[i];
+            if (string.IsNullOrWhiteSpace(assetPath))
+            {
+                RegisterFailure("预加载每日一关关卡文本失败，存在空资源路径。");
+                continue;
+            }
+
+            if (_dailyChallengeLevelTextsByPath.ContainsKey(assetPath) || _loadingDailyChallengeLevelTextPaths.Contains(assetPath))
+            {
+                continue;
+            }
+
+            if (!TryLoadAsset(assetPath, typeof(TextAsset), PreloadAssetKind.DailyChallengeLevelText))
+            {
+                RegisterFailure(Utility.Text.Format("预加载每日一关关卡文本失败，无法开始加载资源，Path='{0}'。", assetPath));
+            }
         }
 
         UpdatePreloadCompletionState();
@@ -902,6 +1029,11 @@ public sealed class GameAssetModule
                 _loadingGoldCoinToastPrefabPaths.Add(assetPath);
                 _pendingGoldCoinToastPrefabCount++;
                 break;
+
+            case PreloadAssetKind.DailyChallengeLevelText:
+                _loadingDailyChallengeLevelTextPaths.Add(assetPath);
+                _pendingDailyChallengeLevelTextCount++;
+                break;
         }
 
         resourceManager.LoadAsset(assetPath, assetType, _loadAssetCallbacks, loadInfo);
@@ -969,6 +1101,12 @@ public sealed class GameAssetModule
                 _loadingGoldCoinToastPrefabPaths.Remove(loadInfo.AssetPath);
                 _pendingGoldCoinToastPrefabCount = Mathf.Max(0, _pendingGoldCoinToastPrefabCount - 1);
                 HandleGoldCoinToastPrefabLoaded(loadInfo.AssetPath, asset as GameObject);
+                break;
+
+            case PreloadAssetKind.DailyChallengeLevelText:
+                _loadingDailyChallengeLevelTextPaths.Remove(loadInfo.AssetPath);
+                _pendingDailyChallengeLevelTextCount = Mathf.Max(0, _pendingDailyChallengeLevelTextCount - 1);
+                HandleDailyChallengeLevelTextLoaded(loadInfo.AssetPath, asset as TextAsset);
                 break;
         }
 
@@ -1042,6 +1180,12 @@ public sealed class GameAssetModule
             _pendingGoldCoinToastPrefabCount = Mathf.Max(0, _pendingGoldCoinToastPrefabCount - 1);
             RegisterFailure(Utility.Text.Format("金币点击提示 Toast 预制体预热失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
         }
+        else if (loadInfo.AssetKind == PreloadAssetKind.DailyChallengeLevelText)
+        {
+            _loadingDailyChallengeLevelTextPaths.Remove(loadInfo.AssetPath);
+            _pendingDailyChallengeLevelTextCount = Mathf.Max(0, _pendingDailyChallengeLevelTextCount - 1);
+            RegisterFailure(Utility.Text.Format("每日一关关卡文本预加载失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
+        }
 
         UpdatePreloadCompletionState();
         NotifyPreloadStateChanged();
@@ -1097,6 +1241,37 @@ public sealed class GameAssetModule
         }
 
         _fruitSpritesByCode[fruitCode] = sprite;
+
+        // 每日一关当前阶段直接复用水果图。
+        // 这里把水果 IconPath 末尾的精灵名反向登记成“卡图名 -> Sprite”缓存，
+        // 让 DailyChallenge 业务层可以像 FruitEntityLogic 一样只走 GameAssetModule，不单独做同步加载。
+        string spriteName = ExtractAssetLeafName(iconPath);
+        if (!string.IsNullOrWhiteSpace(spriteName))
+        {
+            _eliminateCardSpritesByName[spriteName] = sprite;
+        }
+    }
+
+    /// <summary>
+    /// 处理每日一关本地预览关卡文本加载完成。
+    /// </summary>
+    /// <param name="assetPath">关卡文本资源路径。</param>
+    /// <param name="levelText">命中的文本资源。</param>
+    private void HandleDailyChallengeLevelTextLoaded(string assetPath, TextAsset levelText)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath))
+        {
+            RegisterFailure("每日一关关卡文本加载完成回调失败，资源路径为空。");
+            return;
+        }
+
+        if (levelText == null)
+        {
+            RegisterFailure(Utility.Text.Format("每日一关关卡文本加载失败，资源类型不是 TextAsset，Path='{0}'。", assetPath));
+            return;
+        }
+
+        _dailyChallengeLevelTextsByPath[assetPath] = levelText;
     }
 
     /// <summary>
@@ -1311,6 +1486,33 @@ public sealed class GameAssetModule
         {
             _goldCoinToastPrefabPreloadCompleted = true;
         }
+
+        if (_dailyChallengeLevelTextPreloadRequested && _pendingDailyChallengeLevelTextCount <= 0)
+        {
+            _dailyChallengeLevelTextPreloadCompleted = true;
+        }
+    }
+
+    /// <summary>
+    /// 从资源路径中提取末尾文件名。
+    /// 例如：Arts/Fruit/FruitTJ/WP_80001 -> WP_80001。
+    /// </summary>
+    /// <param name="assetPath">资源路径。</param>
+    /// <returns>末尾文件名；提取失败时返回原字符串。</returns>
+    private static string ExtractAssetLeafName(string assetPath)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath))
+        {
+            return string.Empty;
+        }
+
+        int slashIndex = assetPath.LastIndexOf('/');
+        if (slashIndex < 0 || slashIndex >= assetPath.Length - 1)
+        {
+            return assetPath.Trim();
+        }
+
+        return assetPath.Substring(slashIndex + 1).Trim();
     }
 
     /// <summary>

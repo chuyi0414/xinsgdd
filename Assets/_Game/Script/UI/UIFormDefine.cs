@@ -54,4 +54,24 @@ public static class UIFormDefine
     /// 宠物图鉴界面资源名。
     /// </summary>
     public static readonly string PetTJUIForm = AssetPath.GetUI("Pet/PetTJUIForm");
+
+    /// <summary>
+    /// 战斗界面资源名。
+    /// </summary>
+    public static readonly string CombatUIForm = AssetPath.GetUI("Combat/CombatUIForm");
+
+    /// <summary>
+    /// 退出确认界面资源名。
+    /// </summary>
+    public static readonly string IsExitUIForm = AssetPath.GetUI("Combat/IsExitUIForm");
+
+    /// <summary>
+    /// 消除规则说明界面资源名。
+    /// </summary>
+    public static readonly string EliminateRulesUIForm = AssetPath.GetUI("Combat/EliminateRulesUIForm");
+
+    /// <summary>
+    /// 胜利/失败弹窗界面资源名。
+    /// </summary>
+    public static readonly string VictoryFailUIForm = AssetPath.GetUI("Combat/VictoryFailUIForm");
 }

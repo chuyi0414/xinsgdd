@@ -221,6 +221,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _btnLoad: {fileID: 4503339690842857855}
+  _progressSlider: {fileID: 6070499967777798422}
 --- !u!1 &1810355700228658463
 GameObject:
   m_ObjectHideFlags: 0

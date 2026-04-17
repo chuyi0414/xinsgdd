@@ -933,7 +933,9 @@ public partial class MainUIForm
     /// </summary>
     private void EnsurePetFoodBubbleRoot()
     {
-        RectTransform overlayParent = _pageCenter != null ? _pageCenter : _pageViewport;
+        // 【避坑】父节点必须挂 _pageViewport 而非 _pageCenter！
+        // _pageCenter 会随翻页移动，导致食物气泡 anchoredPosition 被分页偏移污染。
+        RectTransform overlayParent = _pageViewport;
         if (_petFoodBubbleRoot != null || overlayParent == null)
         {
             return;
