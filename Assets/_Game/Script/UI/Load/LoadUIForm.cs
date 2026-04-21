@@ -150,6 +150,9 @@ public class LoadUIForm : UIFormLogic
     /// </summary>
     private void OnBtnLoad()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         // 进度未满时按钮不可交互，此处无需再检查 CanEnterMain
         // _enteredMain 防止重复点击导致多次状态切换
         if (_enteredMain)

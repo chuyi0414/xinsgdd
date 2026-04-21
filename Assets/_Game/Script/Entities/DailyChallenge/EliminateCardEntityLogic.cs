@@ -5,11 +5,33 @@ using UnityEngine.EventSystems;
 using UnityGameFramework.Runtime;
 
 /// <summary>
+/// 卡片所在区域枚举。
+/// 同一时刻卡片只属于一个区域，互斥。
+/// </summary>
+public enum CardArea
+{
+    /// <summary>
+    /// 棋盘（主区 + 额外区）。
+    /// </summary>
+    Board = 0,
+
+    /// <summary>
+    /// 等待区。
+    /// </summary>
+    WaitingArea = 1,
+
+    /// <summary>
+    /// 置出区（移出/拿取道具飞入的区域）。
+    /// </summary>
+    OutputZone = 2,
+}
+
+/// <summary>
 /// 消除卡片实体逻辑。
 /// 主线纯消消乐模式下的卡片交互壳：
 /// 1. 接收世界坐标、Sprite、颜色与排序值；
 /// 2. 实现 IPointerClickHandler 处理点击；
-/// 3. 管理 IsBlocked / IsMoving / IsInWaitingArea 状态；
+/// 3. 管理 IsBlocked / IsMoving / CardArea 状态；
 /// 4. 点击后通过 OnClickCallback 通知控制器。
 /// </summary>
 public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
@@ -63,10 +85,11 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
     private bool _isMoving;
 
     /// <summary>
-    /// 当前卡片是否已进入等待区。
-    /// 已在等待区的卡片不可再次点击。
+    /// 当前卡片所在区域。
+    /// Board=棋盘（主区/额外区），WaitingArea=等待区，OutputZone=置出区。
+    /// 互斥状态，同一时刻卡片只属于一个区域。
     /// </summary>
-    private bool _isInWaitingArea;
+    private CardArea _cardArea;
 
     /// <summary>
     /// 卡片类型 Id。
@@ -102,9 +125,19 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
     public bool IsMoving => _isMoving;
 
     /// <summary>
-    /// 当前卡片是否已在等待区。
+    /// 当前卡片所在区域。
     /// </summary>
-    public bool IsInWaitingArea => _isInWaitingArea;
+    public CardArea CurrentArea => _cardArea;
+
+    /// <summary>
+    /// 设置卡片所在区域。
+    /// 由 EliminateCardController / EliminateTheAreaEntityLogic 在区域切换时调用。
+    /// </summary>
+    /// <param name="area">目标区域。</param>
+    public void SetCardArea(CardArea area)
+    {
+        _cardArea = area;
+    }
 
     // ───────────── EntityLogic 生命周期 ─────────────
 
@@ -127,7 +160,7 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
         // 重置运行时状态，防止对象池复用时残留脏数据
         _isBlocked = false;
         _isMoving = false;
-        _isInWaitingArea = false;
+        _cardArea = CardArea.Board;
         ApplyData(userData as EliminateCardEntityData);
 
         // 自动注册点击回调与卡片逻辑引用
@@ -155,7 +188,7 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
 
         _isBlocked = false;
         _isMoving = false;
-        _isInWaitingArea = false;
+        _cardArea = CardArea.Board;
         OnClickCallback = null;
 
         // 自动反注册卡片逻辑引用
@@ -173,6 +206,9 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
     /// </summary>
     public void OnPointerClick(PointerEventData eventData)
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         // 被遮挡的卡片不可点击
         if (_isBlocked)
         {
@@ -185,8 +221,8 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
             return;
         }
 
-        // 已在等待区的卡片不可再次点击
-        if (_isInWaitingArea)
+        // 等待区卡片不可再次点击
+        if (_cardArea == CardArea.WaitingArea)
         {
             return;
         }
@@ -228,13 +264,37 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
         _isMoving = moving;
     }
 
+    // ───────────── 道具操作接口 ─────────────
+
     /// <summary>
-    /// 标记卡片已进入等待区。
-    /// 进入等待区后不可再次点击。
+    /// 设置 SpriteRenderer 的 sortingOrder。
+    /// 由 EliminateCardController 在卡片飞入置出区后调用，
+    /// 后进入的卡片 sortingOrder 更大，确保渲染在上方。
     /// </summary>
-    public void SetInWaitingArea()
+    /// <param name="order">目标 sortingOrder 值。</param>
+    public void SetSortingOrder(int order)
     {
-        _isInWaitingArea = true;
+        if (_spriteRenderer != null)
+        {
+            _spriteRenderer.sortingOrder = order;
+        }
+    }
+
+    /// <summary>
+    /// 设置卡片类型 Id 与显示精灵。
+    /// 由随机道具（Shuffle）调用，打乱后重新赋值 TypeId + Sprite。
+    /// ⚠️ 避坑：TypeId 的 setter 是 private，只有此方法可从外部修改。
+    /// </summary>
+    /// <param name="newTypeId">新的类型 Id。</param>
+    /// <param name="newSprite">新的显示精灵；为 null 时保留当前精灵。</param>
+    public void SetTypeIdAndSprite(int newTypeId, Sprite newSprite)
+    {
+        TypeId = newTypeId;
+
+        if (_spriteRenderer != null && newSprite != null)
+        {
+            _spriteRenderer.sprite = newSprite;
+        }
     }
 
     // ───────────── 内部方法 ─────────────

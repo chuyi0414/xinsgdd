@@ -22,6 +22,12 @@ public static class AssetPath
     public const string DataTableRoot = "DataTable/";
 
     /// <summary>
+    /// 战斗消除分数数字精灵根路径。
+    /// 子文件夹名即为数字编号，如 "2/" 对应 Score/2 下的 0~9.png。
+    /// </summary>
+    public const string CombatScoreDigitRoot = "Arts/Combat/Eliminate/Score/";
+
+    /// <summary>
     /// 获取 UI 资源路径。
     /// </summary>
     /// <param name="subPath">UI 子路径，例如 Login/LoginUIForm。</param>

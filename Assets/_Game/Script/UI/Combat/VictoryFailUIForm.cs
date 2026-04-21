@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityGameFramework.Runtime;
@@ -33,6 +34,14 @@ public sealed class VictoryFailUIForm : UIFormLogic
     private Button _btnReturn;
 
     /// <summary>
+    /// 最终得分文本。
+    /// 胜利时显示翻倍后的总分，失败时显示当前得分。
+    /// Inspector 中拖入绑定；若为 null 则不显示得分。
+    /// </summary>
+    [SerializeField]
+    private TextMeshProUGUI _txtFinalScore;
+
+    /// <summary>
     /// 初始化：绑定返回按钮事件。
     /// </summary>
     protected override void OnInit(object userData)
@@ -54,9 +63,11 @@ public sealed class VictoryFailUIForm : UIFormLogic
 
         // 解析打开数据，默认为失败
         bool isVictory = false;
+        int finalScore = 0;
         if (userData is VictoryFailUIData data)
         {
             isVictory = data.IsVictory;
+            finalScore = data.FinalScore;
         }
 
         if (_victoryObj != null)
@@ -67,6 +78,12 @@ public sealed class VictoryFailUIForm : UIFormLogic
         if (_failObj != null)
         {
             _failObj.SetActive(!isVictory);
+        }
+
+        // 显示最终得分
+        if (_txtFinalScore != null)
+        {
+            _txtFinalScore.text = finalScore.ToString();
         }
     }
 
@@ -87,6 +104,9 @@ public sealed class VictoryFailUIForm : UIFormLogic
     /// </summary>
     private void OnBtnReturn()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         // 先关闭自身，避免流程切换时残留
         if (UIForm != null && GameEntry.UI != null)
         {
@@ -102,7 +122,7 @@ public sealed class VictoryFailUIForm : UIFormLogic
 
 /// <summary>
 /// VictoryFailUIForm 打开数据。
-/// 仅携带 IsVictory 标记，决定显示 Victory 还是 Fail。
+/// 携带 IsVictory 标记和最终得分，决定显示 Victory 还是 Fail 以及分数。
 /// </summary>
 public sealed class VictoryFailUIData
 {
@@ -112,8 +132,15 @@ public sealed class VictoryFailUIData
     /// </summary>
     public bool IsVictory { get; }
 
-    public VictoryFailUIData(bool isVictory)
+    /// <summary>
+    /// 最终得分。
+    /// 胜利时为翻倍后的总分，失败时为当前累计得分。
+    /// </summary>
+    public int FinalScore { get; }
+
+    public VictoryFailUIData(bool isVictory, int finalScore = 0)
     {
         IsVictory = isVictory;
+        FinalScore = finalScore;
     }
 }

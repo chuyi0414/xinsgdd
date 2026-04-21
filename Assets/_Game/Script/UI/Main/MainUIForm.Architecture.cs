@@ -97,6 +97,9 @@ public partial class MainUIForm
     /// </summary>
     private void OnArchitectureUpgradeClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (GameEntry.UI == null)
         {
             Log.Warning("MainUIForm 无法打开建筑升级界面，UIComponent 缺失。");

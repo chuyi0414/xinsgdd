@@ -63,6 +63,17 @@ public sealed class GameAssetModule
         /// 每日一关本地预览关卡文本资源。
         /// </summary>
         DailyChallengeLevelText = 9,
+
+        /// <summary>
+        /// 战斗消除分数数字精灵资源。
+        /// </summary>
+        ScoreDigitSprite = 10,
+
+        /// <summary>
+        /// 战斗消除分数数字精灵资源（小尺寸，Score/1 套图 64×64）。
+        /// 用于等待区每个槽位的分数字图片渲染。
+        /// </summary>
+        ScoreDigitSmallSprite = 11,
     }
 
     /// <summary>
@@ -166,6 +177,17 @@ public sealed class GameAssetModule
     private readonly Dictionary<string, TextAsset> _dailyChallengeLevelTextsByPath = new Dictionary<string, TextAsset>(StringComparer.Ordinal);
 
     /// <summary>
+    /// 已缓存的分数数字精灵，按数字（0~9）索引。
+    /// </summary>
+    private readonly Dictionary<int, Sprite> _scoreDigitSpritesByDigit = new Dictionary<int, Sprite>(10);
+
+    /// <summary>
+    /// 已缓存的小尺寸分数数字精灵（Score/1 套图 64×64），按数字（0~9）索引。
+    /// 用于等待区每个槽位的分数字图片渲染。
+    /// </summary>
+    private readonly Dictionary<int, Sprite> _scoreDigitSmallSpritesByDigit = new Dictionary<int, Sprite>(10);
+
+    /// <summary>
     /// 每个 SkeletonData 路径对应的动画校验信息集合。
     /// </summary>
     private readonly Dictionary<string, List<PetSkeletonValidationInfo>> _petValidationInfosByPath = new Dictionary<string, List<PetSkeletonValidationInfo>>(StringComparer.Ordinal);
@@ -214,6 +236,16 @@ public sealed class GameAssetModule
     /// 当前仍在加载中的每日一关关卡文本路径集合。
     /// </summary>
     private readonly HashSet<string> _loadingDailyChallengeLevelTextPaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 当前仍在加载中的分数数字精灵路径集合。
+    /// </summary>
+    private readonly HashSet<string> _loadingScoreDigitSpritePaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 当前仍在加载中的小尺寸分数数字精灵路径集合（Score/1 套图）。
+    /// </summary>
+    private readonly HashSet<string> _loadingScoreDigitSmallSpritePaths = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// 统一复用的资源加载回调函数集。
@@ -266,6 +298,16 @@ public sealed class GameAssetModule
     private int _pendingDailyChallengeLevelTextCount;
 
     /// <summary>
+    /// 当前待完成的分数数字精灵加载数量。
+    /// </summary>
+    private int _pendingScoreDigitSpriteCount;
+
+    /// <summary>
+    /// 当前待完成的小尺寸分数数字精灵加载数量（Score/1 套图）。
+    /// </summary>
+    private int _pendingScoreDigitSmallSpriteCount;
+
+    /// <summary>
     /// 是否已经发起过蛋图标预加载。
     /// </summary>
     private bool _eggPreloadRequested;
@@ -311,6 +353,16 @@ public sealed class GameAssetModule
     private bool _dailyChallengeLevelTextPreloadRequested;
 
     /// <summary>
+    /// 是否已经发起过分数数字精灵预加载。
+    /// </summary>
+    private bool _scoreDigitSpritePreloadRequested;
+
+    /// <summary>
+    /// 是否已经发起过小尺寸分数数字精灵预加载（Score/1 套图）。
+    /// </summary>
+    private bool _scoreDigitSmallSpritePreloadRequested;
+
+    /// <summary>
     /// 蛋图标预加载是否已经完成。
     /// </summary>
     private bool _eggPreloadCompleted;
@@ -354,6 +406,16 @@ public sealed class GameAssetModule
     /// 每日一关关卡文本预加载是否已经完成。
     /// </summary>
     private bool _dailyChallengeLevelTextPreloadCompleted;
+
+    /// <summary>
+    /// 分数数字精灵预加载是否已经完成。
+    /// </summary>
+    private bool _scoreDigitSpritePreloadCompleted;
+
+    /// <summary>
+    /// 小尺寸分数数字精灵预加载是否已经完成（Score/1 套图）。
+    /// </summary>
+    private bool _scoreDigitSmallSpritePreloadCompleted;
 
     /// <summary>
     /// 已预热缓存的宠物实体预制体。
@@ -415,7 +477,9 @@ public sealed class GameAssetModule
         && _goldCoinPrefabPreloadCompleted
         && _outputProducePrefabPreloadCompleted
         && _goldCoinToastPrefabPreloadCompleted
-        && _dailyChallengeLevelTextPreloadCompleted;
+        && _dailyChallengeLevelTextPreloadCompleted
+        && _scoreDigitSpritePreloadCompleted
+        && _scoreDigitSmallSpritePreloadCompleted;
 
     /// <summary>
     /// 当前是否已经出现预加载失败。
@@ -438,6 +502,16 @@ public sealed class GameAssetModule
         if (!_dailyChallengeLevelTextPreloadRequested)
         {
             BeginPreloadDailyChallengeLevelTexts();
+        }
+
+        if (!_scoreDigitSpritePreloadRequested)
+        {
+            BeginPreloadScoreDigitSprites();
+        }
+
+        if (!_scoreDigitSmallSpritePreloadRequested)
+        {
+            BeginPreloadScoreDigitSmallSprites();
         }
 
         if (!_petEntityPrefabPreloadRequested)
@@ -564,6 +638,41 @@ public sealed class GameAssetModule
         }
 
         return _dailyChallengeLevelTextsByPath.TryGetValue(assetPath.Trim(), out levelText) && levelText != null;
+    }
+
+    /// <summary>
+    /// 获取分数数字精灵缓存。
+    /// </summary>
+    /// <param name="digit">数字 0~9。</param>
+    /// <param name="sprite">命中的精灵资源。</param>
+    /// <returns>是否命中缓存。</returns>
+    public bool TryGetScoreDigitSprite(int digit, out Sprite sprite)
+    {
+        if (digit < 0 || digit > 9)
+        {
+            sprite = null;
+            return false;
+        }
+
+        return _scoreDigitSpritesByDigit.TryGetValue(digit, out sprite) && sprite != null;
+    }
+
+    /// <summary>
+    /// 获取小尺寸分数数字精灵缓存（Score/1 套图 64×64）。
+    /// 用于等待区每个槽位的分数字图片渲染。
+    /// </summary>
+    /// <param name="digit">数字 0~9。</param>
+    /// <param name="sprite">命中的精灵资源。</param>
+    /// <returns>是否命中缓存。</returns>
+    public bool TryGetScoreDigitSmallSprite(int digit, out Sprite sprite)
+    {
+        if (digit < 0 || digit > 9)
+        {
+            sprite = null;
+            return false;
+        }
+
+        return _scoreDigitSmallSpritesByDigit.TryGetValue(digit, out sprite) && sprite != null;
     }
 
     /// <summary>
@@ -701,6 +810,72 @@ public sealed class GameAssetModule
             }
 
             StartLoadFruitSprite(row);
+        }
+
+        UpdatePreloadCompletionState();
+        NotifyPreloadStateChanged();
+    }
+
+    /// <summary>
+    /// 预加载分数数字精灵（0~9）。
+    /// 精灵路径格式：Arts/Combat/Eliminate/Score/2/{数字}。
+    /// 当前使用 Score/2 套图（256×256），如需切换到 Score/1 套图（64×64），
+    /// 修改下方 _scoreDigitSpriteSubFolder 即可。
+    /// </summary>
+    private void BeginPreloadScoreDigitSprites()
+    {
+        _scoreDigitSpritePreloadRequested = true;
+        _scoreDigitSpritePreloadCompleted = false;
+
+        // ⚠️ 避坑：当前硬编码使用 Score/2 子文件夹。
+        // 若后续需要动态切换，改为从配置表读取。
+        const string subFolder = "2";
+
+        for (int i = 0; i < 10; i++)
+        {
+            string assetPath = Utility.Text.Format("{0}{1}/{2}", AssetPath.CombatScoreDigitRoot, subFolder, i);
+
+            if (_scoreDigitSpritesByDigit.ContainsKey(i) || _loadingScoreDigitSpritePaths.Contains(assetPath))
+            {
+                continue;
+            }
+
+            if (!TryLoadAsset(assetPath, typeof(Sprite), PreloadAssetKind.ScoreDigitSprite, i.ToString()))
+            {
+                RegisterFailure(Utility.Text.Format("预加载分数数字精灵失败，无法开始加载资源，Digit='{0}'，Path='{1}'。", i, assetPath));
+            }
+        }
+
+        UpdatePreloadCompletionState();
+        NotifyPreloadStateChanged();
+    }
+
+    /// <summary>
+    /// 预加载小尺寸分数数字精灵（0~9）。
+    /// 精灵路径格式：Arts/Combat/Eliminate/Score/1/{数字}。
+    /// 使用 Score/1 套图（64×64），用于等待区每个槽位的分数字图片渲染。
+    /// </summary>
+    private void BeginPreloadScoreDigitSmallSprites()
+    {
+        _scoreDigitSmallSpritePreloadRequested = true;
+        _scoreDigitSmallSpritePreloadCompleted = false;
+
+        // ⚠️ 避坑：硬编码使用 Score/1 子文件夹（64×64 小尺寸），与 Score/2（256×256 UI 用）分开。
+        const string subFolder = "1";
+
+        for (int i = 0; i < 10; i++)
+        {
+            string assetPath = Utility.Text.Format("{0}{1}/{2}", AssetPath.CombatScoreDigitRoot, subFolder, i);
+
+            if (_scoreDigitSmallSpritesByDigit.ContainsKey(i) || _loadingScoreDigitSmallSpritePaths.Contains(assetPath))
+            {
+                continue;
+            }
+
+            if (!TryLoadAsset(assetPath, typeof(Sprite), PreloadAssetKind.ScoreDigitSmallSprite, i.ToString()))
+            {
+                RegisterFailure(Utility.Text.Format("预加载小尺寸分数数字精灵失败，无法开始加载资源，Digit='{0}'，Path='{1}'。", i, assetPath));
+            }
         }
 
         UpdatePreloadCompletionState();
@@ -1034,6 +1209,11 @@ public sealed class GameAssetModule
                 _loadingDailyChallengeLevelTextPaths.Add(assetPath);
                 _pendingDailyChallengeLevelTextCount++;
                 break;
+
+            case PreloadAssetKind.ScoreDigitSprite:
+                _loadingScoreDigitSpritePaths.Add(assetPath);
+                _pendingScoreDigitSpriteCount++;
+                break;
         }
 
         resourceManager.LoadAsset(assetPath, assetType, _loadAssetCallbacks, loadInfo);
@@ -1107,6 +1287,18 @@ public sealed class GameAssetModule
                 _loadingDailyChallengeLevelTextPaths.Remove(loadInfo.AssetPath);
                 _pendingDailyChallengeLevelTextCount = Mathf.Max(0, _pendingDailyChallengeLevelTextCount - 1);
                 HandleDailyChallengeLevelTextLoaded(loadInfo.AssetPath, asset as TextAsset);
+                break;
+
+            case PreloadAssetKind.ScoreDigitSprite:
+                _loadingScoreDigitSpritePaths.Remove(loadInfo.AssetPath);
+                _pendingScoreDigitSpriteCount = Mathf.Max(0, _pendingScoreDigitSpriteCount - 1);
+                HandleScoreDigitSpriteLoaded(loadInfo.ContextCode, asset as Sprite);
+                break;
+
+            case PreloadAssetKind.ScoreDigitSmallSprite:
+                _loadingScoreDigitSmallSpritePaths.Remove(loadInfo.AssetPath);
+                _pendingScoreDigitSmallSpriteCount = Mathf.Max(0, _pendingScoreDigitSmallSpriteCount - 1);
+                HandleScoreDigitSmallSpriteLoaded(loadInfo.ContextCode, asset as Sprite);
                 break;
         }
 
@@ -1186,6 +1378,18 @@ public sealed class GameAssetModule
             _pendingDailyChallengeLevelTextCount = Mathf.Max(0, _pendingDailyChallengeLevelTextCount - 1);
             RegisterFailure(Utility.Text.Format("每日一关关卡文本预加载失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
         }
+        else if (loadInfo.AssetKind == PreloadAssetKind.ScoreDigitSprite)
+        {
+            _loadingScoreDigitSpritePaths.Remove(loadInfo.AssetPath);
+            _pendingScoreDigitSpriteCount = Mathf.Max(0, _pendingScoreDigitSpriteCount - 1);
+            RegisterFailure(Utility.Text.Format("分数数字精灵预加载失败，Digit='{0}'，Path='{1}'，Status='{2}'，Error='{3}'。", loadInfo.ContextCode, loadInfo.AssetPath, status, errorMessage));
+        }
+        else if (loadInfo.AssetKind == PreloadAssetKind.ScoreDigitSmallSprite)
+        {
+            _loadingScoreDigitSmallSpritePaths.Remove(loadInfo.AssetPath);
+            _pendingScoreDigitSmallSpriteCount = Mathf.Max(0, _pendingScoreDigitSmallSpriteCount - 1);
+            RegisterFailure(Utility.Text.Format("小尺寸分数数字精灵预加载失败，Digit='{0}'，Path='{1}'，Status='{2}'，Error='{3}'。", loadInfo.ContextCode, loadInfo.AssetPath, status, errorMessage));
+        }
 
         UpdatePreloadCompletionState();
         NotifyPreloadStateChanged();
@@ -1250,6 +1454,50 @@ public sealed class GameAssetModule
         {
             _eliminateCardSpritesByName[spriteName] = sprite;
         }
+    }
+
+    /// <summary>
+    /// 处理分数数字精灵加载完成。
+    /// </summary>
+    /// <param name="digitStr">数字字符串（0~9），由 ContextCode 传入。</param>
+    /// <param name="sprite">命中的精灵资源。</param>
+    private void HandleScoreDigitSpriteLoaded(string digitStr, Sprite sprite)
+    {
+        if (string.IsNullOrWhiteSpace(digitStr) || !int.TryParse(digitStr, out int digit) || digit < 0 || digit > 9)
+        {
+            RegisterFailure(Utility.Text.Format("分数数字精灵加载完成回调失败，ContextCode 不是有效数字，Code='{0}'。", digitStr));
+            return;
+        }
+
+        if (sprite == null)
+        {
+            RegisterFailure(Utility.Text.Format("分数数字精灵加载失败，资源类型不是 Sprite，Digit='{0}'。", digit));
+            return;
+        }
+
+        _scoreDigitSpritesByDigit[digit] = sprite;
+    }
+
+    /// <summary>
+    /// 处理小尺寸分数数字精灵加载完成（Score/1 套图 64×64）。
+    /// </summary>
+    /// <param name="digitStr">数字字符串（0~9），由 ContextCode 传入。</param>
+    /// <param name="sprite">命中的精灵资源。</param>
+    private void HandleScoreDigitSmallSpriteLoaded(string digitStr, Sprite sprite)
+    {
+        if (string.IsNullOrWhiteSpace(digitStr) || !int.TryParse(digitStr, out int digit) || digit < 0 || digit > 9)
+        {
+            RegisterFailure(Utility.Text.Format("小尺寸分数数字精灵加载完成回调失败，ContextCode 不是有效数字，Code='{0}'。", digitStr));
+            return;
+        }
+
+        if (sprite == null)
+        {
+            RegisterFailure(Utility.Text.Format("小尺寸分数数字精灵加载失败，资源类型不是 Sprite，Digit='{0}'。", digit));
+            return;
+        }
+
+        _scoreDigitSmallSpritesByDigit[digit] = sprite;
     }
 
     /// <summary>
@@ -1490,6 +1738,16 @@ public sealed class GameAssetModule
         if (_dailyChallengeLevelTextPreloadRequested && _pendingDailyChallengeLevelTextCount <= 0)
         {
             _dailyChallengeLevelTextPreloadCompleted = true;
+        }
+
+        if (_scoreDigitSpritePreloadRequested && _pendingScoreDigitSpriteCount <= 0)
+        {
+            _scoreDigitSpritePreloadCompleted = true;
+        }
+
+        if (_scoreDigitSmallSpritePreloadRequested && _pendingScoreDigitSmallSpriteCount <= 0)
+        {
+            _scoreDigitSmallSpritePreloadCompleted = true;
         }
     }
 

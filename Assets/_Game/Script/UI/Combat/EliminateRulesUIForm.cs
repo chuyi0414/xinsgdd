@@ -222,6 +222,9 @@ public sealed class EliminateRulesUIForm : UIFormLogic
     /// </summary>
     private void PlayCloseAnimation()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (_rulesPanel == null)
         {
             InvokeClosedCallback();

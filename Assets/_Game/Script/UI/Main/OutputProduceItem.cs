@@ -149,6 +149,9 @@ public sealed class OutputProduceItem : MonoBehaviour
     /// </summary>
     private void OnButtonClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (string.IsNullOrWhiteSpace(_produceCode) || _onCollected == null)
         {
             return;

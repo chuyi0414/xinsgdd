@@ -310,6 +310,9 @@ public class ShuiGuoTJUIForm : UIFormLogic
     /// <param name="index">被点击条目在列表中的索引。</param>
     private void OnBtnUnlock(int index)
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (index < 0 || index >= _fruitEntries.Count)
         {
             return;
@@ -334,6 +337,9 @@ public class ShuiGuoTJUIForm : UIFormLogic
     /// </summary>
     private void OnBtnClose()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+
         if (GameEntry.UI == null)
         {
             return;

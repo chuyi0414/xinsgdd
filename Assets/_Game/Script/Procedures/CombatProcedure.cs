@@ -11,6 +11,13 @@ using UnityGameFramework.Runtime;
 public class CombatProcedure : ProcedureBase
 {
     /// <summary>
+    /// 流程间传递"本次战斗是否携带道具包"标记的键名。
+    /// 由 DailyChallengeUIForm 或 MainUIForm 在进入战斗前设置，
+    /// CombatProcedure.OnEnter 读取后传给 CombatUIForm。
+    /// </summary>
+    public const string HasPropKitDataName = "HasPropKit";
+
+    /// <summary>
     /// 当前战斗界面的序列号。
     /// 用于在 OnLeave 时精确关闭由本流程打开的 CombatUIForm。
     /// </summary>
@@ -18,10 +25,23 @@ public class CombatProcedure : ProcedureBase
 
     /// <summary>
     /// 进入战斗流程时打开 CombatUIForm。
+    /// 读取 HasPropKit 标记并传给 CombatUIForm。
     /// </summary>
     protected override void OnEnter(IFsm<IProcedureManager> procedureOwner)
     {
-        _combatUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.CombatUIForm, UIFormDefine.MainGroup);
+        // 读取道具包状态
+        bool hasPropKit = procedureOwner.HasData(HasPropKitDataName)
+            && procedureOwner.GetData<VarBoolean>(HasPropKitDataName).Value;
+
+        // 清理标记，避免跨局残留
+        if (procedureOwner.HasData(HasPropKitDataName))
+        {
+            procedureOwner.RemoveData(HasPropKitDataName);
+        }
+
+        _combatUIFormId = GameEntry.UI.OpenUIForm(
+            UIFormDefine.CombatUIForm, UIFormDefine.MainGroup, hasPropKit);
+
         base.OnEnter(procedureOwner);
     }
 

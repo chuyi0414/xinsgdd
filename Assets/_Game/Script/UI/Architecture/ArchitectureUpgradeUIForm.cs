@@ -522,6 +522,9 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     /// </summary>
     private void OnCloseButtonClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (UIForm == null || GameEntry.UI == null)
         {
             return;
@@ -536,6 +539,9 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     /// </summary>
     private void OnHatchButtonClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         SwitchVisibleCategory(PlayerRuntimeModule.ArchitectureCategory.Hatch, false);
     }
 
@@ -545,6 +551,9 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     /// </summary>
     private void OnDietButtonClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         SwitchVisibleCategory(PlayerRuntimeModule.ArchitectureCategory.Diet, false);
     }
 
@@ -554,6 +563,9 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     /// </summary>
     private void OnFruiterButtonClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         SwitchVisibleCategory(PlayerRuntimeModule.ArchitectureCategory.Fruiter, false);
     }
 
@@ -564,6 +576,9 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     /// <param name="entryIndex">条目在缓存数组中的下标。</param>
     private void OnEntryActionClicked(int entryIndex)
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (!_isViewReady || _entryViews == null || entryIndex < 0 || entryIndex >= _entryViews.Length)
         {
             return;

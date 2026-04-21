@@ -46,6 +46,11 @@ public sealed class GameDataTableModule
     private static readonly string ArchitectureUpgradeDataTableAssetName = AssetPath.GetDataTable("ArchitectureUpgrade");
 
     /// <summary>
+    /// 每日一关得分配置表资源路径。
+    /// </summary>
+    private static readonly string DailyChallengeScoreDataTableAssetName = AssetPath.GetDataTable("DailyChallengeScore");
+
+    /// <summary>
     /// 已注册的数据表缓存，按行类型索引。
     /// </summary>
     private readonly Dictionary<Type, object> _dataTables = new Dictionary<Type, object>();
@@ -75,7 +80,8 @@ public sealed class GameDataTableModule
         && IsAvailable<PetProduceDataRow>()
         && IsAvailable<GameplayRuleDataRow>()
         && IsAvailable<ArchitectureSlotDataRow>()
-        && IsAvailable<ArchitectureUpgradeDataRow>();
+        && IsAvailable<ArchitectureUpgradeDataRow>()
+        && IsAvailable<DailyChallengeScoreDataRow>();
 
     /// <summary>
     /// 启动全部必需业务数据表加载。
@@ -92,6 +98,7 @@ public sealed class GameDataTableModule
         BeginLoadGameplayRuleDataTable();
         BeginLoadArchitectureSlotDataTable();
         BeginLoadArchitectureUpgradeDataTable();
+        BeginLoadDailyChallengeScoreDataTable();
 
         NotifyLoadStateChanged();
     }
@@ -490,6 +497,32 @@ public sealed class GameDataTableModule
     }
 
     /// <summary>
+    /// 开始加载每日一关得分配置表。
+    /// </summary>
+    private void BeginLoadDailyChallengeScoreDataTable()
+    {
+        if (IsAvailable<DailyChallengeScoreDataRow>())
+        {
+            return;
+        }
+
+        IDataTable<DailyChallengeScoreDataRow> dailyChallengeScoreDataTable = EnsureDataTable<DailyChallengeScoreDataRow>();
+        if (dailyChallengeScoreDataTable == null)
+        {
+            Log.Error("创建每日一关得分配置表失败。");
+            return;
+        }
+
+        if (dailyChallengeScoreDataTable.Count > 0)
+        {
+            TryRegisterDailyChallengeScoreDataTable(dailyChallengeScoreDataTable);
+            return;
+        }
+
+        ((GameFramework.DataTable.DataTableBase)dailyChallengeScoreDataTable).ReadData(DailyChallengeScoreDataTableAssetName);
+    }
+
+    /// <summary>
     /// 数据表加载成功回调。
     /// </summary>
     private void OnLoadDataTableSuccess(object sender, GameEventArgs e)
@@ -527,6 +560,10 @@ public sealed class GameDataTableModule
         else if (string.Equals(ne.DataTableAssetName, ArchitectureUpgradeDataTableAssetName, StringComparison.Ordinal))
         {
             TryRegisterArchitectureUpgradeDataTable(GameEntry.DataTable.GetDataTable<ArchitectureUpgradeDataRow>());
+        }
+        else if (string.Equals(ne.DataTableAssetName, DailyChallengeScoreDataTableAssetName, StringComparison.Ordinal))
+        {
+            TryRegisterDailyChallengeScoreDataTable(GameEntry.DataTable.GetDataTable<DailyChallengeScoreDataRow>());
         }
     }
 
@@ -575,6 +612,11 @@ public sealed class GameDataTableModule
         {
             Log.Error("加载建筑升级配置表失败：{0}", ne.ErrorMessage);
             Clear<ArchitectureUpgradeDataRow>();
+        }
+        else if (string.Equals(ne.DataTableAssetName, DailyChallengeScoreDataTableAssetName, StringComparison.Ordinal))
+        {
+            Log.Error("加载每日一关得分配置表失败：{0}", ne.ErrorMessage);
+            Clear<DailyChallengeScoreDataRow>();
         }
     }
 
@@ -747,6 +789,20 @@ public sealed class GameDataTableModule
         }
 
         return TryWarmupPlayerRuntimeState();
+    }
+
+    /// <summary>
+    /// 注册每日一关得分配置表到通用模块。
+    /// </summary>
+    private bool TryRegisterDailyChallengeScoreDataTable(IDataTable<DailyChallengeScoreDataRow> dailyChallengeScoreDataTable)
+    {
+        if (!Register(dailyChallengeScoreDataTable))
+        {
+            Log.Error("每日一关得分配置表注册失败。");
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

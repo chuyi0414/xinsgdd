@@ -640,7 +640,7 @@ public sealed class PetTJUIForm : UIFormLogic
 
         if (_detailView.CloseButton != null)
         {
-            _detailView.CloseButton.onClick.AddListener(HideDetail);
+            _detailView.CloseButton.onClick.AddListener(OnDetailCloseButtonClicked);
         }
 
         for (int i = 0; i < _qualityTabs.Length; i++)
@@ -853,6 +853,9 @@ public sealed class PetTJUIForm : UIFormLogic
     /// <param name="index">被点击品质按钮的数组索引。</param>
     private void OnQualityTabClicked(int index)
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (index < 0 || index >= _qualityTabs.Length || _qualityTabs[index] == null)
         {
             return;
@@ -877,6 +880,9 @@ public sealed class PetTJUIForm : UIFormLogic
     /// <param name="index">被点击条目的缓存索引。</param>
     private void OnPetItemClicked(int index)
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (index < 0 || index >= _entries.Count)
         {
             return;
@@ -942,8 +948,21 @@ public sealed class PetTJUIForm : UIFormLogic
     }
 
     /// <summary>
+    /// 详情面板关闭按钮的点击回调。
+    /// 播放点击音效后关闭详情面板。
+    /// </summary>
+    private void OnDetailCloseButtonClicked()
+    {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+
+        HideDetail();
+    }
+
+    /// <summary>
     /// 关闭详情面板。
     /// 这里只做显隐和当前数据行清空，不销毁详情区域复用的 Spine 图像对象。
+    /// 注意：此方法不播放音效，音效由调用方负责。
     /// </summary>
     private void HideDetail()
     {
@@ -960,6 +979,9 @@ public sealed class PetTJUIForm : UIFormLogic
     /// </summary>
     private void OnBtnClose()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (GameEntry.UI == null)
         {
             return;

@@ -67,6 +67,9 @@ public sealed class IsExitUIForm : UIFormLogic
     /// </summary>
     private void OnBtnYes()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         // 先关闭自身，避免流程切换时残留。
         if (UIForm != null && GameEntry.UI != null)
         {
@@ -77,7 +80,8 @@ public sealed class IsExitUIForm : UIFormLogic
         var controller = EliminateCardController.Instance;
         if (controller != null && controller.HasFailedState())
         {
-            var openData = new VictoryFailUIData(false);
+            int failScore = controller.GetCurrentScore();
+            var openData = new VictoryFailUIData(false, failScore);
             GameEntry.UI?.OpenUIForm(UIFormDefine.VictoryFailUIForm, UIFormDefine.MainGroup, openData);
             return;
         }
@@ -94,6 +98,9 @@ public sealed class IsExitUIForm : UIFormLogic
     /// </summary>
     private void OnBtnNo()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (UIForm != null && GameEntry.UI != null)
         {
             GameEntry.UI.CloseUIForm(UIForm.SerialId);

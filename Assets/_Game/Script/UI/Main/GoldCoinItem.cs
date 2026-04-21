@@ -211,6 +211,9 @@ public sealed class GoldCoinItem : MonoBehaviour
     /// </summary>
     private void OnButtonClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         // 飞行中禁止重复点击
         if (_isFlying)
         {

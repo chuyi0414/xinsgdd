@@ -1,0 +1,3 @@
+#Id	BaseScorePerCard	SameTypeTwoScorePerCard	SameTypeThreeBonusPerCard	SameTypeFourBonusPerCard	SameTypeFiveBonusPerCard	SameTypeSixBonusPerCard	SameTypeSevenBonusPerCard	SameTypeEightBonusPerCard	ComboWindowSeconds	ComboMultiplier	VictoryScoreMultiplier	BaseScoreIncreaseRoundInterval	BaseScoreIncreasePerInterval
+#编号	每轮基础分	同类型2张分量分	同类型3张分量分	同类型4张分量分	同类型5张分量分	同类型6张分量分	同类型7张分量分	同类型8张分量分	连击时间窗口秒	连击倍率系数	胜利分数翻倍倍率	基础分增长间隔轮数	基础分每次增长值
+1	1	2	4	8	15	31	63	127	12.0	1	2	1	1

@@ -12,6 +12,10 @@ public partial class GameEntry : MonoBehaviour
     private void Start()
     {
         InitBuiltinComponents();
+
+        // 初始化声音系统：预加载全部声音组（UI / BGM / Effect）并播放背景音乐，早于一切业务初始化。
+        UIInteractionSound.InitializeSoundSystem();
+
         InitCustomComponents();
     }
 }

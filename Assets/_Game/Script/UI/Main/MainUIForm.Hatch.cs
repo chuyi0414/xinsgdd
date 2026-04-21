@@ -238,6 +238,9 @@ public partial class MainUIForm
     /// </summary>
     private void OnManualHatchClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (GameEntry.EggHatch == null)
         {
             Log.Warning("MainUIForm 无法执行手动孵化，EggHatchComponent 缺失。");
@@ -253,6 +256,9 @@ public partial class MainUIForm
     /// </summary>
     private void OnEggAddClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (GameEntry.UI == null)
         {
             Log.Warning("MainUIForm 无法打开购买蛋界面，UIComponent 缺失。");

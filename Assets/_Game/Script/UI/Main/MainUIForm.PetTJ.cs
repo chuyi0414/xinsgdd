@@ -56,6 +56,9 @@ public partial class MainUIForm
     /// </summary>
     private void TryOpenPetTJUIForm()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (GameEntry.UI == null)
         {
             Log.Warning("MainUIForm 无法打开宠物图鉴界面，UIComponent 缺失。");

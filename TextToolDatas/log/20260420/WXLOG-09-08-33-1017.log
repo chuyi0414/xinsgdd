@@ -1,0 +1,1876 @@
+﻿<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:4397</timestamp>
+  <msgtype>MsgWXLogLaunch</msgtype>
+  <content>[The WXLogger is launched!]</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.Options.OptionsConfig..ctor; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.App..ctor; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Program.Main; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:4553</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|String[]
+OptionsConfig,-option=fb
+-dataDir=C:/Users/ChuYi/Desktop/Unity/xm/sgdd/TextToolDatas
+-classDataPath=C:/Users/ChuYi/Desktop/Unity/xm/sgdd/Assets\WX-WASM-SDK-V2\Editor/TextureEditor/classdata.tpk
+-sourcePath=C:/Users/ChuYi/Desktop/weixinxiaochengxu/xinsgdd\webgl\Build\webgl.data
+-do=slim
+-outDir=C:/Users/ChuYi/Desktop/Unity/xm/sgdd/TextToolDatas\fbslimtTemp
+-slimConfPath=C:/Users/ChuYi/Desktop/Unity/xm/sgdd/Assets\WX-WASM-SDK-V2\Editor/TextureEditor/slim.conf
+</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.App..ctor; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Program.Main; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:4573</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string
+UnityBridgeHandler - SetDataDir,C:/Users/ChuYi/Desktop/Unity/xm/sgdd/TextToolDatas\temp</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Program.Main; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:5161</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string
+FirstBundleDel,C:/Users/ChuYi/Desktop/Unity/xm/sgdd/TextToolDatas\fbslimConfig.txt</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.App.process; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App..ctor; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:5237</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|String[]
+delFiles,UnityWatermark-small.d7411008
+</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.App.process; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App..ctor; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9070</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,Soft.c1d63e75,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9080</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,Font Texture.8f00b204,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9080</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,UnityWatermark-small.d7411008,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9135</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string
+FirstBundleText slim - 0,UnityWatermark-small.d7411008</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9135</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,EscToExit_back.21b1540e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9145</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,EscToExit_Text.2e1ee8b4,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9145</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,UnityWatermark-trial-big.66f46ac8,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9155</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,UnityWatermark-trial.60b4e34e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9155</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,UnityWatermark-beta.dd37c61b,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9155</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,UnityWatermark-edu.a8c472ae,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9155</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,UnityWatermark-dev.ae1fc174,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,WarningSign.59b8d955,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,UnityWatermark-proto.5084375a,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,UnityWatermarkPlugin-beta.52403834,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,box.643f5df8,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,button active.c15aedb7,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,button hover.42efb15e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,button on hover.2c40c4b8,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,button on.7ff0e5a1,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,button.bdec6b82,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,horizontal scrollbar thumb.4137b46d,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,horizontal scrollbar.0ac38291,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,horizontalslider.722f02b2,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,slider thumb active.168a62a9,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,slider thumb.a7acef71,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9160</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,slidert humb hover.0c248117,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,toggle active.e32a2ca9,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,toggle hover.614620f6,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,toggle on hover.528d6b34,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,toggle on.1f99750a,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,toggle on active.9d52caeb,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,toggle.6eafbcb0,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,vertical scrollbar thumb.7ba97313,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,vertical scrollbar.d38290f1,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,verticalslider.58266f5f,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,window on.38a76040,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,window.a62d1258,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,textfield.a75d69ec,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,textfield on.f2c2fb5c,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9170</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,textfield hover.8c7ae9d8,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:33:9186</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+FirstBundleText slim - pngName,UnitySplash-HolographicTrackingLoss.cbf38e69,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:0039</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,Splash Screen Unity Logo.05ef6840,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:0409</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Tishi_001.4e2b454b,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:0474</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Xiaochukacao_001 1.75638d5e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:0868</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,BJ_10003.1296299d,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:0929</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,0.cc1d91fd,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:0955</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_80001.c7ef49d6,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:0997</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,闯关失败.7437d3d9,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:1013</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Tishi_005.c053e84c,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:1059</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,闯关成功.8ea94cbd,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3296</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,NotoSansSC-Regular SDF2 Atlas.8a2bdd5a,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3306</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UISprite.b48f75d0,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3306</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,Background.665e03a7,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3306</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UIMask.09363183,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3319</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Xiaochudaoju_004.dcaf0661,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3324</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Jinbi_002.bbde4404,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3329</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Guanbi_001.0628f23f,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3562</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Cguan_002.25885eef,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3572</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Jinbi_003.c272a634,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3594</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,9.7e3d2a70,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3775</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Jiazai_005.5a5e119e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3800</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10009.1b234504,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3810</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Jiazai_003.29f8466c,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3816</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Jingyan_002.05702573,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3816</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Daojushiyong_006.a1046221,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3826</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Jinbi_001.14108be4,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3826</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Chanchu_004.9abd03ac,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3846</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,Square.29bb4c6c,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3846</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Shuiguotujian_008.077a8e5d,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3866</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_80003.25c36d70,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3866</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,2.d1eef641,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3909</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Jiazai_002.23712d3e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:3934</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,5.d397cad9,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4136</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Chongwu_003.299c2ba7,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4211</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Tishi_001 1.0fd96c3e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4241</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10014.2c0ce405,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4266</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10002.81c38055,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4276</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Chanchu_001.baba80e8,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4291</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Touxiangkuang_002.4e645c3a,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4301</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Shuiguotujian_003.0f17888e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4321</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,8.9a883713,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4366</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Cguan_003.dd3cb060,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4376</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Shuiguotujian_001.306b1e96,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4386</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,GW_Shuxiaoxiao_1002.9578c09a,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4401</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,GW_Lulu_1001.5805746c,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4406</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Shuiguotujian_004.8060c3c8,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4422</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10013.58fb488c,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4467</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,3.7641c4da,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4487</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10012.64efe4dd,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4503</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Jiazai_004.6ad5eb52,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4513</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Guize_001.c65b9357,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4538</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10019.7d142e96,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4548</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Chanchu_005.ba5e54c5,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4568</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,1.9c5a087c,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4583</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,7.7e3ceba2,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4613</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Shuiguotujian_005.8d4357f5,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4623</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,适龄12+.4fbb8ce0,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4633</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Jingyan_001.ccce258f,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4648</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Shuiguotujian_007.a15b2f3e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4669</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10015.cd89047e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4694</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,2.4bbae0d3,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4694</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,1.096446a3,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4704</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,4.ce580e6d,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4734</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Cguan_004.85e63809,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4744</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,MS_Miemieyang_001.8d1b9a27,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4774</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,4.ea6d0b49,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4789</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Xiaochudaoju_002.0f5d8994,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4809</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_80013.bf8f6e2e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4819</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,3.247f15af,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4819</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Dengji_001.32a8f599,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:4819</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Shuiguotujian_004.8060c3c8,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:5165</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Chongwu_002.04c67171,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:5215</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10007.20781bbc,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:5225</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Touxiang_001.76570bb3,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:5250</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Guize_002.1bc7fc20,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:5286</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,0.1c422ab1,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:5425</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,BOOS_Duoduoshou_001.4bbb800b,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:5441</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,5.490bc0e1,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:5531</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Chongwu_004.93b5d9b5,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:5551</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,6.29aef747,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:5711</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Cguan_001.30e9749b,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:5721</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Chanchu_002.935008d8,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6196</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Guize_003.6fbac542,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6201</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Chanchu_003.5a8d898e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6206</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,6.12c02c0e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6243</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Touxiangkuang_001.4e66680e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6284</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10016.f21572e9,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6290</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Shuiguotujian_003.0f17888e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6306</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Xiaochudaoju_003.1536e5f8,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6311</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Shuiguotujian_006.b1f66ffe,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6330</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10006.279b1e65,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6335</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,8.1efb68c7,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6367</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10008.7a1a8ed9,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6377</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Guize_004.4ff5eb75,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6703</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Jiazai_001.cf4969f1,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6733</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10001.4bf13867,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6789</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_ZDDibuanniu_001.8e30091e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6801</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,7.6d4e14e5,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:6806</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Zanting_005.34d830ea,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7341</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Shuiguotujian_002.1eec247e,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7603</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,EmojiOne.5c604724,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7633</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_80009.d92751ae,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7633</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,Font Texture.8f00b204,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7654</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,GW_Papagui_1003.a0903cb4,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7692</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_10011.2ba16def,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7707</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Jiazai_004 1.6ad5eb52,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7727</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Chongwu_001.99a5e304,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7752</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,WP_80002.acfa7060,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7827</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,UI_Dibu_003.1f31b393,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7842</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,9.d18fe085,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>
+<wxlog>
+  <threadId>#main</threadId>
+  <timestamp>09:08:34:7998</timestamp>
+  <msgtype>MsgMixture</msgtype>
+  <content>string|string|bool
+AssetBundleText slim - pngName,LiberationSans SDF Atlas.ac9f1c83,false</content>
+  <stackFrames>
+[CALL STACK][0]: Method:WXTextureTools.Application.FirstBundle.FirstBundleHandler.slim; File:.0
+[CALL STACK][1]: Method:WXTextureTools.Application.AppCmdExec.WXSlimFirstBundleExec.todo; File:.0
+[CALL STACK][2]: Method:WXTextureTools.Application.App.process; File:.0
+</stackFrames>
+</wxlog>

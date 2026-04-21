@@ -89,6 +89,9 @@ public sealed class NewcomerPackageUIForm : UIFormLogic
     /// </summary>
     private void OnBtnYesClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (_hasClaimedReward)
         {
             return;

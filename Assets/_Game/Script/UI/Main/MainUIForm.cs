@@ -294,6 +294,9 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     private void OnBtnRight()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+
         if (_currentPageSlot == MainPageSlot.Left)
         {
             SwitchToPage(MainPageSlot.Center);
@@ -311,6 +314,9 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     private void OnBtnLeft()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+
         if (_currentPageSlot == MainPageSlot.Right)
         {
             SwitchToPage(MainPageSlot.Center);
@@ -329,6 +335,9 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     private void OnBtnUp()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+
         if (_currentPageSlot == MainPageSlot.Below)
         {
             CloseDailyChallengeUIForm();
@@ -344,6 +353,9 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     private void OnBtnDailyChallenge()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (_currentPageSlot == MainPageSlot.Center)
         {
             _pendingRestoreDailyChallengeAuxiliaryUi = false;

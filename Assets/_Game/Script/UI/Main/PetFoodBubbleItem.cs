@@ -183,6 +183,9 @@ public sealed class PetFoodBubbleItem : MonoBehaviour
     /// </summary>
     private void OnButtonClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+
         if (_onClick == null || _petInstanceId <= 0)
         {
             return;

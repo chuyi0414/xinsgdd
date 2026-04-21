@@ -4,7 +4,7 @@ using System.Globalization;
 using UnityEngine;
 
 /// <summary>
-/// 每日一关 CSV 解析器。
+///  CSV 解析器。
 /// 这里只保留“临时迁移卡片生成机制”所必需的数据：
 /// 1. 固定布局卡；
 /// 2. 类型配置；

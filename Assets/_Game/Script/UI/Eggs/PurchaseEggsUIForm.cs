@@ -427,6 +427,9 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     /// </summary>
     private void OnBtnCloseClicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         if (UIForm == null || GameEntry.UI == null)
         {
             return;
@@ -440,6 +443,9 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     /// </summary>
     private void OnPurchaseEntry0Clicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         TryPurchaseEntry(0);
     }
 
@@ -448,6 +454,9 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     /// </summary>
     private void OnPurchaseEntry1Clicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         TryPurchaseEntry(1);
     }
 
@@ -456,6 +465,9 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     /// </summary>
     private void OnPurchaseEntry2Clicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         TryPurchaseEntry(2);
     }
 
@@ -464,6 +476,9 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     /// </summary>
     private void OnPurchaseEntry3Clicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         TryPurchaseEntry(3);
     }
 
@@ -472,6 +487,9 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     /// </summary>
     private void OnPurchaseEntry4Clicked()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         TryPurchaseEntry(4);
     }
 

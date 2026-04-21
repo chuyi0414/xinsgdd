@@ -119,6 +119,9 @@ public sealed class DailyChallengeUIForm : UIFormLogic
     /// </summary>
     private void OnBtnStartLevel()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+        
         MainUIForm mainUIForm = ResolveMainUIForm();
         if (mainUIForm == null)
         {
