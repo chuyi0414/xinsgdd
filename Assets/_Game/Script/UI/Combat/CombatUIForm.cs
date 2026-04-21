@@ -89,6 +89,13 @@ public sealed class CombatUIForm : UIFormLogic
     private bool _hasPropKit;
 
     /// <summary>
+    /// 当前战斗是否携带道具包。
+    /// 供 VictoryFailUIForm 在“再来一局”时把当前战斗配置透传给下一局，
+    /// 避免重开后丢失本局的道具包状态。
+    /// </summary>
+    internal bool HasPropKit => _hasPropKit;
+
+    /// <summary>
     /// 移出道具是否已使用（道具包内）。
     /// </summary>
     private bool _removeToolUsed;
@@ -361,23 +368,81 @@ public sealed class CombatUIForm : UIFormLogic
     /// 若已打开则跳过，避免重复弹出。
     /// </summary>
     /// <param name="isVictory">true=胜利；false=失败。</param>
-    private void OpenVictoryFailUIForm(bool isVictory)
+    /// <param name="openData">
+    /// 可选的打开数据。
+    /// 传入时直接使用外部构造的数据；为 null 时由本方法根据当前分数自动构造。
+    /// </param>
+    /// <returns>
+    /// 当前 VictoryFailUIForm 的序列号。
+    /// 若结果窗已存在，则返回已存在实例的序列号；否则返回本次新打开实例的序列号。
+    /// </returns>
+    internal int OpenVictoryFailUIForm(bool isVictory, VictoryFailUIData openData = null)
     {
+        // 若结果窗已经存在，则直接返回现有实例的序列号，避免重复弹出。
         if (_victoryFailUIFormId > 0 && GameEntry.UI.HasUIForm(_victoryFailUIFormId))
         {
-            return;
+            return _victoryFailUIFormId;
         }
 
-        // 获取当前得分
-        int finalScore = 0;
-        var controller = EliminateCardController.Instance;
-        if (controller != null)
+        // 若外部没有传入打开数据，则在这里按当前得分自动构造默认打开数据。
+        if (openData == null)
         {
-            finalScore = controller.GetCurrentScore();
+            int finalScore = 0;
+            var controller = EliminateCardController.Instance;
+            if (controller != null)
+            {
+                finalScore = controller.GetCurrentScore();
+            }
+
+            openData = new VictoryFailUIData(isVictory, finalScore);
         }
 
-        var openData = new VictoryFailUIData(isVictory, finalScore);
+        // 发起打开结果窗，并记录最新实例的序列号，供 CombatUIForm 后续统一管理与关闭。
         _victoryFailUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.VictoryFailUIForm, UIFormDefine.MainGroup, openData);
+        return _victoryFailUIFormId;
+    }
+
+    /// <summary>
+    /// 直接复用当前 CombatUIForm 原地重开一局。
+    /// 只重建棋盘与战斗态 UI，不重新创建 CombatUIForm 实例，
+    /// 从而避免 VictoryFailUIForm 下次再次打开时出现层级被旧/新 CombatUIForm 扰乱的问题。
+    /// </summary>
+    /// <returns>true=重开成功；false=重开失败，当前结果窗与战斗界面保持原状。</returns>
+    internal bool TryRestartCurrentBattle()
+    {
+        // 当前项目的每日一关棋盘实体由 MainUIForm 持有，
+        // 因此即使复用旧 CombatUIForm，也必须委托 MainUIForm 重建棋盘。
+        MainUIForm mainUIForm = ResolveMainUIForm();
+        if (mainUIForm == null)
+        {
+            Log.Warning("CombatUIForm 无法原地重开：当前拿不到 MainUIForm。");
+            return false;
+        }
+
+        // 记录当前这局是否携带道具包。
+        // 复用旧 CombatUIForm 时，需要保留“有无道具包”这层配置，
+        // 但要把本道具局内的已用次数与购买次数全部重置为新一局状态。
+        bool hasPropKit = HasPropKit;
+
+        // 防御式退出拿取状态，避免极端情况下上一局残留按钮缩放或控制器状态。
+        EliminateCardController.Instance?.ExitTakeState();
+
+        // 先重建棋盘；MainUIForm / EliminateCardController 会负责把旧实体清掉并生成新的一局。
+        // 这里不重新打开 CombatUIForm，确保层级里始终只有同一个 CombatUIForm(Clone)。
+        if (!mainUIForm.TryStartDailyChallengePreviewFromUIForm(null))
+        {
+            Log.Warning("CombatUIForm 原地重开失败：每日一关棋盘重建返回 false。");
+            return false;
+        }
+
+        // 重建成功后，把当前 CombatUIForm 的局内显示状态重置成“新开一局”的口径。
+        _victoryFailUIFormId = 0;
+        UpdateScoreText(0);
+        ResetPropState();
+        _hasPropKit = hasPropKit;
+        RefreshToolCounts();
+        OnTakeStateChanged(false);
+        return true;
     }
 
     /// <summary>
@@ -678,6 +743,22 @@ public sealed class CombatUIForm : UIFormLogic
 
         PropPurchaseUIForm.ResetBattlePurchaseState();
         RefreshToolCounts();
+    }
+
+    /// <summary>
+    /// 获取当前仍处于保活状态的 MainUIForm 逻辑对象。
+    /// 原地重开每日一关时，需要通过它来重建棋盘预览。
+    /// </summary>
+    /// <returns>当前 MainUIForm 逻辑对象；不存在时返回 null。</returns>
+    private static MainUIForm ResolveMainUIForm()
+    {
+        if (GameEntry.UI == null)
+        {
+            return null;
+        }
+
+        UIForm mainUI = GameEntry.UI.GetUIForm(UIFormDefine.MainUIForm);
+        return mainUI != null ? mainUI.Logic as MainUIForm : null;
     }
 
     /// <summary>

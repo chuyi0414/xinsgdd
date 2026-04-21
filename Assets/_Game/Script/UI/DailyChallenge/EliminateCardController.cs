@@ -390,18 +390,6 @@ public sealed class EliminateCardController
     /// <returns>本次预览构建结果。</returns>
     public EliminateCardPreviewResult RebuildPreview(string levelAssetPath)
     {
-        // 设置静态实例，供卡片/区域实体逻辑自动注册
-        Instance = this;
-
-        // ── 重置得分/连击状态 ──
-        _currentScore = 0;
-        _comboCount = 0;
-        _lastSettlementRealTime = -1f;
-        _currentRound = 1;
-        _scoreConfig = null; // 重新查表，避免脏数据
-
-        ClearSpawnedEntities();
-
         if (GameEntry.Entity == null)
         {
             return EliminateCardPreviewResult.Failed("EntityComponent 缺失，无法生成消除卡片。");
@@ -453,6 +441,23 @@ public sealed class EliminateCardController
             return EliminateCardPreviewResult.Failed("未能根据 CSV 生成任何实体落点。");
         }
 
+        // 所有前置校验与数据准备都通过后，才真正切到“新一局”。
+        // 这样即使外部在旧 CombatUIForm 上直接调用 RebuildPreview，
+        // 也不会因为资源缺失/CSV 异常等前置失败，先把当前棋盘清掉再返回 false。
+        Instance = this;
+
+        // ── 重置新一局的运行时状态 ──
+        _currentScore = 0;
+        _comboCount = 0;
+        _lastSettlementRealTime = -1f;
+        _currentRound = 1;
+        _scoreConfig = null;
+        _hasFailed = false;
+        _isTakeState = false;
+        _takenCount = 0;
+        _maxTakeCount = 0;
+
+        ClearSpawnedEntities();
         ApplyCameraFit(worldCamera, spawnInstructions);
         SpawnCards(spawnInstructions);
         ShowEliminateTheAreaEntity(worldCamera, spawnInstructions);
