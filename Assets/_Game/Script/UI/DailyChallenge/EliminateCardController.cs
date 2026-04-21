@@ -159,6 +159,27 @@ public sealed class EliminateCardController
     private const float BlockingOverlapTolerance = 0.01f;
 
     /// <summary>
+    /// bbl1 左侧 DIR 单阻挡上层卡布局索引。
+    /// 用于定向跟踪“点击后下层是否立即解锁”。
+    /// </summary>
+    private const int DebugLeftDirUpperLayoutIndex = 229;
+
+    /// <summary>
+    /// bbl1 左侧 DIR 单阻挡下层卡布局索引。
+    /// </summary>
+    private const int DebugLeftDirLowerLayoutIndex = 228;
+
+    /// <summary>
+    /// bbl1 右侧 DIR 单阻挡上层卡布局索引。
+    /// </summary>
+    private const int DebugRightDirUpperLayoutIndex = 239;
+
+    /// <summary>
+    /// bbl1 右侧 DIR 单阻挡下层卡布局索引。
+    /// </summary>
+    private const int DebugRightDirLowerLayoutIndex = 238;
+
+    /// <summary>
     /// 当前已生成的实体 Id 列表。
     /// 页面刷新或关闭时，会按这个列表统一回收。
     /// </summary>
@@ -169,6 +190,12 @@ public sealed class EliminateCardController
     /// 用于控制器快速查找卡片逻辑，更新遮挡状态等。
     /// </summary>
     private readonly Dictionary<int, EliminateCardEntityLogic> _cardLogics = new Dictionary<int, EliminateCardEntityLogic>(300);
+
+    /// <summary>
+    /// 卡片实体逻辑直索引缓存：layoutIndex -> EliminateCardEntityLogic。
+    /// 遮挡重算时直接按布局索引命中目标实体，避免线性遍历。
+    /// </summary>
+    private readonly Dictionary<int, EliminateCardEntityLogic> _cardLogicsByLayoutIndex = new Dictionary<int, EliminateCardEntityLogic>(300);
 
     /// <summary>
     /// 消除区域实体逻辑引用。
@@ -457,7 +484,10 @@ public sealed class EliminateCardController
         _takenCount = 0;
         _maxTakeCount = 0;
 
-        ClearSpawnedEntities();
+        // ⚠️ 这里必须保留 BuildSpawnInstructions 刚刚缓存好的棋盘几何数据，
+        // 否则点击入等待区后，UpdateBlockingAfterRemoval 会因为缓存被清空直接返回，
+        // 下层卡片永远停留在首帧置灰状态。
+        ClearSpawnedEntities(false);
         ApplyCameraFit(worldCamera, spawnInstructions);
         SpawnCards(spawnInstructions);
         ShowEliminateTheAreaEntity(worldCamera, spawnInstructions);
@@ -1508,10 +1538,29 @@ public sealed class EliminateCardController
     /// <param name="logic">卡片实体逻辑实例。</param>
     public void RegisterCardLogic(int entityId, EliminateCardEntityLogic logic)
     {
-        if (entityId > 0 && logic != null)
+        if (entityId <= 0 || logic == null)
         {
-            _cardLogics[entityId] = logic;
+            return;
         }
+
+        if (_cardLogics.TryGetValue(entityId, out EliminateCardEntityLogic previousLogic) && previousLogic != null)
+        {
+            RemoveLayoutIndexLookup(previousLogic);
+        }
+
+        if (_cardLogicsByLayoutIndex.TryGetValue(logic.LayoutIndex, out EliminateCardEntityLogic existedLogic)
+            && existedLogic != null
+            && !ReferenceEquals(existedLogic, logic))
+        {
+            Log.Warning(
+                "EliminateCardController 检测到重复的布局索引注册：layoutIndex={0}，旧实体={1}，新实体={2}。",
+                logic.LayoutIndex,
+                existedLogic.Entity.Id,
+                logic.Entity.Id);
+        }
+
+        _cardLogics[entityId] = logic;
+        _cardLogicsByLayoutIndex[logic.LayoutIndex] = logic;
     }
 
     /// <summary>
@@ -1521,10 +1570,17 @@ public sealed class EliminateCardController
     /// <param name="entityId">卡片实体 Id。</param>
     public void UnregisterCardLogic(int entityId)
     {
-        if (entityId > 0)
+        if (entityId <= 0)
         {
-            _cardLogics.Remove(entityId);
+            return;
         }
+
+        if (_cardLogics.TryGetValue(entityId, out EliminateCardEntityLogic logic) && logic != null)
+        {
+            RemoveLayoutIndexLookup(logic);
+        }
+
+        _cardLogics.Remove(entityId);
     }
 
     /// <summary>
@@ -1601,8 +1657,10 @@ public sealed class EliminateCardController
             return;
         }
 
-        // 插入成功后，标记该卡片已从棋盘移除，并重算遮挡
-        _removedFromBoard.Add(card.LayoutIndex);
+        // 插入成功后，该卡片已经在 TryRequestInsert 中切到 WaitingArea，
+        // Collider 会立即停用，不再继续占着棋盘位置吃点击。
+        // 这里再把它加入“离开棋盘”集合，确保后续遮挡重算也不再把它当作遮挡源。
+        MarkCardRemovedFromBoard(card, "NormalInsert");
         UpdateBlockingAfterRemoval();
 
         // ⚠️ 避坑：分数显示刷新不在此时调用！
@@ -1620,6 +1678,10 @@ public sealed class EliminateCardController
     {
         if (_cachedLogicalCards == null || _cachedProjectedWorldX == null || _cachedProjectedWorldY == null)
         {
+            Log.Warning(
+                "EliminateCardController 无法重算遮挡：棋盘缓存缺失。removedCount={0}, activeCardLogicCount={1}",
+                _removedFromBoard.Count,
+                _cardLogics.Count);
             return;
         }
 
@@ -1647,9 +1709,26 @@ public sealed class EliminateCardController
 
             // 通过布局索引查找对应的卡片逻辑
             EliminateCardEntityLogic cardLogic = FindCardLogicByLayoutIndex(layoutIndex);
-            if (cardLogic != null)
+            if (cardLogic == null)
             {
-                cardLogic.SetBlocked(blockedStates[i]);
+                Log.Warning(
+                    "EliminateCardController 重算遮挡时找不到布局索引 {0} 对应的卡片实体，blocked={1}。",
+                    layoutIndex,
+                    blockedStates[i]);
+                continue;
+            }
+
+            cardLogic.SetBlocked(blockedStates[i]);
+            if (ShouldDebugSideDirLayout(layoutIndex))
+            {
+                Log.Debug(
+                    "EliminateCardController UpdateBlockingAfterRemoval: layout={0}, blocked={1}, area={2}, moving={3}, colliderEnabled={4}, entityId={5}",
+                    layoutIndex,
+                    blockedStates[i],
+                    cardLogic.CurrentArea,
+                    cardLogic.IsMoving,
+                    cardLogic.IsRaycastColliderEnabled,
+                    cardLogic.Entity.Id);
             }
         }
     }
@@ -1722,15 +1801,72 @@ public sealed class EliminateCardController
     /// <returns>对应的卡片实体逻辑；未找到时返回 null。</returns>
     private EliminateCardEntityLogic FindCardLogicByLayoutIndex(int layoutIndex)
     {
-        foreach (var kvp in _cardLogics)
+        if (_cardLogicsByLayoutIndex.TryGetValue(layoutIndex, out EliminateCardEntityLogic logic))
         {
-            if (kvp.Value != null && kvp.Value.LayoutIndex == layoutIndex)
-            {
-                return kvp.Value;
-            }
+            return logic;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// 把一张棋盘卡标记为“已离开棋盘”。
+    /// 之后它不再作为遮挡源参与棋盘重算。
+    /// </summary>
+    /// <param name="card">目标卡片。</param>
+    /// <param name="reason">触发原因，仅用于调试日志。</param>
+    private void MarkCardRemovedFromBoard(EliminateCardEntityLogic card, string reason)
+    {
+        if (card == null)
+        {
+            return;
+        }
+
+        bool added = _removedFromBoard.Add(card.LayoutIndex);
+        if (ShouldDebugSideDirLayout(card.LayoutIndex))
+        {
+            Log.Debug(
+                "EliminateCardController MarkCardRemovedFromBoard: layout={0}, added={1}, reason={2}, area={3}, moving={4}, colliderEnabled={5}, entityId={6}",
+                card.LayoutIndex,
+                added,
+                reason,
+                card.CurrentArea,
+                card.IsMoving,
+                card.IsRaycastColliderEnabled,
+                card.Entity.Id);
+        }
+    }
+
+    /// <summary>
+    /// 从布局索引直索引缓存中移除一张卡片逻辑。
+    /// 仅当当前映射确实指向这张卡时才删除，避免误删新复用对象。
+    /// </summary>
+    /// <param name="logic">目标卡片逻辑。</param>
+    private void RemoveLayoutIndexLookup(EliminateCardEntityLogic logic)
+    {
+        if (logic == null)
+        {
+            return;
+        }
+
+        if (_cardLogicsByLayoutIndex.TryGetValue(logic.LayoutIndex, out EliminateCardEntityLogic mappedLogic)
+            && ReferenceEquals(mappedLogic, logic))
+        {
+            _cardLogicsByLayoutIndex.Remove(logic.LayoutIndex);
+        }
+    }
+
+    /// <summary>
+    /// 是否属于 bbl1 侧边 DIR 单阻挡诊断卡。
+    /// </summary>
+    /// <param name="layoutIndex">布局索引。</param>
+    /// <returns>true=需要打定向调试日志。</returns>
+    private static bool ShouldDebugSideDirLayout(int layoutIndex)
+    {
+        return layoutIndex == DebugLeftDirLowerLayoutIndex
+            || layoutIndex == DebugLeftDirUpperLayoutIndex
+            || layoutIndex == DebugRightDirLowerLayoutIndex
+            || layoutIndex == DebugRightDirUpperLayoutIndex;
     }
 
     // ───────────── 道具操作 ─────────────
@@ -1957,7 +2093,7 @@ public sealed class EliminateCardController
         card.SetCardArea(CardArea.OutputZone);
 
         // 标记卡片已从棋盘移除
-        _removedFromBoard.Add(card.LayoutIndex);
+        MarkCardRemovedFromBoard(card, "TakeState");
 
         // 计算该卡片在置出区的目标位置（带层叠偏移）
         int outputIndex = _outputZoneCards.Count;
@@ -2555,7 +2691,7 @@ public sealed class EliminateCardController
             EliminateCardEntityLogic card = autoInsertCards[i];
             if (_areaEntityLogic.TryRequestInsert(card))
             {
-                _removedFromBoard.Add(card.LayoutIndex);
+                MarkCardRemovedFromBoard(card, "AutoInsert");
             }
         }
 
@@ -2607,17 +2743,21 @@ public sealed class EliminateCardController
     /// <summary>
     /// 回收当前已经生成的所有实体。
     /// </summary>
-    private void ClearSpawnedEntities()
+    private void ClearSpawnedEntities(bool clearBoardCache = true)
     {
         if (_activeEntityIds.Count <= 0 || GameEntry.Entity == null)
         {
             _activeEntityIds.Clear();
             _cardLogics.Clear();
+            _cardLogicsByLayoutIndex.Clear();
             _areaEntityLogic = null;
-            _cachedLogicalCards = null;
-            _cachedProjectedWorldX = null;
-            _cachedProjectedWorldY = null;
-            _removedFromBoard.Clear();
+            if (clearBoardCache)
+            {
+                _cachedLogicalCards = null;
+                _cachedProjectedWorldX = null;
+                _cachedProjectedWorldY = null;
+                _removedFromBoard.Clear();
+            }
             _outputZoneCards.Clear();
             return;
         }
@@ -2638,11 +2778,15 @@ public sealed class EliminateCardController
 
         _activeEntityIds.Clear();
         _cardLogics.Clear();
+        _cardLogicsByLayoutIndex.Clear();
         _areaEntityLogic = null;
-        _cachedLogicalCards = null;
-        _cachedProjectedWorldX = null;
-        _cachedProjectedWorldY = null;
-        _removedFromBoard.Clear();
+        if (clearBoardCache)
+        {
+            _cachedLogicalCards = null;
+            _cachedProjectedWorldX = null;
+            _cachedProjectedWorldY = null;
+            _removedFromBoard.Clear();
+        }
         _outputZoneCards.Clear();
     }
 

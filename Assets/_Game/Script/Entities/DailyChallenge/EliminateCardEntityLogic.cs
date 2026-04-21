@@ -130,6 +130,12 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
     public CardArea CurrentArea => _cardArea;
 
     /// <summary>
+    /// 当前用于 Physics2D 点击检测的 Collider 是否启用。
+    /// 主要给控制器侧调试日志读取，避免直接暴露 Collider 引用。
+    /// </summary>
+    public bool IsRaycastColliderEnabled => _boxCollider2D != null && _boxCollider2D.enabled;
+
+    /// <summary>
     /// 设置卡片所在区域。
     /// 由 EliminateCardController / EliminateTheAreaEntityLogic 在区域切换时调用。
     /// </summary>
@@ -137,6 +143,7 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
     public void SetCardArea(CardArea area)
     {
         _cardArea = area;
+        UpdateRaycastColliderState();
     }
 
     // ───────────── EntityLogic 生命周期 ─────────────
@@ -190,6 +197,7 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
         _isMoving = false;
         _cardArea = CardArea.Board;
         OnClickCallback = null;
+        UpdateRaycastColliderState();
 
         // 自动反注册卡片逻辑引用
         EliminateCardController.Instance?.UnregisterCardLogic(Entity.Id);
@@ -247,10 +255,18 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
             _spriteRenderer.color = blocked ? BlockedTintColor : Color.white;
         }
 
-        // 被遮挡时禁用 Collider2D，让射线直接穿透到下层卡片
-        if (_boxCollider2D != null)
+        UpdateRaycastColliderState();
+
+        if (ShouldDebugSideDirLayout(LayoutIndex))
         {
-            _boxCollider2D.enabled = !blocked;
+            Log.Debug(
+                "EliminateCardEntityLogic SetBlocked: layout={0}, blocked={1}, area={2}, colliderEnabled={3}, moving={4}, entityId={5}",
+                LayoutIndex,
+                blocked,
+                _cardArea,
+                IsRaycastColliderEnabled,
+                _isMoving,
+                Entity.Id);
         }
     }
 
@@ -384,6 +400,32 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
         // offset 从 bounds 中心减去 transform 位置的局部偏移
         Vector3 localCenter = transform.InverseTransformPoint(bounds.center);
         _boxCollider2D.offset = new Vector2(localCenter.x, localCenter.y);
+    }
+
+    /// <summary>
+    /// 根据“当前区域 + 遮挡状态”统一刷新点击 Collider。
+    /// 等待区卡片不允许再参与点击命中；棋盘/置出区卡片仅在未被遮挡时可点击。
+    /// </summary>
+    private void UpdateRaycastColliderState()
+    {
+        if (_boxCollider2D == null)
+        {
+            return;
+        }
+
+        _boxCollider2D.enabled = _cardArea != CardArea.WaitingArea && !_isBlocked;
+    }
+
+    /// <summary>
+    /// 是否需要输出侧边 DIR 单阻挡卡调试日志。
+    /// 当前只跟踪 bbl1 两组单阻挡关系涉及的 4 张卡。
+    /// </summary>
+    private static bool ShouldDebugSideDirLayout(int layoutIndex)
+    {
+        return layoutIndex == 228
+            || layoutIndex == 229
+            || layoutIndex == 238
+            || layoutIndex == 239;
     }
 
     /// <summary>
