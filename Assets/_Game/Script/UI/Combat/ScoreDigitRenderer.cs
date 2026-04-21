@@ -126,18 +126,33 @@ public sealed class ScoreDigitRenderer : MonoBehaviour
     /// <param name="score">当前分数。</param>
     private void RefreshDigits(int score)
     {
-        // ⚠️ 避坑：将分数转为字符串再逐字符处理，
-        // 虽然会产生一次 GC Alloc（score.ToString()），
-        // 但得分更新频率极低（仅在满格清空时触发，约每 5~30 秒一次），
-        // 对帧率零影响。若后续需要极致优化可改为逐位除法提取数字。
-        string scoreStr = score.ToString();
-        int digitCount = scoreStr.Length;
+        // 先算出当前分数一共需要几位数字，后续据此决定要激活多少个 Image。
+        int digitCount = GetDigitCount(score);
 
         // 确保 Image 数量足够
         EnsureDigitImageCount(digitCount);
 
         // 设置每个数字的精灵和位置
-        LayoutDigits(scoreStr, digitCount);
+        LayoutDigits(score, digitCount);
+    }
+
+    /// <summary>
+    /// 计算当前分数的十进制位数。
+    /// 使用整数除法逐位缩小，避免通过 ToString 取位时产生额外字符串分配。
+    /// </summary>
+    /// <param name="score">当前分数。</param>
+    /// <returns>该分数对应的位数，最少返回 1。</returns>
+    private static int GetDigitCount(int score)
+    {
+        int digitCount = 1;
+        while (score >= 10)
+        {
+            // 每除以 10 一次，就表示去掉了最低一位，因此位数 +1。
+            score /= 10;
+            digitCount++;
+        }
+
+        return digitCount;
     }
 
     /// <summary>
@@ -179,15 +194,18 @@ public sealed class ScoreDigitRenderer : MonoBehaviour
     /// 
     /// 统一公式：position[i] = (i - (digitCount - 1) / 2f) * digitWidth
     /// </summary>
-    /// <param name="scoreStr">分数字符串。</param>
+    /// <param name="score">分数值。</param>
     /// <param name="digitCount">位数。</param>
-    private void LayoutDigits(string scoreStr, int digitCount)
+    private void LayoutDigits(int score, int digitCount)
     {
         // ⚠️ 避坑：中心偏移量用浮点计算，奇数位时 (digitCount-1)/2 恰好为整数，
         // 中心位 x=0；偶数位时中心两位分别在 ±digitWidth/2。
         float centerOffset = (digitCount - 1) * 0.5f;
 
-        for (int i = 0; i < digitCount; i++)
+        // remainingScore 会在循环里不断去掉最低位，配合从右往左遍历即可拿到正确数字顺序。
+        int remainingScore = score;
+
+        for (int i = digitCount - 1; i >= 0; i--)
         {
             Image img = _digitImages[i];
             if (img == null)
@@ -196,7 +214,9 @@ public sealed class ScoreDigitRenderer : MonoBehaviour
             }
 
             // 设置精灵：从 GameAssetModule 预加载缓存读取
-            int digit = scoreStr[i] - '0';
+            // 先取当前最低位，再把 remainingScore 缩小到下一位，整个过程不产生字符串 GC。
+            int digit = remainingScore % 10;
+            remainingScore /= 10;
             if (digit >= 0 && digit <= 9
                 && GameEntry.GameAssets != null
                 && GameEntry.GameAssets.TryGetScoreDigitSprite(digit, out Sprite digitSprite)

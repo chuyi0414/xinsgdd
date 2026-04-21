@@ -6,9 +6,10 @@ using UnityGameFramework.Runtime;
 /// <summary>
 /// 道具购买界面。
 /// 职责：
-/// 1. 显示道具购买确认弹窗（金币购买 / 广告获取）；
+/// 1. 显示道具购买确认弹窗（金币购买）；
 /// 2. 购买成功后通过 OnPropPurchased 事件通知 CombatUIForm 增加道具次数；
-/// 3. 购买规则：每种道具每局可购买1次，携带道具包时禁止购买。
+/// 3. 购买规则：每种道具每局可购买1次，携带道具包时禁止购买；
+/// 4. 当前广告按钮仅保留旧 prefab 占位，保持显示但不参与业务。
 /// </summary>
 public sealed class PropPurchaseUIForm : UIFormLogic
 {
@@ -154,7 +155,6 @@ public sealed class PropPurchaseUIForm : UIFormLogic
         if (_buttonAdvertising != null)
         {
             _buttonAdvertising.onClick.RemoveListener(OnBtnAdvertising);
-            _buttonAdvertising.onClick.AddListener(OnBtnAdvertising);
         }
 
         if (_buttonBJ != null)
@@ -215,24 +215,22 @@ public sealed class PropPurchaseUIForm : UIFormLogic
 
     /// <summary>
     /// 确认购买按钮回调（金币购买）。
-    /// 标记已购买 → 触发购买成功事件 → 关闭自身。
-    /// ⚠️ 避坑：实际扣费逻辑由外部实现，此处仅标记+通知。
+    /// 扣费成功后才会标记购买并关闭自身。
     /// </summary>
     private void OnBtnYes()
     {
         UIInteractionSound.PlayClick();
-        CompletePurchase();
+        TrySpendGoldAndCompletePurchase();
     }
 
     /// <summary>
     /// 广告获取按钮回调。
-    /// 标记已购买 → 触发购买成功事件 → 关闭自身。
-    /// ⚠️ 避坑：实际广告播放逻辑由外部实现，此处仅标记+通知。
+    /// 当前按钮不绑定到 Button.onClick，仅保留旧接口占位。
     /// </summary>
     private void OnBtnAdvertising()
     {
         UIInteractionSound.PlayClick();
-        CompletePurchase();
+        TrySpendGoldAndCompletePurchase();
     }
 
     /// <summary>
@@ -250,6 +248,29 @@ public sealed class PropPurchaseUIForm : UIFormLogic
     }
 
     // ───────────── 内部方法 ─────────────
+
+    /// <summary>
+    /// 尝试扣除当前道具所需金币，并在成功后完成购买。
+    /// </summary>
+    private void TrySpendGoldAndCompletePurchase()
+    {
+        if (!TryGetCurrentPropGoldCost(out int goldCost))
+        {
+            return;
+        }
+
+        if (GameEntry.Fruits == null || !GameEntry.Fruits.EnsureInitialized())
+        {
+            return;
+        }
+
+        if (!GameEntry.Fruits.TryConsumeGold(goldCost))
+        {
+            return;
+        }
+
+        CompletePurchase();
+    }
 
     /// <summary>
     /// 完成购买：标记已购买 → 触发事件 → 关闭自身。
@@ -283,23 +304,79 @@ public sealed class PropPurchaseUIForm : UIFormLogic
             return;
         }
 
-        string propName;
-        switch (_currentPropType)
+        string propName = GetPropName(_currentPropType);
+        if (TryGetCurrentPropGoldCost(out int goldCost))
         {
-            case PropType.Remove:
-                propName = "移出道具";
-                break;
-            case PropType.Retrieve:
-                propName = "拿取道具";
-                break;
-            case PropType.Shuffle:
-                propName = "随机道具";
-                break;
-            default:
-                propName = "道具";
-                break;
+            _txtPrompt.text = $"是否花费{goldCost}金币购买{propName}？";
+            return;
         }
 
         _txtPrompt.text = $"是否购买{propName}？";
+    }
+
+    /// <summary>
+    /// 获取当前道具的价格。
+    /// </summary>
+    /// <param name="goldCost">输出的价格。</param>
+    /// <returns>true=读取成功；false=读取失败。</returns>
+    private bool TryGetCurrentPropGoldCost(out int goldCost)
+    {
+        return TryGetPropGoldCost(_currentPropType, out goldCost);
+    }
+
+    /// <summary>
+    /// 获取指定道具的价格。
+    /// </summary>
+    /// <param name="propType">目标道具类型。</param>
+    /// <param name="goldCost">输出的价格。</param>
+    /// <returns>true=读取成功；false=读取失败。</returns>
+    internal static bool TryGetPropGoldCost(PropType propType, out int goldCost)
+    {
+        goldCost = 0;
+        if (GameEntry.DataTables == null || !GameEntry.DataTables.IsAvailable<DailyChallengeCostDataRow>())
+        {
+            return false;
+        }
+
+        DailyChallengeCostDataRow costDataRow = GameEntry.DataTables.GetDataRowByCode<DailyChallengeCostDataRow>(DailyChallengeCostDataRow.DefaultCode);
+        if (costDataRow == null)
+        {
+            return false;
+        }
+
+        switch (propType)
+        {
+            case PropType.Remove:
+                goldCost = costDataRow.RemoveGold;
+                return goldCost > 0;
+            case PropType.Retrieve:
+                goldCost = costDataRow.RetrieveGold;
+                return goldCost > 0;
+            case PropType.Shuffle:
+                goldCost = costDataRow.ShuffleGold;
+                return goldCost > 0;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// 获取道具名称。
+    /// </summary>
+    /// <param name="propType">目标道具类型。</param>
+    /// <returns>用于 UI 显示的道具名称。</returns>
+    private static string GetPropName(PropType propType)
+    {
+        switch (propType)
+        {
+            case PropType.Remove:
+                return "移出道具";
+            case PropType.Retrieve:
+                return "拿取道具";
+            case PropType.Shuffle:
+                return "随机道具";
+            default:
+                return "道具";
+        }
     }
 }

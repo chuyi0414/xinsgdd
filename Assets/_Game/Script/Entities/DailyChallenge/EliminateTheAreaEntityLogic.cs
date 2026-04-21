@@ -502,6 +502,43 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     public int MaxCardCount => _maxCardCount;
 
     /// <summary>
+    /// 获取当前等待区按显示顺序排列的卡片快照。
+    /// 这里会先重建一次双端快照，再过滤掉空槽位与无效引用，
+    /// 确保返回顺序与玩家当前看到的等待区顺序一致。
+    /// </summary>
+    /// <returns>按显示顺序排列的等待区卡片列表；无卡时返回空列表。</returns>
+    public List<EliminateCardEntityLogic> GetDisplayedWaitingAreaCardsSnapshot()
+    {
+        List<EliminateCardEntityLogic> result = new List<EliminateCardEntityLogic>(_currentCardCount > 0 ? _currentCardCount : 0);
+
+        if (_currentCardCount <= 0 || _waitingOrder.Count <= 0)
+        {
+            return result;
+        }
+
+        BuildDualEndSnapshot();
+        if (_snapshotCards == null || _snapshotCards.Length <= 0)
+        {
+            return result;
+        }
+
+        for (int i = 0; i < _snapshotCards.Length; i++)
+        {
+            EliminateCardEntityLogic card = _snapshotCards[i];
+            if (card == null
+                || card.CurrentArea != CardArea.WaitingArea
+                || !card.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            result.Add(card);
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// 从等待区前方取出指定数量的卡片，仅修改数据结构，不做动画/回收。
     /// 由移出道具（ShiftOut）调用：取出卡片后由 Controller 层负责飞行动画 + 回收 + 前移补位。
     /// ⚠️ 避坑：此方法仅修改 _waitingOrder / _currentCardCount / 入槽序号缓存，
@@ -545,6 +582,43 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         // 更新等待区卡片计数
         _currentCardCount = _waitingOrder.Count;
 
+        return result;
+    }
+
+    /// <summary>
+    /// 从等待区中取出指定卡片集合，仅修改数据结构，不做动画/回收。
+    /// 调用方传入的顺序会原样保留到返回值中，
+    /// 因此移出道具可以先按显示顺序筛好目标，再按该顺序执行飞行动画。
+    /// </summary>
+    /// <param name="cards">要取出的目标卡片集合。</param>
+    /// <returns>实际成功取出的卡片列表；无命中时返回空列表。</returns>
+    public List<EliminateCardEntityLogic> DetachSpecificCardsFromWaitingArea(List<EliminateCardEntityLogic> cards)
+    {
+        List<EliminateCardEntityLogic> result = new List<EliminateCardEntityLogic>(cards != null ? cards.Count : 0);
+
+        if (cards == null || cards.Count <= 0 || _currentCardCount <= 0 || _waitingOrder.Count <= 0)
+        {
+            return result;
+        }
+
+        for (int i = 0; i < cards.Count; i++)
+        {
+            EliminateCardEntityLogic card = cards[i];
+            if (card == null)
+            {
+                continue;
+            }
+
+            if (!_waitingOrder.Remove(card))
+            {
+                continue;
+            }
+
+            RemoveInsertSerialByCard(card);
+            result.Add(card);
+        }
+
+        _currentCardCount = _waitingOrder.Count;
         return result;
     }
 
@@ -1307,6 +1381,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     internal void RefreshWaitingAreaLayout(float moveDuration)
     {
         BuildDualEndSnapshot();
+        OnWaitingAreaLayoutChanged?.Invoke();
         AnimateRemainingCardsToSlots(moveDuration);
     }
 

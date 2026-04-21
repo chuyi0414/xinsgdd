@@ -6,11 +6,7 @@ using UnityGameFramework.Runtime;
 
 /// <summary>
 /// 战斗界面。
-/// 职责：
-/// 1. 提供 BtnExit 退出按钮，点击后弹出 IsExitUIForm 确认窗；
-/// 2. 提供 BtnEliminateRules 规则按钮，点击后弹出 EliminateRulesUIForm；
-/// 3. OnOpen 时自动打开一次 EliminateRulesUIForm；
-/// 4. 在 OnClose 时连带关闭 IsExitUIForm / EliminateRulesUIForm，防止战斗流程切换时残留弹窗。
+/// 负责每日一关战斗态 UI、道具购买、失败分流与结果弹窗的统一管理。
 /// </summary>
 public sealed class CombatUIForm : UIFormLogic
 {
@@ -35,6 +31,36 @@ public sealed class CombatUIForm : UIFormLogic
     /// </summary>
     [SerializeField]
     private ScoreDigitRenderer _scoreDigitRenderer;
+
+    /// <summary>
+    /// 分数滚动刷新时间间隔（秒）。
+    /// 参考项目按 0.1 秒一个节拍推进一次分数，这里保持同样手感。
+    /// </summary>
+    private const float ScoreTickIntervalSeconds = 0.1f;
+
+    /// <summary>
+    /// 分数滚动的自适应步长档位。
+    /// 会从大到小挑选一个不超过当前分差的最大步长，兼顾大分差追赶速度与小分差收敛精度。
+    /// </summary>
+    private static readonly int[] ScoreStepLadder = { 100000, 10000, 1000, 100, 10, 1 };
+
+    /// <summary>
+    /// 当前分数滚动用的延迟 Tween 句柄。
+    /// 只在需要继续追分时创建；界面关闭、销毁或直接同步分数时统一 Kill。
+    /// </summary>
+    private Tween _scoreTickTween;
+
+    /// <summary>
+    /// 当前界面已经显示出来的分数。
+    /// 作为滚动动画的起点，每次推进都会向目标值逼近。
+    /// </summary>
+    private int _displayedScore;
+
+    /// <summary>
+    /// 当前需要追赶到的目标分数。
+    /// 由 EliminateCardController.OnScoreUpdated 驱动刷新。
+    /// </summary>
+    private int _targetScore;
 
     // ───────────── 道具按钮 ─────────────
 
@@ -126,6 +152,12 @@ public sealed class CombatUIForm : UIFormLogic
     private int _purchasedShuffleCount;
 
     /// <summary>
+    /// 本局是否已经复活过。
+    /// 每局只允许成功复活一次。
+    /// </summary>
+    private bool _hasRevivedThisBattle;
+
+    /// <summary>
     /// 当前已打开的 PropPurchaseUIForm 序列号。
     /// 为 0 表示当前没有活动的购买窗实例。
     /// </summary>
@@ -148,6 +180,12 @@ public sealed class CombatUIForm : UIFormLogic
     /// 为 0 表示当前没有活动的胜利/失败弹窗实例。
     /// </summary>
     private int _victoryFailUIFormId;
+
+    /// <summary>
+    /// 当前已打开的 ResurgenceUIForm 序列号。
+    /// 为 0 表示当前没有活动的复活确认窗实例。
+    /// </summary>
+    private int _resurgenceUIFormId;
 
     /// <summary>
     /// 规则按钮 Punch 回弹动画 Tween 句柄。
@@ -255,7 +293,7 @@ public sealed class CombatUIForm : UIFormLogic
     }
 
     /// <summary>
-    /// 关闭战斗界面时连带清理 IsExitUIForm / EliminateRulesUIForm / VictoryFailUIForm / Punch 动画。
+    /// 关闭战斗界面时连带清理 IsExitUIForm / EliminateRulesUIForm / VictoryFailUIForm / ResurgenceUIForm / PropPurchaseUIForm / Punch 动画。
     /// 防止战斗流程切换时弹窗残留在屏幕上或动画残留。
     /// </summary>
     protected override void OnClose(bool isShutdown, object userData)
@@ -284,8 +322,10 @@ public sealed class CombatUIForm : UIFormLogic
         CloseIsExitUIForm();
         CloseEliminateRulesUIForm();
         CloseVictoryFailUIForm();
+        CloseResurgenceUIForm();
         ClosePropPurchaseUIForm();
         KillEliminateRulesPunchTween();
+        KillScoreAnimation();
         base.OnClose(isShutdown, userData);
     }
 
@@ -295,6 +335,7 @@ public sealed class CombatUIForm : UIFormLogic
     private void OnDestroy()
     {
         KillEliminateRulesPunchTween();
+        KillScoreAnimation();
         if (_btnExit != null)
         {
             _btnExit.onClick.RemoveListener(OnBtnExit);
@@ -332,22 +373,27 @@ public sealed class CombatUIForm : UIFormLogic
     }
 
     /// <summary>
-    /// 消除失败回调：弹出 VictoryFailUIForm(Fail)。
+    /// 消除失败回调。
+    /// 本局未复活过时优先弹出 ResurgenceUIForm；
+    /// 本局已复活过时，后续再次失败直接进入 VictoryFailUIForm(Fail)。
     /// </summary>
     private void OnEliminateFail()
     {
-        OpenVictoryFailUIForm(isVictory: false);
+        if (_hasRevivedThisBattle || !OpenResurgenceUIForm())
+        {
+            OpenVictoryFailUIForm(isVictory: false);
+        }
     }
 
     // ───────────── 得分/连击事件处理 ─────────────
 
     /// <summary>
-    /// 得分变化回调：刷新得分文本。
+    /// 得分变化回调：触发滚动分数刷新。
     /// </summary>
     /// <param name="score">当前累计得分。</param>
     private void OnScoreChanged(int score)
     {
-        UpdateScoreText(score);
+        UpdateScoreTextAnimated(score);
     }
 
     /// <summary>
@@ -357,9 +403,146 @@ public sealed class CombatUIForm : UIFormLogic
     /// <param name="score">当前得分。</param>
     private void UpdateScoreText(int score)
     {
+        // 立即同步时必须先终止旧滚分，避免旧 Tween 在下一拍又把显示值改回去。
+        KillScoreAnimation();
+        _targetScore = Mathf.Max(0, score);
+        _displayedScore = _targetScore;
+        ApplyScoreText(_displayedScore);
+    }
+
+    /// <summary>
+    /// 按参考项目手感执行滚动分数刷新。
+    /// 分数上升时按固定节拍 + 自适应步长追赶；分数回退或界面不可见时直接同步。
+    /// </summary>
+    /// <param name="score">本次需要显示到的目标分数。</param>
+    private void UpdateScoreTextAnimated(int score)
+    {
+        int safeScore = Mathf.Max(0, score);
+
+        // 每次事件到来都先覆盖目标值；若滚分正在执行，后续会自动追到新目标。
+        _targetScore = safeScore;
+
+        // 1. UI 不可见时不做后台滚分；
+        // 2. 分数下降/重置时直接同步，避免出现倒着滚的表现。
+        if (!isActiveAndEnabled || !gameObject.activeInHierarchy || safeScore <= _displayedScore)
+        {
+            UpdateScoreText(safeScore);
+            return;
+        }
+
+        // 当前没有滚分任务时，立刻推进第一拍；
+        // 若已有任务在跑，本次只更新目标值，等下一拍自然追上即可。
+        if (_scoreTickTween == null || !_scoreTickTween.IsActive())
+        {
+            AdvanceScoreAnimation();
+        }
+    }
+
+    /// <summary>
+    /// 推进一拍分数滚动动画。
+    /// 会根据当前分差选择合适步长，写入显示层后决定是否继续排下一拍。
+    /// </summary>
+    private void AdvanceScoreAnimation()
+    {
+        int diff = _targetScore - _displayedScore;
+        int step = GetAdaptiveScoreStep(diff);
+        if (step <= 0)
+        {
+            UpdateScoreText(_targetScore);
+            return;
+        }
+
+        // 这里不允许越过目标值，必须用 Min 把最终显示值钳到目标分。
+        _displayedScore = Mathf.Min(_targetScore, _displayedScore + step);
+        ApplyScoreText(_displayedScore);
+
+        // 只有还没追平时才继续排下一拍，避免无意义空转。
+        if (_displayedScore < _targetScore)
+        {
+            ScheduleScoreAnimationTick();
+        }
+    }
+
+    /// <summary>
+    /// 安排下一拍分数滚动。
+    /// 使用 DOVirtual.DelayedCall 而不是 Update/Coroutine，减少常驻轮询代码。
+    /// </summary>
+    private void ScheduleScoreAnimationTick()
+    {
+        // 防御式先 Kill，保证任意时刻最多只存在一个有效的分数滚动定时器。
+        KillScoreAnimation();
+        _scoreTickTween = DOVirtual.DelayedCall(ScoreTickIntervalSeconds, OnScoreAnimationTick).SetUpdate(true);
+    }
+
+    /// <summary>
+    /// 分数滚动下一拍的回调入口。
+    /// 延迟 Tween 到点后会进入这里继续推进追分。
+    /// </summary>
+    private void OnScoreAnimationTick()
+    {
+        // 先清空句柄，表示这一拍已经执行完；
+        // 若还需要继续，会在 AdvanceScoreAnimation 内重新排下一拍。
+        _scoreTickTween = null;
+
+        // 若此时界面已经不可见，直接落到目标值并收口，避免隐藏状态残留 Tween。
+        if (!isActiveAndEnabled || !gameObject.activeInHierarchy)
+        {
+            UpdateScoreText(_targetScore);
+            return;
+        }
+
+        AdvanceScoreAnimation();
+    }
+
+    /// <summary>
+    /// 根据当前分差选择一档滚分步长。
+    /// 规则：返回不超过 diff 的最大档位；若 diff 非正则返回 0。
+    /// </summary>
+    /// <param name="diff">目标分与当前显示分之间的差值。</param>
+    /// <returns>本拍应增加的分数步长。</returns>
+    private static int GetAdaptiveScoreStep(int diff)
+    {
+        if (diff <= 0)
+        {
+            return 0;
+        }
+
+        // 从大到小找第一个可用档位，确保大分差时追得快，小分差时落点稳。
+        for (int i = 0; i < ScoreStepLadder.Length; i++)
+        {
+            int step = ScoreStepLadder[i];
+            if (step <= diff)
+            {
+                return step;
+            }
+        }
+
+        return 1;
+    }
+
+    /// <summary>
+    /// 将指定分数真正写入 Scores 显示层。
+    /// 这里只负责 UI 呈现，不修改任何战斗层的真实记分数据。
+    /// </summary>
+    /// <param name="score">当前要显示的分数。</param>
+    private void ApplyScoreText(int score)
+    {
         if (_scoreDigitRenderer != null)
         {
             _scoreDigitRenderer.SetScore(score);
+        }
+    }
+
+    /// <summary>
+    /// 终止当前分数滚动 Tween。
+    /// 统一供直接同步分数、界面关闭、界面销毁等收口场景调用。
+    /// </summary>
+    private void KillScoreAnimation()
+    {
+        if (_scoreTickTween != null)
+        {
+            _scoreTickTween.Kill(false);
+            _scoreTickTween = null;
         }
     }
 
@@ -437,6 +620,7 @@ public sealed class CombatUIForm : UIFormLogic
 
         // 重建成功后，把当前 CombatUIForm 的局内显示状态重置成“新开一局”的口径。
         _victoryFailUIFormId = 0;
+        _resurgenceUIFormId = 0;
         UpdateScoreText(0);
         ResetPropState();
         _hasPropKit = hasPropKit;
@@ -462,6 +646,127 @@ public sealed class CombatUIForm : UIFormLogic
         }
 
         _victoryFailUIFormId = 0;
+    }
+
+    /// <summary>
+    /// 尝试在失败后执行一次金币复活。
+    /// 成功时关闭复活窗，清除失败态，并自动执行一次移出道具效果。
+    /// </summary>
+    /// <returns>true=复活成功；false=复活失败。</returns>
+    internal bool TryReviveAfterFailure()
+    {
+        if (_hasRevivedThisBattle)
+        {
+            return false;
+        }
+
+        EliminateCardController controller = EliminateCardController.Instance;
+        if (controller == null)
+        {
+            return false;
+        }
+
+        if (!TryGetResurgenceGoldCost(out int resurgenceGold))
+        {
+            return false;
+        }
+
+        if (GameEntry.Fruits == null || !GameEntry.Fruits.EnsureInitialized())
+        {
+            return false;
+        }
+
+        if (!GameEntry.Fruits.TryConsumeGold(resurgenceGold))
+        {
+            return false;
+        }
+
+        if (!controller.TryRecoverFromFailedStateByShiftOut())
+        {
+            GameEntry.Fruits.AddGold(resurgenceGold);
+            return false;
+        }
+
+        controller.ApplyResurgenceComboBonus(10);
+        _hasRevivedThisBattle = true;
+        CloseResurgenceUIForm();
+        return true;
+    }
+
+    /// <summary>
+    /// 复活取消、金币不足或复活执行失败时，收口到失败结算窗。
+    /// </summary>
+    internal void EnterFailureSettlementAfterResurgence()
+    {
+        CloseResurgenceUIForm();
+        OpenVictoryFailUIForm(isVictory: false);
+    }
+
+    /// <summary>
+    /// 打开复活确认窗。
+    /// 若已打开则跳过，避免重复弹出。
+    /// </summary>
+    /// <returns>true=复活窗已存在或打开成功；false=打开失败。</returns>
+    private bool OpenResurgenceUIForm()
+    {
+        if (GameEntry.UI == null)
+        {
+            return false;
+        }
+
+        if (_resurgenceUIFormId > 0 && GameEntry.UI.HasUIForm(_resurgenceUIFormId))
+        {
+            return true;
+        }
+
+        if (_victoryFailUIFormId > 0 && GameEntry.UI.HasUIForm(_victoryFailUIFormId))
+        {
+            return false;
+        }
+
+        _resurgenceUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.ResurgenceUIForm, UIFormDefine.MainGroup);
+        return _resurgenceUIFormId > 0;
+    }
+
+    /// <summary>
+    /// 关闭当前记录到的 ResurgenceUIForm。
+    /// </summary>
+    private void CloseResurgenceUIForm()
+    {
+        if (_resurgenceUIFormId <= 0)
+        {
+            return;
+        }
+
+        if (GameEntry.UI != null && GameEntry.UI.HasUIForm(_resurgenceUIFormId))
+        {
+            GameEntry.UI.CloseUIForm(_resurgenceUIFormId);
+        }
+
+        _resurgenceUIFormId = 0;
+    }
+
+    /// <summary>
+    /// 获取复活价格。
+    /// </summary>
+    /// <param name="resurgenceGold">输出的复活价格。</param>
+    /// <returns>true=读取成功；false=读取失败。</returns>
+    private static bool TryGetResurgenceGoldCost(out int resurgenceGold)
+    {
+        resurgenceGold = 0;
+        if (GameEntry.DataTables == null || !GameEntry.DataTables.IsAvailable<DailyChallengeCostDataRow>())
+        {
+            return false;
+        }
+
+        DailyChallengeCostDataRow costDataRow = GameEntry.DataTables.GetDataRowByCode<DailyChallengeCostDataRow>(DailyChallengeCostDataRow.DefaultCode);
+        if (costDataRow == null || costDataRow.ResurgenceGold <= 0)
+        {
+            return false;
+        }
+
+        resurgenceGold = costDataRow.ResurgenceGold;
+        return true;
     }
 
     /// <summary>
@@ -740,6 +1045,7 @@ public sealed class CombatUIForm : UIFormLogic
         _purchasedRemoveCount = 0;
         _purchasedRetrieveCount = 0;
         _purchasedShuffleCount = 0;
+        _hasRevivedThisBattle = false;
 
         PropPurchaseUIForm.ResetBattlePurchaseState();
         RefreshToolCounts();

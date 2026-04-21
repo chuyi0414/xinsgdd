@@ -53,7 +53,7 @@ public sealed class EliminateCardController
     private static readonly Vector2[] LegacyDirAnchors = new Vector2[]
     {
         new Vector2(0f, 8.5f),
-        new Vector2(8f, 8.5f),
+        new Vector2(7f, 8.5f),
     };
 
     /// <summary>
@@ -67,7 +67,7 @@ public sealed class EliminateCardController
     /// 口径与 LegacyDirAnchors 一致：col 为逻辑列，row 为逻辑行（正值向下）。
     /// 调整此值即可控制区域 prefab 在棋盘上的位置。
     /// </summary>
-    private static readonly Vector2 EliminateTheAreaAnchor = new Vector2(4f, 11.5f);
+    private static readonly Vector2 EliminateTheAreaAnchor = new Vector2(3.5f, 11.5f);
 
     /// <summary>
     /// 道具置出区锚点定义（col, row）。
@@ -75,7 +75,7 @@ public sealed class EliminateCardController
     /// 口径与 EliminateTheAreaAnchor 一致：col 为逻辑列，row 为逻辑行（正值向下）。
     /// 调整此值即可控制置出区在棋盘上的位置。
     /// </summary>
-    private static readonly Vector2 PropOutputZoneAnchor = new Vector2(3f, 8.5f);
+    private static readonly Vector2 PropOutputZoneAnchor = new Vector2(2.5f, 8.5f);
 
     /// <summary>
     /// 道具卡片飞向置出区的动画时长（秒）。
@@ -92,7 +92,7 @@ public sealed class EliminateCardController
     /// 固定视口的逻辑列跨度。
     /// 主盘 8 列 (0~7) + DIR 两侧各 1 列 (-1, 8) = 10。
     /// </summary>
-    private const float FixedViewportLogicalCols = 11f;
+    private const float FixedViewportLogicalCols = 10f;
 
     /// <summary>
     /// 固定视口的逻辑行跨度。
@@ -1719,17 +1719,6 @@ public sealed class EliminateCardController
             }
 
             cardLogic.SetBlocked(blockedStates[i]);
-            if (ShouldDebugSideDirLayout(layoutIndex))
-            {
-                Log.Debug(
-                    "EliminateCardController UpdateBlockingAfterRemoval: layout={0}, blocked={1}, area={2}, moving={3}, colliderEnabled={4}, entityId={5}",
-                    layoutIndex,
-                    blockedStates[i],
-                    cardLogic.CurrentArea,
-                    cardLogic.IsMoving,
-                    cardLogic.IsRaycastColliderEnabled,
-                    cardLogic.Entity.Id);
-            }
         }
     }
 
@@ -1823,18 +1812,6 @@ public sealed class EliminateCardController
         }
 
         bool added = _removedFromBoard.Add(card.LayoutIndex);
-        if (ShouldDebugSideDirLayout(card.LayoutIndex))
-        {
-            Log.Debug(
-                "EliminateCardController MarkCardRemovedFromBoard: layout={0}, added={1}, reason={2}, area={3}, moving={4}, colliderEnabled={5}, entityId={6}",
-                card.LayoutIndex,
-                added,
-                reason,
-                card.CurrentArea,
-                card.IsMoving,
-                card.IsRaycastColliderEnabled,
-                card.Entity.Id);
-        }
     }
 
     /// <summary>
@@ -1856,18 +1833,6 @@ public sealed class EliminateCardController
         }
     }
 
-    /// <summary>
-    /// 是否属于 bbl1 侧边 DIR 单阻挡诊断卡。
-    /// </summary>
-    /// <param name="layoutIndex">布局索引。</param>
-    /// <returns>true=需要打定向调试日志。</returns>
-    private static bool ShouldDebugSideDirLayout(int layoutIndex)
-    {
-        return layoutIndex == DebugLeftDirLowerLayoutIndex
-            || layoutIndex == DebugLeftDirUpperLayoutIndex
-            || layoutIndex == DebugRightDirLowerLayoutIndex
-            || layoutIndex == DebugRightDirUpperLayoutIndex;
-    }
 
     // ───────────── 道具操作 ─────────────
 
@@ -1900,7 +1865,7 @@ public sealed class EliminateCardController
     }
 
     /// <summary>
-    /// 移出道具：将等待区前3张卡片移出。
+    /// 移出道具：优先移出单牌；若单牌不足 3 张，则继续移出数量最少的多牌补足。
     /// 卡片飞向置出区后继续存活显示（不回收），加入 _outputZoneCards。
     /// 全部飞完后执行前移补位动画。
     /// </summary>
@@ -1912,8 +1877,19 @@ public sealed class EliminateCardController
             return false;
         }
 
-        // 仅从数据结构取出卡片，不做动画/回收
-        List<EliminateCardEntityLogic> detachedCards = _areaEntityLogic.DetachCardsFromWaitingArea(3);
+        List<EliminateCardEntityLogic> displayedWaitingCards = _areaEntityLogic.GetDisplayedWaitingAreaCardsSnapshot();
+        if (displayedWaitingCards == null || displayedWaitingCards.Count <= 0)
+        {
+            return false;
+        }
+
+        List<EliminateCardEntityLogic> shiftOutTargets = SelectShiftOutTargets(displayedWaitingCards, 3);
+        if (shiftOutTargets == null || shiftOutTargets.Count <= 0)
+        {
+            return false;
+        }
+
+        List<EliminateCardEntityLogic> detachedCards = _areaEntityLogic.DetachSpecificCardsFromWaitingArea(shiftOutTargets);
         if (detachedCards == null || detachedCards.Count <= 0)
         {
             return false;
@@ -1967,6 +1943,115 @@ public sealed class EliminateCardController
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// 根据移出道具规则，从当前等待区显示顺序中选出要移出的目标卡片。
+    /// 规则：
+    /// 1. 先取所有单牌；
+    /// 2. 若单牌不足上限，则继续取“数量最少”的多牌补足；
+    /// 3. 若候选总数超过上限，则按当前显示顺序截取前 maxSelectionCount 张。
+    /// </summary>
+    /// <param name="displayedWaitingCards">当前等待区按显示顺序排列的卡片列表。</param>
+    /// <param name="maxSelectionCount">最多选中的卡片数量。</param>
+    /// <returns>按最终移出顺序排列的目标卡片列表。</returns>
+    private static List<EliminateCardEntityLogic> SelectShiftOutTargets(
+        List<EliminateCardEntityLogic> displayedWaitingCards,
+        int maxSelectionCount)
+    {
+        int candidateCapacity = displayedWaitingCards != null
+            ? Mathf.Min(maxSelectionCount, displayedWaitingCards.Count)
+            : 0;
+        List<EliminateCardEntityLogic> result = new List<EliminateCardEntityLogic>(candidateCapacity);
+
+        if (displayedWaitingCards == null || displayedWaitingCards.Count <= 0 || maxSelectionCount <= 0)
+        {
+            return result;
+        }
+
+        // 先统计当前等待区里每个 TypeId 的数量。
+        // ⚠️ 这里的数量统计必须基于“当前显示快照”对应的同一批卡片，
+        // 否则会出现单牌/多牌判断与当前界面不一致的问题。
+        Dictionary<int, int> typeCounts = new Dictionary<int, int>(displayedWaitingCards.Count);
+        for (int i = 0; i < displayedWaitingCards.Count; i++)
+        {
+            EliminateCardEntityLogic card = displayedWaitingCards[i];
+            if (card == null)
+            {
+                continue;
+            }
+
+            int count = 0;
+            typeCounts.TryGetValue(card.TypeId, out count);
+            typeCounts[card.TypeId] = count + 1;
+        }
+
+        // 第一步：先找出“最少多牌”的数量阈值。
+        // 单牌会在下一步优先吃掉；如果单牌不足 3 张，再从这里补足。
+        int minMultiCount = int.MaxValue;
+        foreach (KeyValuePair<int, int> pair in typeCounts)
+        {
+            if (pair.Value >= 2 && pair.Value < minMultiCount)
+            {
+                minMultiCount = pair.Value;
+            }
+        }
+
+        // 第二步：严格按显示顺序优先收集所有单牌。
+        for (int i = 0; i < displayedWaitingCards.Count; i++)
+        {
+            EliminateCardEntityLogic card = displayedWaitingCards[i];
+            if (card == null)
+            {
+                continue;
+            }
+
+            int sameTypeCount = 0;
+            if (!typeCounts.TryGetValue(card.TypeId, out sameTypeCount) || sameTypeCount != 1)
+            {
+                continue;
+            }
+
+            result.Add(card);
+            if (result.Count >= maxSelectionCount)
+            {
+                return result;
+            }
+        }
+
+        // 第三步：若单牌不足上限，再从“数量最少”的多牌组中按显示顺序补足。
+        if (minMultiCount == int.MaxValue)
+        {
+            return result;
+        }
+
+        for (int i = 0; i < displayedWaitingCards.Count; i++)
+        {
+            EliminateCardEntityLogic card = displayedWaitingCards[i];
+            if (card == null)
+            {
+                continue;
+            }
+
+            int sameTypeCount = 0;
+            if (!typeCounts.TryGetValue(card.TypeId, out sameTypeCount))
+            {
+                continue;
+            }
+
+            if (sameTypeCount != minMultiCount)
+            {
+                continue;
+            }
+
+            result.Add(card);
+            if (result.Count >= maxSelectionCount)
+            {
+                break;
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -2192,9 +2277,8 @@ public sealed class EliminateCardController
 
         // Z 轴递减：后进入的卡片 Z 更小（离相机更近），
         // 确保 Physics2D.Raycast 命中视觉上层的卡片，与 sortingOrder 一致。
-        // ⚠️ 避坑：Z 递增会导致 Raycast 命中底层卡片而非上层！
+        // 避坑：Z 递增会导致 Raycast 命中底层卡片而非上层！
         float zOffset = -outputIndex * OutputZoneZOffset;
-
         return new Vector3(baseWorldX + xOffset, baseWorldY, EntityWorldZ + zOffset);
     }
 
@@ -2211,6 +2295,27 @@ public sealed class EliminateCardController
     /// </summary>
     /// <returns>当前连击数。</returns>
     public int GetComboCount() => _comboCount;
+
+    /// <summary>
+    /// 复活成功后，强制给予一段指定连击数的奖励状态。
+    /// 会同步重置连击时间窗起点，并立即刷新场景中的 Combo 显示。
+    /// </summary>
+    /// <param name="comboCount">要赋予的目标连击数，小于等于 0 时忽略。</param>
+    public void ApplyResurgenceComboBonus(int comboCount)
+    {
+        if (comboCount <= 0)
+        {
+            return;
+        }
+
+        if (_comboCount < comboCount)
+        {
+            _comboCount = comboCount;
+        }
+
+        _lastSettlementRealTime = Time.unscaledTime;
+        SyncComboDisplay();
+    }
 
     /// <summary>
     /// 将当前连击状态同步到区域实体的 Combo UI。
@@ -2624,6 +2729,22 @@ public sealed class EliminateCardController
         }
 
         OnFail?.Invoke();
+    }
+
+    /// <summary>
+    /// 尝试通过自动执行一次移出道具效果来解除当前失败态。
+    /// 仅当移出成功时才真正清理失败标记，避免玩家付费后仍停留在失败状态。
+    /// </summary>
+    /// <returns>true=恢复成功；false=恢复失败。</returns>
+    public bool TryRecoverFromFailedStateByShiftOut()
+    {
+        if (!PropShiftOut())
+        {
+            return false;
+        }
+
+        _hasFailed = false;
+        return true;
     }
 
     /// <summary>

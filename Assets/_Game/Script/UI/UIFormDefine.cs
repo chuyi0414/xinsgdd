@@ -76,6 +76,11 @@ public static class UIFormDefine
     public static readonly string VictoryFailUIForm = AssetPath.GetUI("Combat/VictoryFailUIForm");
 
     /// <summary>
+    /// 复活确认界面资源名。
+    /// </summary>
+    public static readonly string ResurgenceUIForm = AssetPath.GetUI("Combat/ResurgenceUIForm");
+
+    /// <summary>
     /// 道具购买界面资源名。
     /// </summary>
     public static readonly string PropPurchaseUIForm = AssetPath.GetUI("Combat/PropPurchaseUIForm");

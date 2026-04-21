@@ -51,6 +51,11 @@ public sealed class GameDataTableModule
     private static readonly string DailyChallengeScoreDataTableAssetName = AssetPath.GetDataTable("DailyChallengeScore");
 
     /// <summary>
+    /// 每日一关价格配置表资源路径。
+    /// </summary>
+    private static readonly string DailyChallengeCostDataTableAssetName = AssetPath.GetDataTable("DailyChallengeCost");
+
+    /// <summary>
     /// 已注册的数据表缓存，按行类型索引。
     /// </summary>
     private readonly Dictionary<Type, object> _dataTables = new Dictionary<Type, object>();
@@ -81,7 +86,8 @@ public sealed class GameDataTableModule
         && IsAvailable<GameplayRuleDataRow>()
         && IsAvailable<ArchitectureSlotDataRow>()
         && IsAvailable<ArchitectureUpgradeDataRow>()
-        && IsAvailable<DailyChallengeScoreDataRow>();
+        && IsAvailable<DailyChallengeScoreDataRow>()
+        && IsAvailable<DailyChallengeCostDataRow>();
 
     /// <summary>
     /// 启动全部必需业务数据表加载。
@@ -99,6 +105,7 @@ public sealed class GameDataTableModule
         BeginLoadArchitectureSlotDataTable();
         BeginLoadArchitectureUpgradeDataTable();
         BeginLoadDailyChallengeScoreDataTable();
+        BeginLoadDailyChallengeCostDataTable();
 
         NotifyLoadStateChanged();
     }
@@ -523,6 +530,32 @@ public sealed class GameDataTableModule
     }
 
     /// <summary>
+    /// 开始加载每日一关价格配置表。
+    /// </summary>
+    private void BeginLoadDailyChallengeCostDataTable()
+    {
+        if (IsAvailable<DailyChallengeCostDataRow>())
+        {
+            return;
+        }
+
+        IDataTable<DailyChallengeCostDataRow> dailyChallengeCostDataTable = EnsureDataTable<DailyChallengeCostDataRow>();
+        if (dailyChallengeCostDataTable == null)
+        {
+            Log.Error("创建每日一关价格配置表失败。");
+            return;
+        }
+
+        if (dailyChallengeCostDataTable.Count > 0)
+        {
+            TryRegisterDailyChallengeCostDataTable(dailyChallengeCostDataTable);
+            return;
+        }
+
+        ((GameFramework.DataTable.DataTableBase)dailyChallengeCostDataTable).ReadData(DailyChallengeCostDataTableAssetName);
+    }
+
+    /// <summary>
     /// 数据表加载成功回调。
     /// </summary>
     private void OnLoadDataTableSuccess(object sender, GameEventArgs e)
@@ -564,6 +597,10 @@ public sealed class GameDataTableModule
         else if (string.Equals(ne.DataTableAssetName, DailyChallengeScoreDataTableAssetName, StringComparison.Ordinal))
         {
             TryRegisterDailyChallengeScoreDataTable(GameEntry.DataTable.GetDataTable<DailyChallengeScoreDataRow>());
+        }
+        else if (string.Equals(ne.DataTableAssetName, DailyChallengeCostDataTableAssetName, StringComparison.Ordinal))
+        {
+            TryRegisterDailyChallengeCostDataTable(GameEntry.DataTable.GetDataTable<DailyChallengeCostDataRow>());
         }
     }
 
@@ -617,6 +654,11 @@ public sealed class GameDataTableModule
         {
             Log.Error("加载每日一关得分配置表失败：{0}", ne.ErrorMessage);
             Clear<DailyChallengeScoreDataRow>();
+        }
+        else if (string.Equals(ne.DataTableAssetName, DailyChallengeCostDataTableAssetName, StringComparison.Ordinal))
+        {
+            Log.Error("加载每日一关价格配置表失败：{0}", ne.ErrorMessage);
+            Clear<DailyChallengeCostDataRow>();
         }
     }
 
@@ -799,6 +841,20 @@ public sealed class GameDataTableModule
         if (!Register(dailyChallengeScoreDataTable))
         {
             Log.Error("每日一关得分配置表注册失败。");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 注册每日一关价格配置表到通用模块。
+    /// </summary>
+    private bool TryRegisterDailyChallengeCostDataTable(IDataTable<DailyChallengeCostDataRow> dailyChallengeCostDataTable)
+    {
+        if (!Register(dailyChallengeCostDataTable))
+        {
+            Log.Error("每日一关价格配置表注册失败。");
             return false;
         }
 

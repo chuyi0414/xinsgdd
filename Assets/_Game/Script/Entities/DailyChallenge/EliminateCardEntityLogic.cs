@@ -256,18 +256,6 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
         }
 
         UpdateRaycastColliderState();
-
-        if (ShouldDebugSideDirLayout(LayoutIndex))
-        {
-            Log.Debug(
-                "EliminateCardEntityLogic SetBlocked: layout={0}, blocked={1}, area={2}, colliderEnabled={3}, moving={4}, entityId={5}",
-                LayoutIndex,
-                blocked,
-                _cardArea,
-                IsRaycastColliderEnabled,
-                _isMoving,
-                Entity.Id);
-        }
     }
 
     /// <summary>
@@ -416,17 +404,6 @@ public sealed class EliminateCardEntityLogic : EntityLogic, IPointerClickHandler
         _boxCollider2D.enabled = _cardArea != CardArea.WaitingArea && !_isBlocked;
     }
 
-    /// <summary>
-    /// 是否需要输出侧边 DIR 单阻挡卡调试日志。
-    /// 当前只跟踪 bbl1 两组单阻挡关系涉及的 4 张卡。
-    /// </summary>
-    private static bool ShouldDebugSideDirLayout(int layoutIndex)
-    {
-        return layoutIndex == 228
-            || layoutIndex == 229
-            || layoutIndex == 238
-            || layoutIndex == 239;
-    }
 
     /// <summary>
     /// 确保主相机挂有 Physics2DRaycaster。

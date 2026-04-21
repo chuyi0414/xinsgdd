@@ -1,0 +1,3 @@
+#Id	Code	RemoveGold	RetrieveGold	ShuffleGold	ResurgenceGold
+#编号	配置编码	移出道具金币	拿取道具金币	随机道具金币	复活金币
+1	daily_challenge_cost_default	500	500	500	1000
