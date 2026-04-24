@@ -590,6 +590,20 @@ public sealed class PlayfieldEntityModule
             bool isOccupied = slotState != null && slotState.IsOccupied;
             if (!isOccupied)
             {
+                // 蛋实体正在播放结束动画时，暂不隐藏，等动画播完由实体自行通知
+                int eggEntityId = _eggEntityIds[i];
+                if (eggEntityId > 0 && TryGetEntityLogic(eggEntityId, out EggEntityLogic finishingEgg))
+                {
+                    if (finishingEgg.IsFinishing)
+                    {
+                        continue;
+                    }
+
+                    // 蛋实体存在且尚未开始结束动画，触发动画而非直接隐藏
+                    finishingEgg.PlayFinishAnimation();
+                    continue;
+                }
+
                 HideEggEntity(i);
                 continue;
             }
@@ -759,6 +773,13 @@ public sealed class PlayfieldEntityModule
 
         if (_petEntityIdsByPetInstanceId.TryGetValue(petState.InstanceId, out int entityId)
             && (IsEntityLoaded(entityId) || IsEntityLoading(entityId)))
+        {
+            return;
+        }
+
+        if (petState.PendingSpawnHatchSlotIndex >= 0
+            && petState.PendingSpawnHatchSlotIndex < _incubatorEntityIds.Length
+            && !IsEntityLoaded(_incubatorEntityIds[petState.PendingSpawnHatchSlotIndex]))
         {
             return;
         }
@@ -1044,6 +1065,28 @@ public sealed class PlayfieldEntityModule
     }
 
     /// <summary>
+    /// 蛋实体结束动画播放完毕后的回调入口。
+    /// 由 EggEntityLogic 在动画结束时主动调用，触发真正的隐藏流程。
+    /// </summary>
+    /// <param name="slotIndex">孵化槽索引。</param>
+    public void NotifyEggFinishAnimationCompleted(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= _eggEntityIds.Length)
+        {
+            return;
+        }
+
+        EggHatchSlotState slotState = GameEntry.EggHatch != null ? GameEntry.EggHatch.GetSlotState(slotIndex) : null;
+        if (slotState != null && slotState.IsOccupied)
+        {
+            ApplyEggDataToLoadedEntity(slotIndex, slotState);
+            return;
+        }
+
+        HideEggEntity(slotIndex);
+    }
+
+    /// <summary>
     /// 隐藏指定孵化槽的蛋实体。
     /// </summary>
     private void HideEggEntity(int slotIndex)
@@ -1138,7 +1181,7 @@ public sealed class PlayfieldEntityModule
         return new EggEntityData(
             slotIndex,
             slotState != null ? slotState.EggCode : null,
-            _currentMarkerSnapshot.HatchSlotWorldPositions[slotIndex]);
+            GetHatchGenericWorldPosition(slotIndex));
     }
 
     /// <summary>
@@ -1241,7 +1284,7 @@ public sealed class PlayfieldEntityModule
             if (petState.PendingSpawnHatchSlotIndex >= 0
                 && petState.PendingSpawnHatchSlotIndex < _currentMarkerSnapshot.HatchSlotWorldPositions.Length)
             {
-                initialWorldPosition = _currentMarkerSnapshot.HatchSlotWorldPositions[petState.PendingSpawnHatchSlotIndex];
+                initialWorldPosition = GetHatchGenericWorldPosition(petState.PendingSpawnHatchSlotIndex);
                 useInitialWorldPositionOnShow = true;
             }
             else
@@ -1352,6 +1395,32 @@ public sealed class PlayfieldEntityModule
 
         worldPosition = Vector3.zero;
         return false;
+    }
+
+    /// <summary>
+    /// 获取孵化槽通用出生世界坐标。
+    /// </summary>
+    /// <param name="hatchSlotIndex">孵化槽索引，用于定位对应的 IncubatorEntity。</param>
+    /// <returns>优先返回 IncubatorEntity 的 PetGenericPoint；实体未就绪时回退到孵化槽 UI marker 投影点。</returns>
+    private Vector3 GetHatchGenericWorldPosition(int hatchSlotIndex)
+    {
+        if (hatchSlotIndex >= 0
+            && hatchSlotIndex < _incubatorEntityIds.Length
+            && TryGetEntityLogic(_incubatorEntityIds[hatchSlotIndex], out IncubatorEntityLogic incubatorEntityLogic)
+            && incubatorEntityLogic.TryGetPetGenericWorldPosition(out Vector3 petGenericWorldPosition))
+        {
+            return petGenericWorldPosition;
+        }
+
+        if (_currentMarkerSnapshot != null
+            && _currentMarkerSnapshot.HatchSlotWorldPositions != null
+            && hatchSlotIndex >= 0
+            && hatchSlotIndex < _currentMarkerSnapshot.HatchSlotWorldPositions.Length)
+        {
+            return _currentMarkerSnapshot.HatchSlotWorldPositions[hatchSlotIndex];
+        }
+
+        return Vector3.zero;
     }
 
     /// <summary>
@@ -1630,6 +1699,9 @@ public sealed class PlayfieldEntityModule
             {
                 incubatorEntityLogic.ApplyData(BuildIncubatorEntityData(incubatorEntityData.SlotIndex));
             }
+
+            RefreshEggEntities();
+            RefreshPetEntities(true);
 
             return;
         }

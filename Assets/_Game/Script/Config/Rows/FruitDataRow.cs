@@ -14,8 +14,9 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 数据表固定列数。
+    /// 当前 Fruit.txt 结构为：Id、Code、Name、IsUnlocked、IconPath、UnlockGold、CoinProbability、CoinAmount、ProduceSeconds、SaveGoldPerMinute、Description。
     /// </summary>
-    private const int ColumnCount = 9;
+    private const int ColumnCount = 11;
 
     /// <summary>
     /// 合法水果 Code 的前缀。
@@ -71,6 +72,18 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
     /// 生产该水果所需秒数。
     /// </summary>
     public int ProduceSeconds { get; private set; }
+
+    /// <summary>
+    /// 每分钟存钱金币数量。
+    /// 该字段只负责图鉴详情展示，当前不参与任何金币结算逻辑。
+    /// </summary>
+    public int SaveGoldPerMinute { get; private set; }
+
+    /// <summary>
+    /// 水果图鉴详情描述。
+    /// 该字段只负责 FruitTJUIForm 的 _txtParticularsDescription 展示，不参与运行时数值计算。
+    /// </summary>
+    public string Description { get; private set; }
 
     /// <summary>
     /// 产出物品的概率。
@@ -167,6 +180,19 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
+        if (!int.TryParse(columns[9], out int saveGoldPerMinute) || saveGoldPerMinute < 0)
+        {
+            Log.Warning("FruitDataRow parse failed because SaveGoldPerMinute '{0}' is invalid, code '{1}'.", columns[9], code);
+            return false;
+        }
+
+        string description = columns[10].Trim();
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            Log.Warning("FruitDataRow parse failed because Description is empty, code '{0}'.", code);
+            return false;
+        }
+
         _id = id;
         Code = code;
         Name = name;
@@ -176,6 +202,8 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
         CoinProbability = coinProbability;
         CoinAmount = coinAmount;
         ProduceSeconds = produceSeconds;
+        SaveGoldPerMinute = saveGoldPerMinute;
+        Description = description;
         return true;
     }
 

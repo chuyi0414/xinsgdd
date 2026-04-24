@@ -20,6 +20,13 @@ public sealed class IncubatorEntityLogic : EntityLogic
     private SpriteRenderer _spriteRenderer;
 
     /// <summary>
+    /// 宠物孵化出生挂点。
+    /// 初始状态由 Inspector 手动拖入 IncubatorEntity prefab 内的 PetGenericPoint 节点。
+    /// </summary>
+    [SerializeField]
+    private Transform _petGenericPoint;
+
+    /// <summary>
     /// 孵化器 prefab 上配置的默认颜色。
     /// 这里必须缓存下来，避免实体复用后颜色被运行时状态污染。
     /// </summary>
@@ -143,6 +150,24 @@ public sealed class IncubatorEntityLogic : EntityLogic
     public void SetWorldPosition(Vector3 worldPosition)
     {
         CachedTransform.position = worldPosition;
+    }
+
+    /// <summary>
+    /// 获取宠物孵化出生挂点的世界坐标。
+    /// </summary>
+    /// <param name="worldPosition">命中 PetGenericPoint 时输出该挂点的世界坐标。</param>
+    /// <returns>是否成功获取到有效的宠物出生挂点。</returns>
+    public bool TryGetPetGenericWorldPosition(out Vector3 worldPosition)
+    {
+        CacheReferences();
+        if (_petGenericPoint != null)
+        {
+            worldPosition = _petGenericPoint.position;
+            return true;
+        }
+
+        worldPosition = Vector3.zero;
+        return false;
     }
 
     /// <summary>
