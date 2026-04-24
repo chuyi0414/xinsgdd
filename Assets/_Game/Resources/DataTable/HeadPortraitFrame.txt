@@ -1,0 +1,16 @@
+#Id	Code	Name	IconPath	IsDefaultUnlocked	AcquireType	AcquireParam	AcquireDesc
+#唯一编号	机器码	显示名称	图标资源路径	是否默认解锁	获取类型(gold/other)	获取参数(金币价格等)	获取描述
+1	head_portrait_frame_001	初心之证	Arts/ProfilePictureFrame/UI_Touxiangkuang_001	true	other	0	
+2	head_portrait_frame_002	萌趣小猫	Arts/ProfilePictureFrame/UI_Touxiangkuang_002	false	gold	1000	1000金币
+3	head_portrait_frame_003	喵爪气球	Arts/ProfilePictureFrame/UI_Touxiangkuang_003	false	gold	1000	1000金币
+4	head_portrait_frame_004	圣诞颂歌	Arts/ProfilePictureFrame/UI_Touxiangkuang_004	false	gold	1000	1000金币
+5	head_portrait_frame_005	捣蛋幽灵	Arts/ProfilePictureFrame/UI_Touxiangkuang_005	false	gold	1000	1000金币
+6	head_portrait_frame_006	多多兽的馈赠	Arts/ProfilePictureFrame/UI_Touxiangkuang_006	false	gold	1000	1000金币
+7	head_portrait_frame_007	快乐青蛙	Arts/ProfilePictureFrame/UI_Touxiangkuang_007	false	gold	1000	1000金币
+8	head_portrait_frame_008	破壳小鸡	Arts/ProfilePictureFrame/UI_Touxiangkuang_008	false	gold	1000	1000金币
+9	head_portrait_frame_101	冰晶天马	Arts/ProfilePictureFrame/UI_Touxiangkuang_101	false	gold	1000	1000金币
+10	head_portrait_frame_102	幸运四叶草	Arts/ProfilePictureFrame/UI_Touxiangkuang_102	false	gold	1000	1000金币
+11	head_portrait_frame_103	冰雪卫士	Arts/ProfilePictureFrame/UI_Touxiangkuang_103	false	gold	1000	1000金币
+12	head_portrait_frame_104	鲨鸭鲨鸭	Arts/ProfilePictureFrame/UI_Touxiangkuang_104	false	gold	1000	1000金币
+13	head_portrait_frame_105	远古化石	Arts/ProfilePictureFrame/UI_Touxiangkuang_105	false	gold	1000	1000金币
+14	head_portrait_frame_106	萝卜小兔	Arts/ProfilePictureFrame/UI_Touxiangkuang_106	false	gold	1000	1000金币

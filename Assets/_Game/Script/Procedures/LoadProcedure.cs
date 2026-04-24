@@ -28,7 +28,7 @@ public class LoadProcedure : ProcedureBase
     {
         SubscribeDataTableStateEvents();
         SubscribeAssetPreloadEvents();
-        _loadUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.LoadUIForm, UIFormDefine.MainGroup);
+        _loadUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.LoadUIForm, UIFormDefine.BJGroup);
         GameEntry.DataTables?.BeginLoadRequiredDataTables();
         GameEntry.GameAssets?.BeginPreloadRequiredAssets();
 

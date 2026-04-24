@@ -74,6 +74,22 @@ public sealed class GameAssetModule
         /// 用于等待区每个槽位的分数字图片渲染。
         /// </summary>
         ScoreDigitSmallSprite = 11,
+
+        /// <summary>
+        /// 头像图标精灵资源。
+        /// </summary>
+        HeadPortraitSprite = 12,
+
+        /// <summary>
+        /// 头像框图标精灵资源。
+        /// </summary>
+        HeadPortraitFrameSprite = 13,
+
+        /// <summary>
+        /// 建筑图片精灵资源。
+        /// 包含升级界面指示器精灵与主界面实体精灵。
+        /// </summary>
+        ArchitectureSprite = 14,
     }
 
     /// <summary>
@@ -188,6 +204,22 @@ public sealed class GameAssetModule
     private readonly Dictionary<int, Sprite> _scoreDigitSmallSpritesByDigit = new Dictionary<int, Sprite>(10);
 
     /// <summary>
+    /// 已缓存的头像图标，按 IconPath 索引。
+    /// </summary>
+    private readonly Dictionary<string, Sprite> _headPortraitSpritesByPath = new Dictionary<string, Sprite>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 已缓存的头像框图标，按 IconPath 索引。
+    /// </summary>
+    private readonly Dictionary<string, Sprite> _headPortraitFrameSpritesByPath = new Dictionary<string, Sprite>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 已缓存的建筑精灵，按资源路径索引。
+    /// 升级界面指示器与主界面实体都复用这一份缓存。
+    /// </summary>
+    private readonly Dictionary<string, Sprite> _architectureSpritesByPath = new Dictionary<string, Sprite>(StringComparer.Ordinal);
+
+    /// <summary>
     /// 每个 SkeletonData 路径对应的动画校验信息集合。
     /// </summary>
     private readonly Dictionary<string, List<PetSkeletonValidationInfo>> _petValidationInfosByPath = new Dictionary<string, List<PetSkeletonValidationInfo>>(StringComparer.Ordinal);
@@ -246,6 +278,21 @@ public sealed class GameAssetModule
     /// 当前仍在加载中的小尺寸分数数字精灵路径集合（Score/1 套图）。
     /// </summary>
     private readonly HashSet<string> _loadingScoreDigitSmallSpritePaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 当前仍在加载中的头像图标路径集合。
+    /// </summary>
+    private readonly HashSet<string> _loadingHeadPortraitAssetPaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 当前仍在加载中的头像框图标路径集合。
+    /// </summary>
+    private readonly HashSet<string> _loadingHeadPortraitFrameAssetPaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 当前仍在加载中的建筑精灵路径集合。
+    /// </summary>
+    private readonly HashSet<string> _loadingArchitectureSpritePaths = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// 统一复用的资源加载回调函数集。
@@ -308,6 +355,21 @@ public sealed class GameAssetModule
     private int _pendingScoreDigitSmallSpriteCount;
 
     /// <summary>
+    /// 当前待完成的头像图标加载数量。
+    /// </summary>
+    private int _pendingHeadPortraitAssetCount;
+
+    /// <summary>
+    /// 当前待完成的头像框图标加载数量。
+    /// </summary>
+    private int _pendingHeadPortraitFrameAssetCount;
+
+    /// <summary>
+    /// 当前待完成的建筑精灵加载数量。
+    /// </summary>
+    private int _pendingArchitectureSpriteCount;
+
+    /// <summary>
     /// 是否已经发起过蛋图标预加载。
     /// </summary>
     private bool _eggPreloadRequested;
@@ -363,6 +425,21 @@ public sealed class GameAssetModule
     private bool _scoreDigitSmallSpritePreloadRequested;
 
     /// <summary>
+    /// 是否已经发起过头像图标预加载。
+    /// </summary>
+    private bool _headPortraitPreloadRequested;
+
+    /// <summary>
+    /// 是否已经发起过头像框图标预加载。
+    /// </summary>
+    private bool _headPortraitFramePreloadRequested;
+
+    /// <summary>
+    /// 是否已经发起过建筑精灵预加载。
+    /// </summary>
+    private bool _architectureSpritePreloadRequested;
+
+    /// <summary>
     /// 蛋图标预加载是否已经完成。
     /// </summary>
     private bool _eggPreloadCompleted;
@@ -416,6 +493,21 @@ public sealed class GameAssetModule
     /// 小尺寸分数数字精灵预加载是否已经完成（Score/1 套图）。
     /// </summary>
     private bool _scoreDigitSmallSpritePreloadCompleted;
+
+    /// <summary>
+    /// 头像图标预加载是否已经完成。
+    /// </summary>
+    private bool _headPortraitPreloadCompleted;
+
+    /// <summary>
+    /// 头像框图标预加载是否已经完成。
+    /// </summary>
+    private bool _headPortraitFramePreloadCompleted;
+
+    /// <summary>
+    /// 建筑精灵预加载是否已经完成。
+    /// </summary>
+    private bool _architectureSpritePreloadCompleted;
 
     /// <summary>
     /// 已预热缓存的宠物实体预制体。
@@ -479,7 +571,10 @@ public sealed class GameAssetModule
         && _goldCoinToastPrefabPreloadCompleted
         && _dailyChallengeLevelTextPreloadCompleted
         && _scoreDigitSpritePreloadCompleted
-        && _scoreDigitSmallSpritePreloadCompleted;
+        && _scoreDigitSmallSpritePreloadCompleted
+        && _headPortraitPreloadCompleted
+        && _headPortraitFramePreloadCompleted
+        && _architectureSpritePreloadCompleted;
 
     /// <summary>
     /// 当前是否已经出现预加载失败。
@@ -558,6 +653,73 @@ public sealed class GameAssetModule
         {
             BeginPreloadFruitSprites(GameEntry.DataTables.GetAllDataRows<FruitDataRow>());
         }
+
+        if (!_headPortraitPreloadRequested && GameEntry.DataTables.IsAvailable<HeadPortraitDataRow>())
+        {
+            BeginPreloadHeadPortraitSprites(GameEntry.DataTables.GetAllDataRows<HeadPortraitDataRow>());
+        }
+
+        if (!_headPortraitFramePreloadRequested && GameEntry.DataTables.IsAvailable<HeadPortraitFrameDataRow>())
+        {
+            BeginPreloadHeadPortraitFrameSprites(GameEntry.DataTables.GetAllDataRows<HeadPortraitFrameDataRow>());
+        }
+
+        if (!_architectureSpritePreloadRequested && GameEntry.DataTables.IsAvailable<ArchitectureDataRow>())
+        {
+            BeginPreloadArchitectureSprites(GameEntry.DataTables.GetAllDataRows<ArchitectureDataRow>());
+        }
+    }
+
+    /// <summary>
+    /// 获取头像图标缓存。
+    /// </summary>
+    /// <param name="iconPath">头像图标资源路径。</param>
+    /// <param name="sprite">命中的图标资源。</param>
+    /// <returns>是否命中缓存。</returns>
+    public bool TryGetHeadPortraitSprite(string iconPath, out Sprite sprite)
+    {
+        if (string.IsNullOrWhiteSpace(iconPath))
+        {
+            sprite = null;
+            return false;
+        }
+
+        return _headPortraitSpritesByPath.TryGetValue(iconPath, out sprite) && sprite != null;
+    }
+
+    /// <summary>
+    /// 尝试从缓存中获取头像框图标精灵。
+    /// </summary>
+    /// <param name="iconPath">图标资源路径。</param>
+    /// <param name="sprite">命中的精灵资源。</param>
+    /// <returns>是否命中缓存。</returns>
+    public bool TryGetHeadPortraitFrameSprite(string iconPath, out Sprite sprite)
+    {
+        if (string.IsNullOrWhiteSpace(iconPath))
+        {
+            sprite = null;
+            return false;
+        }
+
+        return _headPortraitFrameSpritesByPath.TryGetValue(iconPath, out sprite) && sprite != null;
+    }
+
+    /// <summary>
+    /// 尝试从缓存中获取建筑精灵。
+    /// 升级界面指示器与主界面实体统一按资源路径查询。
+    /// </summary>
+    /// <param name="assetPath">建筑精灵资源路径。</param>
+    /// <param name="sprite">命中的精灵资源。</param>
+    /// <returns>是否命中缓存。</returns>
+    public bool TryGetArchitectureSprite(string assetPath, out Sprite sprite)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath))
+        {
+            sprite = null;
+            return false;
+        }
+
+        return _architectureSpritesByPath.TryGetValue(assetPath, out sprite) && sprite != null;
     }
 
     /// <summary>
@@ -810,6 +972,41 @@ public sealed class GameAssetModule
             }
 
             StartLoadFruitSprite(row);
+        }
+
+        UpdatePreloadCompletionState();
+        NotifyPreloadStateChanged();
+    }
+
+    /// <summary>
+    /// 根据建筑图片配置表批量预加载建筑精灵。
+    /// 指示器精灵与实体精灵统一复用路径缓存，重复路径只会实际加载一次。
+    /// </summary>
+    /// <param name="rows">建筑图片配置表行集合。</param>
+    private void BeginPreloadArchitectureSprites(ArchitectureDataRow[] rows)
+    {
+        _architectureSpritePreloadRequested = true;
+        _architectureSpritePreloadCompleted = false;
+
+        if (rows == null || rows.Length == 0)
+        {
+            RegisterFailure("预加载建筑精灵失败，建筑图片表为空。");
+            UpdatePreloadCompletionState();
+            NotifyPreloadStateChanged();
+            return;
+        }
+
+        for (int i = 0; i < rows.Length; i++)
+        {
+            ArchitectureDataRow row = rows[i];
+            if (row == null)
+            {
+                RegisterFailure("预加载建筑精灵失败，建筑图片表存在空行。");
+                continue;
+            }
+
+            StartLoadArchitectureSprite(row.IndicatorSpritePath);
+            StartLoadArchitectureSprite(row.EntitySpritePath);
         }
 
         UpdatePreloadCompletionState();
@@ -1137,6 +1334,29 @@ public sealed class GameAssetModule
     }
 
     /// <summary>
+    /// 为单条建筑图片路径启动精灵加载。
+    /// 已缓存或已在加载中的路径会直接跳过。
+    /// </summary>
+    /// <param name="assetPath">建筑精灵资源路径。</param>
+    private void StartLoadArchitectureSprite(string assetPath)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath))
+        {
+            return;
+        }
+
+        if (_architectureSpritesByPath.ContainsKey(assetPath) || _loadingArchitectureSpritePaths.Contains(assetPath))
+        {
+            return;
+        }
+
+        if (!TryLoadAsset(assetPath, typeof(Sprite), PreloadAssetKind.ArchitectureSprite))
+        {
+            RegisterFailure(Utility.Text.Format("预加载建筑精灵失败，无法开始加载资源，Path='{0}'。", assetPath));
+        }
+    }
+
+    /// <summary>
     /// 通过 GF 资源管理器启动一次异步加载。
     /// 在编辑器资源模式下走 EditorResourceHelper，正式模式下走运行时 ResourceManager。
     /// </summary>
@@ -1213,6 +1433,11 @@ public sealed class GameAssetModule
             case PreloadAssetKind.ScoreDigitSprite:
                 _loadingScoreDigitSpritePaths.Add(assetPath);
                 _pendingScoreDigitSpriteCount++;
+                break;
+
+            case PreloadAssetKind.ArchitectureSprite:
+                _loadingArchitectureSpritePaths.Add(assetPath);
+                _pendingArchitectureSpriteCount++;
                 break;
         }
 
@@ -1295,10 +1520,28 @@ public sealed class GameAssetModule
                 HandleScoreDigitSpriteLoaded(loadInfo.ContextCode, asset as Sprite);
                 break;
 
+            case PreloadAssetKind.ArchitectureSprite:
+                _loadingArchitectureSpritePaths.Remove(loadInfo.AssetPath);
+                _pendingArchitectureSpriteCount = Mathf.Max(0, _pendingArchitectureSpriteCount - 1);
+                HandleArchitectureSpriteLoaded(loadInfo.AssetPath, asset as Sprite);
+                break;
+
             case PreloadAssetKind.ScoreDigitSmallSprite:
                 _loadingScoreDigitSmallSpritePaths.Remove(loadInfo.AssetPath);
                 _pendingScoreDigitSmallSpriteCount = Mathf.Max(0, _pendingScoreDigitSmallSpriteCount - 1);
                 HandleScoreDigitSmallSpriteLoaded(loadInfo.ContextCode, asset as Sprite);
+                break;
+
+            case PreloadAssetKind.HeadPortraitSprite:
+                _loadingHeadPortraitAssetPaths.Remove(loadInfo.AssetPath);
+                _pendingHeadPortraitAssetCount = Mathf.Max(0, _pendingHeadPortraitAssetCount - 1);
+                HandleHeadPortraitSpriteLoaded(loadInfo.AssetPath, asset as Sprite);
+                break;
+
+            case PreloadAssetKind.HeadPortraitFrameSprite:
+                _loadingHeadPortraitFrameAssetPaths.Remove(loadInfo.AssetPath);
+                _pendingHeadPortraitFrameAssetCount = Mathf.Max(0, _pendingHeadPortraitFrameAssetCount - 1);
+                HandleHeadPortraitFrameSpriteLoaded(loadInfo.AssetPath, asset as Sprite);
                 break;
         }
 
@@ -1384,15 +1627,164 @@ public sealed class GameAssetModule
             _pendingScoreDigitSpriteCount = Mathf.Max(0, _pendingScoreDigitSpriteCount - 1);
             RegisterFailure(Utility.Text.Format("分数数字精灵预加载失败，Digit='{0}'，Path='{1}'，Status='{2}'，Error='{3}'。", loadInfo.ContextCode, loadInfo.AssetPath, status, errorMessage));
         }
+        else if (loadInfo.AssetKind == PreloadAssetKind.ArchitectureSprite)
+        {
+            _loadingArchitectureSpritePaths.Remove(loadInfo.AssetPath);
+            _pendingArchitectureSpriteCount = Mathf.Max(0, _pendingArchitectureSpriteCount - 1);
+            RegisterFailure(Utility.Text.Format("建筑精灵预加载失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
+        }
         else if (loadInfo.AssetKind == PreloadAssetKind.ScoreDigitSmallSprite)
         {
             _loadingScoreDigitSmallSpritePaths.Remove(loadInfo.AssetPath);
             _pendingScoreDigitSmallSpriteCount = Mathf.Max(0, _pendingScoreDigitSmallSpriteCount - 1);
             RegisterFailure(Utility.Text.Format("小尺寸分数数字精灵预加载失败，Digit='{0}'，Path='{1}'，Status='{2}'，Error='{3}'。", loadInfo.ContextCode, loadInfo.AssetPath, status, errorMessage));
         }
+        else if (loadInfo.AssetKind == PreloadAssetKind.HeadPortraitSprite)
+        {
+            _loadingHeadPortraitAssetPaths.Remove(loadInfo.AssetPath);
+            _pendingHeadPortraitAssetCount = Mathf.Max(0, _pendingHeadPortraitAssetCount - 1);
+            RegisterFailure(Utility.Text.Format("头像图标预加载失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
+        }
+        else if (loadInfo.AssetKind == PreloadAssetKind.HeadPortraitFrameSprite)
+        {
+            _loadingHeadPortraitFrameAssetPaths.Remove(loadInfo.AssetPath);
+            _pendingHeadPortraitFrameAssetCount = Mathf.Max(0, _pendingHeadPortraitFrameAssetCount - 1);
+            RegisterFailure(Utility.Text.Format("头像框图标预加载失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
+        }
 
         UpdatePreloadCompletionState();
         NotifyPreloadStateChanged();
+    }
+
+    /// <summary>
+    /// 根据头像表批量预加载头像图标资源。
+    /// </summary>
+    /// <param name="rows">头像表行集合。</param>
+    private void BeginPreloadHeadPortraitSprites(HeadPortraitDataRow[] rows)
+    {
+        _headPortraitPreloadRequested = true;
+        _headPortraitPreloadCompleted = false;
+
+        if (rows == null || rows.Length == 0)
+        {
+            _headPortraitPreloadCompleted = true;
+            return;
+        }
+
+        for (int i = 0; i < rows.Length; i++)
+        {
+            HeadPortraitDataRow row = rows[i];
+            if (row == null || string.IsNullOrWhiteSpace(row.IconPath))
+            {
+                continue;
+            }
+
+            StartLoadHeadPortraitSprite(row);
+        }
+
+        UpdatePreloadCompletionState();
+    }
+
+    /// <summary>
+    /// 为单条头像表记录启动图标加载。
+    /// 已缓存或已在加载中的路径会直接跳过。
+    /// </summary>
+    /// <param name="row">头像表行。</param>
+    private void StartLoadHeadPortraitSprite(HeadPortraitDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.IconPath))
+        {
+            RegisterFailure("预加载头像图标失败，头像表存在空 IconPath。");
+            return;
+        }
+
+        if (_headPortraitSpritesByPath.ContainsKey(row.IconPath) || _loadingHeadPortraitAssetPaths.Contains(row.IconPath))
+        {
+            return;
+        }
+
+        if (!TryLoadAsset(row.IconPath, typeof(Sprite), PreloadAssetKind.HeadPortraitSprite))
+        {
+            RegisterFailure(Utility.Text.Format("预加载头像图标失败，无法开始加载资源，Code='{0}'，Path='{1}'。", row.Code, row.IconPath));
+        }
+    }
+
+    /// <summary>
+    /// 处理头像图标加载完成。
+    /// </summary>
+    /// <param name="iconPath">头像图标资源路径。</param>
+    /// <param name="sprite">命中的图标资源。</param>
+    private void HandleHeadPortraitSpriteLoaded(string iconPath, Sprite sprite)
+    {
+        if (sprite == null)
+        {
+            RegisterFailure(Utility.Text.Format("头像图标加载失败，资源类型不是 Sprite，Path='{0}'。", iconPath));
+            return;
+        }
+
+        _headPortraitSpritesByPath[iconPath] = sprite;
+    }
+
+    /// <summary>
+    /// 启动头像框图标预加载。
+    /// </summary>
+    /// <param name="rows">头像框表行集合。</param>
+    private void BeginPreloadHeadPortraitFrameSprites(HeadPortraitFrameDataRow[] rows)
+    {
+        _headPortraitFramePreloadRequested = true;
+        _headPortraitFramePreloadCompleted = false;
+
+        if (rows == null || rows.Length == 0)
+        {
+            _headPortraitFramePreloadCompleted = true;
+            return;
+        }
+
+        for (int i = 0; i < rows.Length; i++)
+        {
+            StartLoadHeadPortraitFrameSprite(rows[i]);
+        }
+
+        if (_pendingHeadPortraitFrameAssetCount <= 0)
+        {
+            _headPortraitFramePreloadCompleted = true;
+        }
+    }
+
+    /// <summary>
+    /// 发起单张头像框图标的异步加载。
+    /// </summary>
+    /// <param name="row">头像框数据行。</param>
+    private void StartLoadHeadPortraitFrameSprite(HeadPortraitFrameDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.IconPath))
+        {
+            return;
+        }
+
+        if (_headPortraitFrameSpritesByPath.ContainsKey(row.IconPath) || _loadingHeadPortraitFrameAssetPaths.Contains(row.IconPath))
+        {
+            return;
+        }
+
+        _loadingHeadPortraitFrameAssetPaths.Add(row.IconPath);
+        _pendingHeadPortraitFrameAssetCount++;
+        TryLoadAsset(row.IconPath, typeof(Sprite), PreloadAssetKind.HeadPortraitFrameSprite, row.IconPath);
+    }
+
+    /// <summary>
+    /// 头像框图标加载成功回调。
+    /// </summary>
+    /// <param name="iconPath">图标资源路径。</param>
+    /// <param name="sprite">加载到的精灵资源。</param>
+    private void HandleHeadPortraitFrameSpriteLoaded(string iconPath, Sprite sprite)
+    {
+        if (string.IsNullOrWhiteSpace(iconPath))
+        {
+            return;
+        }
+
+        _headPortraitFrameSpritesByPath[iconPath] = sprite;
     }
 
     /// <summary>
@@ -1454,6 +1846,28 @@ public sealed class GameAssetModule
         {
             _eliminateCardSpritesByName[spriteName] = sprite;
         }
+    }
+
+    /// <summary>
+    /// 处理建筑精灵加载完成。
+    /// </summary>
+    /// <param name="assetPath">建筑精灵资源路径。</param>
+    /// <param name="sprite">命中的精灵资源。</param>
+    private void HandleArchitectureSpriteLoaded(string assetPath, Sprite sprite)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath))
+        {
+            RegisterFailure("建筑精灵加载完成回调失败，资源路径为空。");
+            return;
+        }
+
+        if (sprite == null)
+        {
+            RegisterFailure(Utility.Text.Format("建筑精灵加载失败，资源类型不是 Sprite，Path='{0}'。", assetPath));
+            return;
+        }
+
+        _architectureSpritesByPath[assetPath] = sprite;
     }
 
     /// <summary>
@@ -1748,6 +2162,21 @@ public sealed class GameAssetModule
         if (_scoreDigitSmallSpritePreloadRequested && _pendingScoreDigitSmallSpriteCount <= 0)
         {
             _scoreDigitSmallSpritePreloadCompleted = true;
+        }
+
+        if (_headPortraitPreloadRequested && _pendingHeadPortraitAssetCount <= 0)
+        {
+            _headPortraitPreloadCompleted = true;
+        }
+
+        if (_headPortraitFramePreloadRequested && _pendingHeadPortraitFrameAssetCount <= 0)
+        {
+            _headPortraitFramePreloadCompleted = true;
+        }
+
+        if (_architectureSpritePreloadRequested && _pendingArchitectureSpriteCount <= 0)
+        {
+            _architectureSpritePreloadCompleted = true;
         }
     }
 

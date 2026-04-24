@@ -58,6 +58,18 @@ public partial class MainUIForm : UIFormLogic
     // 每日一关附属 UI：GoTX 根节点。进入每日一关时隐藏，返回中页动画结束后恢复。
     [SerializeField]
     private GameObject _goTX;
+    // 个人设置按钮。
+    // 用户在 Inspector 中自行拖入 GoTX 上的 Button 组件。
+    [SerializeField]
+    private Button _btnPersonalSetting;
+    // 当前选中头像的展示 RawImage。
+    // 用户在 Inspector 中自行拖入 GoTX 上的头像 RawImage 组件。
+    [SerializeField]
+    private RawImage _rawImageAvatar;
+    // 当前选中头像框的展示 Image。
+    // 用户在 Inspector 中自行拖入 GoTX 上的头像框 Image 组件。
+    [SerializeField]
+    private Image _imageAvatarFrame;
     // 每日一关附属 UI：GoJB 根节点。进入每日一关时隐藏，返回中页动画结束后恢复。
     [SerializeField]
     private GameObject _goJB;
@@ -194,6 +206,7 @@ public partial class MainUIForm : UIFormLogic
         InitializeDailyChallengeView();
         InitializeFruitTJView();
         InitializePetTJView();
+        CachePersonalSettingButton();
     }
 
     /// <summary>
@@ -212,6 +225,8 @@ public partial class MainUIForm : UIFormLogic
         OpenProduceView();
         OpenArchitectureView();
         OpenDailyChallengeView();
+        TryFlushPendingPetRewardDrops();
+        RefreshAvatarDisplay();
     }
 
     /// <summary>
@@ -232,6 +247,16 @@ public partial class MainUIForm : UIFormLogic
     }
 
     /// <summary>
+    /// 界面遮挡恢复（如 PersonalSettingUIForm 关闭后）。
+    /// 刷新头像展示，确保与运行时选中状态同步。
+    /// </summary>
+    protected override void OnReveal()
+    {
+        base.OnReveal();
+        RefreshAvatarDisplay();
+    }
+
+    /// <summary>
     /// 每帧更新子视图状态。
     /// </summary>
     protected override void OnUpdate(float elapseSeconds, float realElapseSeconds)
@@ -239,6 +264,7 @@ public partial class MainUIForm : UIFormLogic
         base.OnUpdate(elapseSeconds, realElapseSeconds);
         UpdateHatchView();
         UpdatePetPlacementView();
+        TryFlushPendingPetRewardDrops();
     }
 
 
@@ -287,6 +313,7 @@ public partial class MainUIForm : UIFormLogic
         DestroyDailyChallengeView();
         DestroyFruitTJView();
         DestroyPetTJView();
+        DestroyPersonalSettingButton();
     }
 
     /// <summary>
@@ -738,6 +765,7 @@ public partial class MainUIForm : UIFormLogic
         UpdatePageVisibility();
         UpdateGoYouWanVisibility();
         UpdateDailyChallengeAuxiliaryUiVisibility();
+        UpdatePetRewardUiVisibility();
 
         if (_btnLeft != null)
         {
@@ -801,5 +829,219 @@ public partial class MainUIForm : UIFormLogic
         SetDailyChallengeAuxiliaryUiHidden(true);
         SwitchToPage(MainPageSlot.Below);
         ScheduleDailyChallengeUIFormOpenAfterSwitch();
+    }
+
+    /// <summary>
+    /// 判断当前是否允许直接展示宠物奖励掉落物。
+    /// 只有主界面已经稳定停在中页时，金币/产出物的投影结果才和宠物页一致。
+    /// </summary>
+    /// <returns>true 表示可立即展示；false 表示应先缓存。</returns>
+    private bool CanPresentPetRewardDropsNow()
+    {
+        return _currentPageSlot == MainPageSlot.Center && !_isSwitching;
+    }
+
+    /// <summary>
+    /// 根据分页状态刷新宠物奖励 UI 的显隐。
+    /// 规则非常严格：只有停在 Center 且切页动画完全结束后才显示。
+    /// </summary>
+    private void UpdatePetRewardUiVisibility()
+    {
+        bool isVisible = CanPresentPetRewardDropsNow();
+        UpdateGoldRewardUiVisibility(isVisible);
+        UpdateProduceRewardUiVisibility(isVisible);
+    }
+
+    /// <summary>
+    /// 尝试刷新所有待展示的宠物奖励掉落请求。
+    /// 这里统一作为金币与产出物两条链路的公共入口。
+    /// </summary>
+    private void TryFlushPendingPetRewardDrops()
+    {
+        if (!CanPresentPetRewardDropsNow())
+        {
+            return;
+        }
+
+        FlushPendingGoldDropRequests();
+        FlushPendingProduceDropRequests();
+    }
+
+    /// <summary>
+    /// 基于当前宠物实体位置，构建一条奖励掉落的起点/终点世界坐标。
+    /// 这里必须在奖励事件发生当下就把世界坐标固化下来，
+    /// 否则等玩家返回宠物页时，宠物可能已经移动，掉落位置就会失真。
+    /// </summary>
+    /// <param name="petInstanceId">宠物实例 Id。</param>
+    /// <param name="offsetMinX">终点随机偏移的 X 最小值。</param>
+    /// <param name="offsetMaxX">终点随机偏移的 X 最大值。</param>
+    /// <param name="offsetMinY">终点随机偏移的 Y 最小值。</param>
+    /// <param name="offsetMaxY">终点随机偏移的 Y 最大值。</param>
+    /// <param name="startWorldPos">输出：奖励起点世界坐标。</param>
+    /// <param name="endWorldPos">输出：奖励终点世界坐标。</param>
+    /// <returns>成功构建返回 true；否则返回 false。</returns>
+    private static bool TryBuildPetRewardWorldPositions(
+        int petInstanceId,
+        float offsetMinX,
+        float offsetMaxX,
+        float offsetMinY,
+        float offsetMaxY,
+        out Vector3 startWorldPos,
+        out Vector3 endWorldPos)
+    {
+        startWorldPos = Vector3.zero;
+        endWorldPos = Vector3.zero;
+
+        if (petInstanceId <= 0 || GameEntry.PlayfieldEntities == null)
+        {
+            return false;
+        }
+
+        if (!GameEntry.PlayfieldEntities.TryGetPetEntityLogic(petInstanceId, out PetEntityLogic petEntityLogic)
+            || petEntityLogic == null
+            || petEntityLogic.CachedTransform == null)
+        {
+            return false;
+        }
+
+        startWorldPos = petEntityLogic.CachedTransform.position;
+        float offsetX = UnityEngine.Random.Range(offsetMinX, offsetMaxX);
+        float offsetY = UnityEngine.Random.Range(offsetMinY, offsetMaxY);
+        endWorldPos = startWorldPos + new Vector3(offsetX, offsetY, 0f);
+        return true;
+    }
+
+    /// <summary>
+    /// 缓存个人设置入口按钮。
+    /// 引用由用户在 Inspector 中手动拖入，这里只负责注册监听。
+    /// </summary>
+    private void CachePersonalSettingButton()
+    {
+        if (_btnPersonalSetting == null)
+        {
+            Log.Warning("MainUIForm 缺少个人设置按钮引用，请在 Inspector 中把 GoTX 上的 Button 组件拖入 _btnPersonalSetting。");
+            return;
+        }
+
+        _btnPersonalSetting.onClick.RemoveListener(OnBtnPersonalSettingClicked);
+        _btnPersonalSetting.onClick.AddListener(OnBtnPersonalSettingClicked);
+    }
+
+    /// <summary>
+    /// 清理个人设置入口按钮的点击监听。
+    /// </summary>
+    private void DestroyPersonalSettingButton()
+    {
+        if (_btnPersonalSetting == null)
+        {
+            return;
+        }
+
+        _btnPersonalSetting.onClick.RemoveListener(OnBtnPersonalSettingClicked);
+        _btnPersonalSetting = null;
+    }
+
+    /// <summary>
+    /// GoTX 点击回调。
+    /// 打开个人设置界面 PersonalSettingUIForm。
+    /// </summary>
+    private void OnBtnPersonalSettingClicked()
+    {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+
+        if (GameEntry.UI == null)
+        {
+            Log.Warning("MainUIForm 无法打开个人设置界面，UIComponent 缺失。");
+            return;
+        }
+
+        GameEntry.UI.OpenUIForm(UIFormDefine.PersonalSettingUIForm, UIFormDefine.PopupGroup);
+    }
+
+    /// <summary>
+    /// 刷新当前选中头像的展示图片。
+    /// 从运行时数据读取选中 Code，再从预加载缓存取 Sprite 赋给 RawImage。
+    /// </summary>
+    private void RefreshAvatarDisplay()
+    {
+        if (GameEntry.Fruits == null || GameEntry.GameAssets == null)
+        {
+            return;
+        }
+
+        // ── 头像 ──
+        if (_rawImageAvatar != null)
+        {
+            string selectedCode = GameEntry.Fruits.SelectedHeadPortraitCode;
+
+            if (string.IsNullOrEmpty(selectedCode) && GameEntry.DataTables != null && GameEntry.DataTables.IsAvailable<HeadPortraitDataRow>())
+            {
+                HeadPortraitDataRow[] rows = GameEntry.DataTables.GetAllDataRows<HeadPortraitDataRow>();
+                for (int i = 0; i < rows.Length; i++)
+                {
+                    if (rows[i] != null && rows[i].IsDefaultUnlocked)
+                    {
+                        GameEntry.Fruits.TrySetSelectedHeadPortrait(rows[i].Code);
+                        selectedCode = rows[i].Code;
+                        break;
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(selectedCode))
+            {
+                _rawImageAvatar.texture = null;
+            }
+            else
+            {
+                HeadPortraitDataRow row = GameEntry.DataTables?.GetDataRowByCode<HeadPortraitDataRow>(selectedCode);
+                if (row != null && GameEntry.GameAssets.TryGetHeadPortraitSprite(row.IconPath, out Sprite sprite) && sprite != null)
+                {
+                    _rawImageAvatar.texture = sprite.texture;
+                }
+                else
+                {
+                    _rawImageAvatar.texture = null;
+                }
+            }
+        }
+
+        // ── 头像框 ──
+        if (_imageAvatarFrame != null)
+        {
+            string selectedFrameCode = GameEntry.Fruits.SelectedHeadPortraitFrameCode;
+
+            if (string.IsNullOrEmpty(selectedFrameCode) && GameEntry.DataTables != null && GameEntry.DataTables.IsAvailable<HeadPortraitFrameDataRow>())
+            {
+                HeadPortraitFrameDataRow[] rows = GameEntry.DataTables.GetAllDataRows<HeadPortraitFrameDataRow>();
+                for (int i = 0; i < rows.Length; i++)
+                {
+                    if (rows[i] != null && rows[i].IsDefaultUnlocked)
+                    {
+                        GameEntry.Fruits.TrySetSelectedHeadPortraitFrame(rows[i].Code);
+                        selectedFrameCode = rows[i].Code;
+                        break;
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(selectedFrameCode))
+            {
+                _imageAvatarFrame.sprite = null;
+            }
+            else
+            {
+                HeadPortraitFrameDataRow row = GameEntry.DataTables?.GetDataRowByCode<HeadPortraitFrameDataRow>(selectedFrameCode);
+                if (row != null && GameEntry.GameAssets.TryGetHeadPortraitFrameSprite(row.IconPath, out Sprite sprite) && sprite != null)
+                {
+                    _imageAvatarFrame.sprite = sprite;
+                }
+                else
+                {
+                    _imageAvatarFrame.sprite = null;
+                }
+            }
+        }
     }
 }

@@ -121,16 +121,26 @@ public sealed class DailyChallengeUIForm : UIFormLogic
     {
         // 播放点击音效
         UIInteractionSound.PlayClick();
-        
+
+        // 立即打开战斗加载过渡界面，确保用户点击后立刻看到加载遮罩，
+        // 覆盖后续棋盘生成与流程切换期间的视觉空白。
+        // LoadingUIForm 最少显示 1 秒后自动关闭，此时 CombatUIForm 已打开。
+        if (GameEntry.UI != null)
+        {
+            GameEntry.UI.OpenUIForm(UIFormDefine.LoadingUIForm, UIFormDefine.LoadingGroup);
+        }
+
         MainUIForm mainUIForm = ResolveMainUIForm();
         if (mainUIForm == null)
         {
+            CloseLoadingUIForm();
             WriteFailureText("主界面未打开，无法启动每日一关。");
             return;
         }
 
         if (!mainUIForm.TryStartDailyChallengePreviewFromUIForm(PreviewLevelAssetPath))
         {
+            CloseLoadingUIForm();
             WriteFailureText("关卡加载失败，请检查资源或日志。");
             return;
         }
@@ -182,6 +192,24 @@ public sealed class DailyChallengeUIForm : UIFormLogic
         if (_txtPassingCriteria != null)
         {
             _txtPassingCriteria.text = message;
+        }
+    }
+
+    /// <summary>
+    /// 关闭当前已打开的 LoadingUIForm。
+    /// 棋盘生成失败时调用，避免加载遮罩残留在屏幕上。
+    /// </summary>
+    private static void CloseLoadingUIForm()
+    {
+        if (GameEntry.UI == null)
+        {
+            return;
+        }
+
+        UIForm loadingUI = GameEntry.UI.GetUIForm(UIFormDefine.LoadingUIForm);
+        if (loadingUI != null)
+        {
+            GameEntry.UI.CloseUIForm(loadingUI.SerialId);
         }
     }
 

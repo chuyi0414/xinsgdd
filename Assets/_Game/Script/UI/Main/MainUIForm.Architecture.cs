@@ -111,7 +111,7 @@ public partial class MainUIForm
             return;
         }
 
-        _architectureUpgradeUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.ArchitectureUpgradeUIForm, UIFormDefine.MainGroup);
+        _architectureUpgradeUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.ArchitectureUpgradeUIForm, UIFormDefine.PopupGroup);
     }
 
     /// <summary>

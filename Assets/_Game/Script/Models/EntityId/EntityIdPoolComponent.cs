@@ -1,13 +1,7 @@
 using GameFramework.Event;
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using UnityGameFramework.Runtime;
-
 
 /// <summary>
 /// 实体实例 Id 池组件。
@@ -62,34 +56,25 @@ public sealed class EntityIdPoolComponent : GameFrameworkComponent
     }
 
     /// <summary>
-    /// 订阅实体隐藏完成事件，用于自动回收 Id。
+    /// 每帧检查 Event 组件是否就绪，就绪后立即订阅实体隐藏完成事件。
+    /// 替代旧版 StartCoroutine 轮询方案，避免 Coroutine 带来的 GC 与生命周期耦合问题。
+    /// 订阅成功后自动禁用本帧回调（enabled = false），不再消耗 Update 开销。
     /// </summary>
-    private void Start()
+    private void Update()
     {
-        StartCoroutine(SubscribeWhenReady());
-    }
-
-    /// <summary>
-    /// 等待 Event 组件就绪后再订阅实体隐藏完成事件。
-    /// </summary>
-    private IEnumerator SubscribeWhenReady()
-    {
-        int waitFrames = 0;
-        while (waitFrames < 120)
+        if (_isSubscribed)
         {
-            _eventComponent = GameEntry.Event;
-            if (_eventComponent != null)
-            {
-                _eventComponent.Subscribe(HideEntityCompleteEventArgs.EventId, OnHideEntityComplete);
-                _isSubscribed = true;
-                yield break;
-            }
-
-            waitFrames++;
-            yield return null;
+            enabled = false;
+            return;
         }
 
-        Log.Error("订阅实体隐藏事件失败，Event 组件为空。");
+        _eventComponent = GameEntry.Event;
+        if (_eventComponent != null)
+        {
+            _eventComponent.Subscribe(HideEntityCompleteEventArgs.EventId, OnHideEntityComplete);
+            _isSubscribed = true;
+            enabled = false;
+        }
     }
 
     /// <summary>

@@ -141,7 +141,7 @@ public sealed class IsExitUIForm : UIFormLogic
         }
         else
         {
-            _pendingVictoryFailUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.VictoryFailUIForm, UIFormDefine.MainGroup, _pendingVictoryFailUIData);
+            _pendingVictoryFailUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.VictoryFailUIForm, UIFormDefine.PopupGroup, _pendingVictoryFailUIData);
         }
 
         // 若同步打开成功/失败事件已经在 OpenUIForm 返回前把等待态清掉，

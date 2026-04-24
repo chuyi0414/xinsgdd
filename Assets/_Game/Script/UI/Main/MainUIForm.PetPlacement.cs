@@ -326,7 +326,7 @@ public partial class MainUIForm
             return false;
         }
 
-        int tableCount = GameEntry.PlayfieldEntities?.TableCount ?? PetPlacementModule.DefaultDiningSeatCount;
+        int tableCount = GameEntry.PlayfieldEntities?.TableCount ?? PlayerRuntimeModule.DietArchitectureCountValue;
         if (_diningSeatsRoot.childCount < tableCount)
         {
             Log.Error(
@@ -336,7 +336,7 @@ public partial class MainUIForm
             return false;
         }
 
-        int orchardCount = GameEntry.PlayfieldEntities?.OrchardCount ?? OrchardModule.DefaultOrchardSlotCount;
+        int orchardCount = GameEntry.PlayfieldEntities?.OrchardCount ?? PlayerRuntimeModule.FruiterArchitectureCountValue;
         if (_orchardSlotsRoot.childCount < orchardCount)
         {
             Log.Error(

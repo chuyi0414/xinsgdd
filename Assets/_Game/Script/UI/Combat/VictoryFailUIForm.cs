@@ -116,6 +116,15 @@ public sealed class VictoryFailUIForm : UIFormLogic
     }
 
     /// <summary>
+    /// 关闭时重置再来一局防重入锁，防止窗体回池后残留状态。
+    /// </summary>
+    protected override void OnClose(bool isShutdown, object userData)
+    {
+        _isRechallenging = false;
+        base.OnClose(isShutdown, userData);
+    }
+
+    /// <summary>
     /// 销毁时移除按钮监听。
     /// </summary>
     private void OnDestroy()
@@ -205,18 +214,12 @@ public sealed class VictoryFailUIForm : UIFormLogic
 
     /// <summary>
     /// 获取当前已打开的 CombatUIForm 逻辑对象。
-    /// 用于把“再来一局”请求派发给当前战斗界面。
+    /// 委托给 CombatUIForm.ResolveCurrent() 统一入口。
     /// </summary>
     /// <returns>当前 CombatUIForm 逻辑对象；不存在时返回 null。</returns>
     private static CombatUIForm ResolveCombatUIForm()
     {
-        if (GameEntry.UI == null)
-        {
-            return null;
-        }
-
-        UIForm combatUI = GameEntry.UI.GetUIForm(UIFormDefine.CombatUIForm);
-        return combatUI != null ? combatUI.Logic as CombatUIForm : null;
+        return CombatUIForm.ResolveCurrent();
     }
 
     /// <summary>

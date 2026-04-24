@@ -28,6 +28,14 @@ public sealed class EliminateRulesUIForm : UIFormLogic
     private Transform _rulesPanel;
 
     /// <summary>
+    /// 背景遮罩节点（BJ）。
+    /// 关闭动画播放时先隐藏 BJ，避免面板缩小过程中露出背景边缘瑕疵。
+    /// 由用户在 Inspector 中手动拖入。
+    /// </summary>
+    [SerializeField]
+    private GameObject _bj;
+
+    /// <summary>
     /// 关闭动画缩放目标值。面板缩小到该比例后消失。
     /// </summary>
     private const float CloseTargetScale = 0.1f;
@@ -108,6 +116,7 @@ public sealed class EliminateRulesUIForm : UIFormLogic
     {
         KillCloseSequence();
         ResetRulesPanelState();
+        RestoreBjVisible();
         _targetTransform = null;
         _onClosedCallback = null;
         base.OnClose(isShutdown, userData);
@@ -164,6 +173,18 @@ public sealed class EliminateRulesUIForm : UIFormLogic
         if (_hasCachedInitialLocalPosition)
         {
             _rulesPanel.localPosition = _rulesPanelInitialLocalPosition;
+        }
+    }
+
+    /// <summary>
+    /// 恢复 BJ 背景遮罩可见。
+    /// 在 OnClose 时调用，确保下次打开时 BJ 不会残留隐藏状态。
+    /// </summary>
+    private void RestoreBjVisible()
+    {
+        if (_bj != null)
+        {
+            _bj.SetActive(true);
         }
     }
 
@@ -236,6 +257,13 @@ public sealed class EliminateRulesUIForm : UIFormLogic
 
         // 先 Kill 上一轮残留动画，防止叠加
         KillCloseSequence();
+
+        // 关闭动画开始前立即隐藏背景遮罩，
+        // 避免面板缩小过程中 BJ 仍然可见导致视觉瑕疵。
+        if (_bj != null)
+        {
+            _bj.SetActive(false);
+        }
 
         // 延迟读取目标 Transform 的世界坐标，确保布局已完成时才取值
         Vector3 targetWorldPos = _targetTransform != null

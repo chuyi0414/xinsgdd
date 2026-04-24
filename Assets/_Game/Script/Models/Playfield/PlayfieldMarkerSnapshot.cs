@@ -40,6 +40,7 @@ public sealed class PlayfieldMarkerSnapshot
 
     /// <summary>
     /// 当前快照是否满足场地区固定数量要求。
+    /// 使用总槽位数（包含未解锁）验证，确保所有槽位都有对应的世界坐标。
     /// </summary>
     public bool IsValid =>
         HatchSlotWorldPositions != null
@@ -47,9 +48,9 @@ public sealed class PlayfieldMarkerSnapshot
         && QueueWorldPositions != null
         && QueueWorldPositions.Length == PlayfieldEntityModule.QueueSlotCountValue
         && TableWorldPositions != null
-        && TableWorldPositions.Length == (GameEntry.Fruits?.DiningSeatCount ?? PetPlacementModule.DefaultDiningSeatCount)
+        && TableWorldPositions.Length == (GameEntry.Fruits?.TotalDiningSeatCount ?? PlayerRuntimeModule.DietArchitectureCountValue)
         && OrchardWorldPositions != null
-        && OrchardWorldPositions.Length == (GameEntry.Fruits?.OrchardSlotCount ?? OrchardModule.DefaultOrchardSlotCount);
+        && OrchardWorldPositions.Length == (GameEntry.Fruits?.TotalOrchardSlotCount ?? PlayerRuntimeModule.FruiterArchitectureCountValue);
 
     /// <summary>
     /// 创建一份场地标记点快照。

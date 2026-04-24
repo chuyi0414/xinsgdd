@@ -1,0 +1,11 @@
+#Id	Code	Name	IconPath	IsDefaultUnlocked	AcquireType	AcquireParam	AcquireDesc
+#唯一编号	机器码	显示名称	图标资源路径	是否默认解锁	获取类型(gold/other)	获取参数(金币价格等)	获取描述
+1	head_portrait_001	史莱姆	Arts/HeadPortrait/UI_Touxiang_001	true	gold	0	
+2	head_portrait_002	魔法狐	Arts/HeadPortrait/UI_Touxiang_002	false	gold	1000	1000金币
+3	head_portrait_003	香蕉猴	Arts/HeadPortrait/UI_Touxiang_003	false	gold	1000	1000金币
+4	head_portrait_004	咩咩羊	Arts/HeadPortrait/UI_Touxiang_004	false	gold	1000	1000金币
+5	head_portrait_005	盾盾猪	Arts/HeadPortrait/UI_Touxiang_005	false	gold	1000	1000金币
+6	head_portrait_006	多多兽	Arts/HeadPortrait/UI_Touxiang_006	false	gold	1000	1000金币
+7	head_portrait_007	豚豚鼠	Arts/HeadPortrait/UI_Touxiang_007	false	gold	1000	1000金币
+8	head_portrait_008	蓝小鸭	Arts/HeadPortrait/UI_Touxiang_008	false	gold	1000	1000金币
+9	head_portrait_009	锤锤牛	Arts/HeadPortrait/UI_Touxiang_009	false	gold	1000	1000金币

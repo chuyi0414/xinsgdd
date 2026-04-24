@@ -13,9 +13,19 @@ public partial class GameEntry : MonoBehaviour
     {
         InitBuiltinComponents();
 
-        // 初始化声音系统：预加载全部声音组（UI / BGM / Effect）并播放背景音乐，早于一切业务初始化。
-        UIInteractionSound.InitializeSoundSystem();
-
         InitCustomComponents();
+
+        // 推迟到下一帧执行：确保 SoundComponent.Start() 已经先完成 SoundHelper 的初始化，
+        // 避免 SoundManager.AddSoundAgentHelper() 检测到 m_SoundHelper == null 而抛异常。
+        // Invoke(..., 0f) 会在当前帧 LateUpdate 之后、下一帧之前触发。
+        Invoke(nameof(InitSoundSystem), 0f);
+    }
+
+    /// <summary>
+    /// 延迟初始化声音系统：在 SoundComponent.Start() 设置完 SoundHelper 后执行。
+    /// </summary>
+    private void InitSoundSystem()
+    {
+        UIInteractionSound.InitializeSoundSystem();
     }
 }

@@ -139,7 +139,7 @@ public class MainProcedure : ProcedureBase
             return;
         }
 
-        _newcomerPackageUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.NewcomerPackageUIForm, UIFormDefine.MainGroup);
+        _newcomerPackageUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.NewcomerPackageUIForm, UIFormDefine.PopupGroup);
         if (_newcomerPackageUIFormId > 0)
         {
             s_hasOpenedNewcomerPackageThisSession = true;

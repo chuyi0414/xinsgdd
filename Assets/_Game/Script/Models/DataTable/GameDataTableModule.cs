@@ -10,50 +10,78 @@ using UnityGameFramework.Runtime;
 /// </summary>
 public sealed class GameDataTableModule
 {
-    /// <summary>
-    /// 蛋表资源路径。
-    /// </summary>
-    private static readonly string EggDataTableAssetName = AssetPath.GetDataTable("Egg");
+    // ───────────── 表驱动描述符 ─────────────
 
     /// <summary>
-    /// 宠物表资源路径。
+    /// 数据表描述符：将行类型与资源路径绑定。
+    /// 新增数据表时只需在此数组追加一项，无需再改 IsReady / BeginLoad / 回调分支。
     /// </summary>
-    private static readonly string PetDataTableAssetName = AssetPath.GetDataTable("Pet");
+    private readonly struct DataTableEntry
+    {
+        /// <summary>
+        /// 数据行类型。
+        /// </summary>
+        public readonly Type RowType;
+
+        /// <summary>
+        /// 对应的资源路径。
+        /// </summary>
+        public readonly string AssetName;
+
+        /// <summary>
+        /// 构造一个数据表描述符。
+        /// </summary>
+        public DataTableEntry(Type rowType, string assetName)
+        {
+            RowType = rowType;
+            AssetName = assetName;
+        }
+    }
 
     /// <summary>
-    /// 水果表资源路径。
+    /// 全部必需业务数据表描述符。
+    /// 新增数据表只需在此追加一行即可，IsReady / BeginLoad / 回调会自动覆盖。
     /// </summary>
-    private static readonly string FruitDataTableAssetName = AssetPath.GetDataTable("Fruit");
+    private static readonly DataTableEntry[] RequiredTables =
+    {
+        new DataTableEntry(typeof(EggDataRow), AssetPath.GetDataTable("Egg")),
+        new DataTableEntry(typeof(PetDataRow), AssetPath.GetDataTable("Pet")),
+        new DataTableEntry(typeof(FruitDataRow), AssetPath.GetDataTable("Fruit")),
+        new DataTableEntry(typeof(PetProduceDataRow), AssetPath.GetDataTable("PetProduce")),
+        new DataTableEntry(typeof(GameplayRuleDataRow), AssetPath.GetDataTable("GameplayRule")),
+        new DataTableEntry(typeof(ArchitectureSlotDataRow), AssetPath.GetDataTable("ArchitectureSlot")),
+        new DataTableEntry(typeof(ArchitectureUpgradeDataRow), AssetPath.GetDataTable("ArchitectureUpgrade")),
+        new DataTableEntry(typeof(ArchitectureDataRow), AssetPath.GetDataTable("Architecture")),
+        new DataTableEntry(typeof(DailyChallengeScoreDataRow), AssetPath.GetDataTable("DailyChallengeScore")),
+        new DataTableEntry(typeof(DailyChallengeCostDataRow), AssetPath.GetDataTable("DailyChallengeCost")),
+        new DataTableEntry(typeof(HeadPortraitDataRow), AssetPath.GetDataTable("HeadPortrait")),
+        new DataTableEntry(typeof(HeadPortraitFrameDataRow), AssetPath.GetDataTable("HeadPortraitFrame")),
+    };
 
     /// <summary>
-    /// 宠物产出表资源路径。
+    /// 资源路径到描述符的查找缓存。
+    /// 延迟构建，仅在首次回调时初始化。
     /// </summary>
-    private static readonly string PetProduceDataTableAssetName = AssetPath.GetDataTable("PetProduce");
+    private static Dictionary<string, DataTableEntry> s_entriesByAssetName;
 
     /// <summary>
-    /// 全局玩法规则表资源路径。
+    /// 获取或创建资源路径查找缓存。
     /// </summary>
-    private static readonly string GameplayRuleDataTableAssetName = AssetPath.GetDataTable("GameplayRule");
+    private static Dictionary<string, DataTableEntry> GetEntriesByAssetName()
+    {
+        if (s_entriesByAssetName != null)
+        {
+            return s_entriesByAssetName;
+        }
 
-    /// <summary>
-    /// 建筑槽位配置表资源路径。
-    /// </summary>
-    private static readonly string ArchitectureSlotDataTableAssetName = AssetPath.GetDataTable("ArchitectureSlot");
+        s_entriesByAssetName = new Dictionary<string, DataTableEntry>(RequiredTables.Length, StringComparer.Ordinal);
+        for (int i = 0; i < RequiredTables.Length; i++)
+        {
+            s_entriesByAssetName.Add(RequiredTables[i].AssetName, RequiredTables[i]);
+        }
 
-    /// <summary>
-    /// 建筑升级配置表资源路径。
-    /// </summary>
-    private static readonly string ArchitectureUpgradeDataTableAssetName = AssetPath.GetDataTable("ArchitectureUpgrade");
-
-    /// <summary>
-    /// 每日一关得分配置表资源路径。
-    /// </summary>
-    private static readonly string DailyChallengeScoreDataTableAssetName = AssetPath.GetDataTable("DailyChallengeScore");
-
-    /// <summary>
-    /// 每日一关价格配置表资源路径。
-    /// </summary>
-    private static readonly string DailyChallengeCostDataTableAssetName = AssetPath.GetDataTable("DailyChallengeCost");
+        return s_entriesByAssetName;
+    }
 
     /// <summary>
     /// 已注册的数据表缓存，按行类型索引。
@@ -78,34 +106,37 @@ public sealed class GameDataTableModule
 
     /// <summary>
     /// 必需业务数据表是否全部可用。
+    /// 由 RequiredTables 驱动，新增表后无需手动追加检查。
     /// </summary>
-    public bool IsReady => IsAvailable<EggDataRow>()
-        && IsAvailable<PetDataRow>()
-        && IsAvailable<FruitDataRow>()
-        && IsAvailable<PetProduceDataRow>()
-        && IsAvailable<GameplayRuleDataRow>()
-        && IsAvailable<ArchitectureSlotDataRow>()
-        && IsAvailable<ArchitectureUpgradeDataRow>()
-        && IsAvailable<DailyChallengeScoreDataRow>()
-        && IsAvailable<DailyChallengeCostDataRow>();
+    public bool IsReady
+    {
+        get
+        {
+            for (int i = 0; i < RequiredTables.Length; i++)
+            {
+                if (!_dataTables.ContainsKey(RequiredTables[i].RowType))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
 
     /// <summary>
     /// 启动全部必需业务数据表加载。
     /// 重复调用是安全的，只会补齐尚未开始或尚未注册完成的部分。
+    /// 由 RequiredTables 驱动，新增表后无需手动追加调用。
     /// </summary>
     public void BeginLoadRequiredDataTables()
     {
         EnsureLoadEventSubscription();
 
-        BeginLoadEggDataTable();
-        BeginLoadPetDataTable();
-        BeginLoadFruitDataTable();
-        BeginLoadPetProduceDataTable();
-        BeginLoadGameplayRuleDataTable();
-        BeginLoadArchitectureSlotDataTable();
-        BeginLoadArchitectureUpgradeDataTable();
-        BeginLoadDailyChallengeScoreDataTable();
-        BeginLoadDailyChallengeCostDataTable();
+        for (int i = 0; i < RequiredTables.Length; i++)
+        {
+            BeginLoadCore(RequiredTables[i]);
+        }
 
         NotifyLoadStateChanged();
     }
@@ -279,6 +310,84 @@ public sealed class GameDataTableModule
         return dataTable.GetAllDataRows();
     }
 
+    // ───────────── 每日一关价格查询 ─────────────
+
+    /// <summary>
+    /// 获取默认配置行的每日一关价格数据。
+    /// 内部统一入口，所有价格查询方法都走这里拿行。
+    /// </summary>
+    /// <returns>默认配置行；不可用时返回 null。</returns>
+    private DailyChallengeCostDataRow GetDailyChallengeCostDefaultRow()
+    {
+        if (!IsAvailable<DailyChallengeCostDataRow>())
+        {
+            return null;
+        }
+
+        return GetDataRowByCode<DailyChallengeCostDataRow>(DailyChallengeCostDataRow.DefaultCode);
+    }
+
+    /// <summary>
+    /// 尝试获取复活价格。
+    /// </summary>
+    /// <param name="resurgenceGold">输出的复活价格。</param>
+    /// <returns>true=读取成功且价格合法；false=读取失败或价格非正。</returns>
+    public bool TryGetResurgenceGoldCost(out int resurgenceGold)
+    {
+        resurgenceGold = 0;
+        DailyChallengeCostDataRow row = GetDailyChallengeCostDefaultRow();
+        if (row == null || row.ResurgenceGold <= 0)
+        {
+            return false;
+        }
+
+        resurgenceGold = row.ResurgenceGold;
+        return true;
+    }
+
+    /// <summary>
+    /// 获取复活价格（直接返回值，失败时返回 0）。
+    /// 适用于 UI 文案拼接等不需要 bool 判定的场景。
+    /// </summary>
+    /// <returns>复活价格；读取失败时返回 0。</returns>
+    public int GetResurgenceGoldCost()
+    {
+        return TryGetResurgenceGoldCost(out int gold) ? gold : 0;
+    }
+
+    /// <summary>
+    /// 尝试获取指定道具类型的金币价格。
+    /// </summary>
+    /// <param name="propType">道具类型枚举值（1=Remove, 2=Retrieve, 3=Shuffle）。</param>
+    /// <param name="goldCost">输出的价格。</param>
+    /// <returns>true=读取成功且价格合法；false=读取失败或价格非正。</returns>
+    public bool TryGetPropGoldCost(int propType, out int goldCost)
+    {
+        goldCost = 0;
+        DailyChallengeCostDataRow row = GetDailyChallengeCostDefaultRow();
+        if (row == null)
+        {
+            return false;
+        }
+
+        switch (propType)
+        {
+            case 1: // PropPurchaseUIForm.PropType.Remove
+                goldCost = row.RemoveGold;
+                break;
+            case 2: // PropPurchaseUIForm.PropType.Retrieve
+                goldCost = row.RetrieveGold;
+                break;
+            case 3: // PropPurchaseUIForm.PropType.Shuffle
+                goldCost = row.ShuffleGold;
+                break;
+            default:
+                return false;
+        }
+
+        return goldCost > 0;
+    }
+
     /// <summary>
     /// 清空指定类型的数据表缓存。
     /// </summary>
@@ -322,241 +431,103 @@ public sealed class GameDataTableModule
     }
 
     /// <summary>
-    /// 开始加载蛋系统数据表。
+    /// 表驱动加载入口：根据描述符的 RowType 分发到泛型加载方法。
+    /// ⚠️ 新增数据表时，必须在此 switch 追加一个 case 分支。
     /// </summary>
-    private void BeginLoadEggDataTable()
+    /// <param name="entry">数据表描述符。</param>
+    private void BeginLoadCore(DataTableEntry entry)
     {
-        if (IsAvailable<EggDataRow>())
+        switch (entry.RowType.Name)
         {
-            return;
+            case nameof(EggDataRow): BeginLoadCore<EggDataRow>(entry.AssetName); break;
+            case nameof(PetDataRow): BeginLoadCore<PetDataRow>(entry.AssetName); break;
+            case nameof(FruitDataRow): BeginLoadCore<FruitDataRow>(entry.AssetName); break;
+            case nameof(PetProduceDataRow): BeginLoadCore<PetProduceDataRow>(entry.AssetName); break;
+            case nameof(GameplayRuleDataRow): BeginLoadCore<GameplayRuleDataRow>(entry.AssetName); break;
+            case nameof(ArchitectureSlotDataRow): BeginLoadCore<ArchitectureSlotDataRow>(entry.AssetName); break;
+            case nameof(ArchitectureUpgradeDataRow): BeginLoadCore<ArchitectureUpgradeDataRow>(entry.AssetName); break;
+            case nameof(ArchitectureDataRow): BeginLoadCore<ArchitectureDataRow>(entry.AssetName); break;
+            case nameof(DailyChallengeScoreDataRow): BeginLoadCore<DailyChallengeScoreDataRow>(entry.AssetName); break;
+            case nameof(DailyChallengeCostDataRow): BeginLoadCore<DailyChallengeCostDataRow>(entry.AssetName); break;
+            case nameof(HeadPortraitDataRow): BeginLoadCore<HeadPortraitDataRow>(entry.AssetName); break;
+            case nameof(HeadPortraitFrameDataRow): BeginLoadCore<HeadPortraitFrameDataRow>(entry.AssetName); break;
+            default:
+                Log.Error("GameDataTableModule 遇到未识别的 RowType '{0}'，请补充 case 分支。", entry.RowType.Name);
+                break;
         }
-
-        IDataTable<EggDataRow> eggDataTable = EnsureDataTable<EggDataRow>();
-        if (eggDataTable == null)
-        {
-            Log.Error("创建蛋系统数据表失败。");
-            return;
-        }
-
-        if (eggDataTable.Count > 0)
-        {
-            TryRegisterEggDataTable(eggDataTable);
-            return;
-        }
-
-        ((GameFramework.DataTable.DataTableBase)eggDataTable).ReadData(EggDataTableAssetName);
     }
 
     /// <summary>
-    /// 开始加载宠物系统数据表。
+    /// 泛型数据表加载核心。
+    /// 统一处理"已注册 → 跳过"、"已加载未注册 → 注册"、"未加载 → 发起异步读取"三种状态。
     /// </summary>
-    private void BeginLoadPetDataTable()
+    /// <typeparam name="T">数据行类型。</typeparam>
+    /// <param name="assetName">资源路径。</param>
+    private void BeginLoadCore<T>(string assetName) where T : class, IDataRow, new()
     {
-        if (IsAvailable<PetDataRow>())
+        if (IsAvailable<T>())
         {
             return;
         }
 
-        IDataTable<PetDataRow> petDataTable = EnsureDataTable<PetDataRow>();
-        if (petDataTable == null)
+        IDataTable<T> dataTable = EnsureDataTable<T>();
+        if (dataTable == null)
         {
-            Log.Error("创建宠物系统数据表失败。");
+            Log.Error("创建数据表 {0} 失败。", typeof(T).Name);
             return;
         }
 
-        if (petDataTable.Count > 0)
+        if (dataTable.Count > 0)
         {
-            TryRegisterPetDataTable(petDataTable);
+            TryRegisterDispatch(dataTable);
             return;
         }
 
-        ((GameFramework.DataTable.DataTableBase)petDataTable).ReadData(PetDataTableAssetName);
+        ((GameFramework.DataTable.DataTableBase)dataTable).ReadData(assetName);
     }
 
     /// <summary>
-    /// 开始加载水果系统数据表。
+    /// 注册分发：根据行类型调用对应的 TryRegisterXxxDataTable 方法。
+    /// 有自定义校验/预热逻辑的表需要显式 case；其余走 default 直接 Register。
+    /// ⚠️ 新增数据表时，如有自定义注册逻辑，必须在此追加 case；否则 default 自动覆盖。
     /// </summary>
-    private void BeginLoadFruitDataTable()
+    private void TryRegisterDispatch<T>(IDataTable<T> dataTable) where T : class, IDataRow
     {
-        if (IsAvailable<FruitDataRow>())
+        switch (typeof(T).Name)
         {
-            return;
+            case nameof(EggDataRow):
+                TryRegisterEggDataTable((IDataTable<EggDataRow>)(object)dataTable);
+                break;
+            case nameof(PetDataRow):
+                TryRegisterPetDataTable((IDataTable<PetDataRow>)(object)dataTable);
+                break;
+            case nameof(FruitDataRow):
+                TryRegisterFruitDataTable((IDataTable<FruitDataRow>)(object)dataTable);
+                break;
+            case nameof(PetProduceDataRow):
+                TryRegisterPetProduceDataTable((IDataTable<PetProduceDataRow>)(object)dataTable);
+                break;
+            case nameof(GameplayRuleDataRow):
+                TryRegisterGameplayRuleDataTable((IDataTable<GameplayRuleDataRow>)(object)dataTable);
+                break;
+            case nameof(ArchitectureSlotDataRow):
+                TryRegisterArchitectureSlotDataTable((IDataTable<ArchitectureSlotDataRow>)(object)dataTable);
+                break;
+            case nameof(ArchitectureUpgradeDataRow):
+                TryRegisterArchitectureUpgradeDataTable((IDataTable<ArchitectureUpgradeDataRow>)(object)dataTable);
+                break;
+            case nameof(ArchitectureDataRow):
+                TryRegisterArchitectureDataTable((IDataTable<ArchitectureDataRow>)(object)dataTable);
+                break;
+            default:
+                Register(dataTable);
+                break;
         }
-
-        IDataTable<FruitDataRow> fruitDataTable = EnsureDataTable<FruitDataRow>();
-        if (fruitDataTable == null)
-        {
-            Log.Error("创建水果系统数据表失败。");
-            return;
-        }
-
-        if (fruitDataTable.Count > 0)
-        {
-            TryRegisterFruitDataTable(fruitDataTable);
-            return;
-        }
-
-        ((GameFramework.DataTable.DataTableBase)fruitDataTable).ReadData(FruitDataTableAssetName);
-    }
-
-    /// <summary>
-    /// 开始加载宠物产出数据表。
-    /// </summary>
-    private void BeginLoadPetProduceDataTable()
-    {
-        if (IsAvailable<PetProduceDataRow>())
-        {
-            return;
-        }
-
-        IDataTable<PetProduceDataRow> petProduceDataTable = EnsureDataTable<PetProduceDataRow>();
-        if (petProduceDataTable == null)
-        {
-            Log.Error("创建宠物产出数据表失败。");
-            return;
-        }
-
-        if (petProduceDataTable.Count > 0)
-        {
-            TryRegisterPetProduceDataTable(petProduceDataTable);
-            return;
-        }
-
-        ((GameFramework.DataTable.DataTableBase)petProduceDataTable).ReadData(PetProduceDataTableAssetName);
-    }
-
-    /// <summary>
-    /// 开始加载全局玩法规则表。
-    /// </summary>
-    private void BeginLoadGameplayRuleDataTable()
-    {
-        if (IsAvailable<GameplayRuleDataRow>())
-        {
-            return;
-        }
-
-        IDataTable<GameplayRuleDataRow> gameplayRuleDataTable = EnsureDataTable<GameplayRuleDataRow>();
-        if (gameplayRuleDataTable == null)
-        {
-            Log.Error("创建全局玩法规则表失败。");
-            return;
-        }
-
-        if (gameplayRuleDataTable.Count > 0)
-        {
-            TryRegisterGameplayRuleDataTable(gameplayRuleDataTable);
-            return;
-        }
-
-        ((GameFramework.DataTable.DataTableBase)gameplayRuleDataTable).ReadData(GameplayRuleDataTableAssetName);
-    }
-
-    /// <summary>
-    /// 开始加载建筑槽位配置表。
-    /// </summary>
-    private void BeginLoadArchitectureSlotDataTable()
-    {
-        if (IsAvailable<ArchitectureSlotDataRow>())
-        {
-            return;
-        }
-
-        IDataTable<ArchitectureSlotDataRow> architectureSlotDataTable = EnsureDataTable<ArchitectureSlotDataRow>();
-        if (architectureSlotDataTable == null)
-        {
-            Log.Error("创建建筑槽位配置表失败。");
-            return;
-        }
-
-        if (architectureSlotDataTable.Count > 0)
-        {
-            TryRegisterArchitectureSlotDataTable(architectureSlotDataTable);
-            return;
-        }
-
-        ((GameFramework.DataTable.DataTableBase)architectureSlotDataTable).ReadData(ArchitectureSlotDataTableAssetName);
-    }
-
-    /// <summary>
-    /// 开始加载建筑升级配置表。
-    /// </summary>
-    private void BeginLoadArchitectureUpgradeDataTable()
-    {
-        if (IsAvailable<ArchitectureUpgradeDataRow>())
-        {
-            return;
-        }
-
-        IDataTable<ArchitectureUpgradeDataRow> architectureUpgradeDataTable = EnsureDataTable<ArchitectureUpgradeDataRow>();
-        if (architectureUpgradeDataTable == null)
-        {
-            Log.Error("创建建筑升级配置表失败。");
-            return;
-        }
-
-        if (architectureUpgradeDataTable.Count > 0)
-        {
-            TryRegisterArchitectureUpgradeDataTable(architectureUpgradeDataTable);
-            return;
-        }
-
-        ((GameFramework.DataTable.DataTableBase)architectureUpgradeDataTable).ReadData(ArchitectureUpgradeDataTableAssetName);
-    }
-
-    /// <summary>
-    /// 开始加载每日一关得分配置表。
-    /// </summary>
-    private void BeginLoadDailyChallengeScoreDataTable()
-    {
-        if (IsAvailable<DailyChallengeScoreDataRow>())
-        {
-            return;
-        }
-
-        IDataTable<DailyChallengeScoreDataRow> dailyChallengeScoreDataTable = EnsureDataTable<DailyChallengeScoreDataRow>();
-        if (dailyChallengeScoreDataTable == null)
-        {
-            Log.Error("创建每日一关得分配置表失败。");
-            return;
-        }
-
-        if (dailyChallengeScoreDataTable.Count > 0)
-        {
-            TryRegisterDailyChallengeScoreDataTable(dailyChallengeScoreDataTable);
-            return;
-        }
-
-        ((GameFramework.DataTable.DataTableBase)dailyChallengeScoreDataTable).ReadData(DailyChallengeScoreDataTableAssetName);
-    }
-
-    /// <summary>
-    /// 开始加载每日一关价格配置表。
-    /// </summary>
-    private void BeginLoadDailyChallengeCostDataTable()
-    {
-        if (IsAvailable<DailyChallengeCostDataRow>())
-        {
-            return;
-        }
-
-        IDataTable<DailyChallengeCostDataRow> dailyChallengeCostDataTable = EnsureDataTable<DailyChallengeCostDataRow>();
-        if (dailyChallengeCostDataTable == null)
-        {
-            Log.Error("创建每日一关价格配置表失败。");
-            return;
-        }
-
-        if (dailyChallengeCostDataTable.Count > 0)
-        {
-            TryRegisterDailyChallengeCostDataTable(dailyChallengeCostDataTable);
-            return;
-        }
-
-        ((GameFramework.DataTable.DataTableBase)dailyChallengeCostDataTable).ReadData(DailyChallengeCostDataTableAssetName);
     }
 
     /// <summary>
     /// 数据表加载成功回调。
+    /// 由 RequiredTables 驱动，新增表后无需手动追加分支。
     /// </summary>
     private void OnLoadDataTableSuccess(object sender, GameEventArgs e)
     {
@@ -566,46 +537,68 @@ public sealed class GameDataTableModule
             return;
         }
 
-        if (string.Equals(ne.DataTableAssetName, EggDataTableAssetName, StringComparison.Ordinal))
+        Dictionary<string, DataTableEntry> entriesByAssetName = GetEntriesByAssetName();
+        if (!entriesByAssetName.TryGetValue(ne.DataTableAssetName, out DataTableEntry entry))
         {
-            TryRegisterEggDataTable(GameEntry.DataTable.GetDataTable<EggDataRow>());
+            return;
         }
-        else if (string.Equals(ne.DataTableAssetName, PetDataTableAssetName, StringComparison.Ordinal))
+
+        DispatchOnLoadSuccess(entry.RowType);
+    }
+
+    /// <summary>
+    /// 加载成功分发：根据行类型调用对应的 TryRegisterXxxDataTable 方法。
+    /// ⚠️ 新增数据表时，如有自定义注册逻辑，必须在此追加 case；否则 default 自动覆盖。
+    /// </summary>
+    private void DispatchOnLoadSuccess(Type rowType)
+    {
+        switch (rowType.Name)
         {
-            TryRegisterPetDataTable(GameEntry.DataTable.GetDataTable<PetDataRow>());
-        }
-        else if (string.Equals(ne.DataTableAssetName, FruitDataTableAssetName, StringComparison.Ordinal))
-        {
-            TryRegisterFruitDataTable(GameEntry.DataTable.GetDataTable<FruitDataRow>());
-        }
-        else if (string.Equals(ne.DataTableAssetName, PetProduceDataTableAssetName, StringComparison.Ordinal))
-        {
-            TryRegisterPetProduceDataTable(GameEntry.DataTable.GetDataTable<PetProduceDataRow>());
-        }
-        else if (string.Equals(ne.DataTableAssetName, GameplayRuleDataTableAssetName, StringComparison.Ordinal))
-        {
-            TryRegisterGameplayRuleDataTable(GameEntry.DataTable.GetDataTable<GameplayRuleDataRow>());
-        }
-        else if (string.Equals(ne.DataTableAssetName, ArchitectureSlotDataTableAssetName, StringComparison.Ordinal))
-        {
-            TryRegisterArchitectureSlotDataTable(GameEntry.DataTable.GetDataTable<ArchitectureSlotDataRow>());
-        }
-        else if (string.Equals(ne.DataTableAssetName, ArchitectureUpgradeDataTableAssetName, StringComparison.Ordinal))
-        {
-            TryRegisterArchitectureUpgradeDataTable(GameEntry.DataTable.GetDataTable<ArchitectureUpgradeDataRow>());
-        }
-        else if (string.Equals(ne.DataTableAssetName, DailyChallengeScoreDataTableAssetName, StringComparison.Ordinal))
-        {
-            TryRegisterDailyChallengeScoreDataTable(GameEntry.DataTable.GetDataTable<DailyChallengeScoreDataRow>());
-        }
-        else if (string.Equals(ne.DataTableAssetName, DailyChallengeCostDataTableAssetName, StringComparison.Ordinal))
-        {
-            TryRegisterDailyChallengeCostDataTable(GameEntry.DataTable.GetDataTable<DailyChallengeCostDataRow>());
+            case nameof(EggDataRow):
+                TryRegisterEggDataTable(GameEntry.DataTable.GetDataTable<EggDataRow>());
+                break;
+            case nameof(PetDataRow):
+                TryRegisterPetDataTable(GameEntry.DataTable.GetDataTable<PetDataRow>());
+                break;
+            case nameof(FruitDataRow):
+                TryRegisterFruitDataTable(GameEntry.DataTable.GetDataTable<FruitDataRow>());
+                break;
+            case nameof(PetProduceDataRow):
+                TryRegisterPetProduceDataTable(GameEntry.DataTable.GetDataTable<PetProduceDataRow>());
+                break;
+            case nameof(GameplayRuleDataRow):
+                TryRegisterGameplayRuleDataTable(GameEntry.DataTable.GetDataTable<GameplayRuleDataRow>());
+                break;
+            case nameof(ArchitectureSlotDataRow):
+                TryRegisterArchitectureSlotDataTable(GameEntry.DataTable.GetDataTable<ArchitectureSlotDataRow>());
+                break;
+            case nameof(ArchitectureUpgradeDataRow):
+                TryRegisterArchitectureUpgradeDataTable(GameEntry.DataTable.GetDataTable<ArchitectureUpgradeDataRow>());
+                break;
+            case nameof(ArchitectureDataRow):
+                TryRegisterArchitectureDataTable(GameEntry.DataTable.GetDataTable<ArchitectureDataRow>());
+                break;
+            case nameof(DailyChallengeScoreDataRow):
+                TryRegisterDailyChallengeScoreDataTable(GameEntry.DataTable.GetDataTable<DailyChallengeScoreDataRow>());
+                break;
+            case nameof(DailyChallengeCostDataRow):
+                TryRegisterDailyChallengeCostDataTable(GameEntry.DataTable.GetDataTable<DailyChallengeCostDataRow>());
+                break;
+            case nameof(HeadPortraitDataRow):
+                TryRegisterHeadPortraitDataTable(GameEntry.DataTable.GetDataTable<HeadPortraitDataRow>());
+                break;
+            case nameof(HeadPortraitFrameDataRow):
+                TryRegisterHeadPortraitFrameDataTable(GameEntry.DataTable.GetDataTable<HeadPortraitFrameDataRow>());
+                break;
+            default:
+                Log.Warning("GameDataTableModule 加载成功回调遇到未识别的 RowType '{0}'。", rowType.Name);
+                break;
         }
     }
 
     /// <summary>
     /// 数据表加载失败回调。
+    /// 由 RequiredTables 驱动，新增表后无需手动追加分支。
     /// </summary>
     private void OnLoadDataTableFailure(object sender, GameEventArgs e)
     {
@@ -615,50 +608,39 @@ public sealed class GameDataTableModule
             return;
         }
 
-        if (string.Equals(ne.DataTableAssetName, EggDataTableAssetName, StringComparison.Ordinal))
+        Dictionary<string, DataTableEntry> entriesByAssetName = GetEntriesByAssetName();
+        if (!entriesByAssetName.TryGetValue(ne.DataTableAssetName, out DataTableEntry entry))
         {
-            Log.Error("加载蛋系统数据表失败：{0}", ne.ErrorMessage);
-            Clear<EggDataRow>();
+            return;
         }
-        else if (string.Equals(ne.DataTableAssetName, PetDataTableAssetName, StringComparison.Ordinal))
+
+        Log.Error("加载数据表 {0} 失败：{1}", entry.RowType.Name, ne.ErrorMessage);
+        DispatchClear(entry.RowType);
+    }
+
+    /// <summary>
+    /// 加载失败分发：根据行类型调用对应的 Clear 方法。
+    /// ⚠️ 新增数据表时，必须在此追加一个 case 分支。
+    /// </summary>
+    private void DispatchClear(Type rowType)
+    {
+        switch (rowType.Name)
         {
-            Log.Error("加载宠物系统数据表失败：{0}", ne.ErrorMessage);
-            Clear<PetDataRow>();
-        }
-        else if (string.Equals(ne.DataTableAssetName, FruitDataTableAssetName, StringComparison.Ordinal))
-        {
-            Log.Error("加载水果系统数据表失败：{0}", ne.ErrorMessage);
-            Clear<FruitDataRow>();
-        }
-        else if (string.Equals(ne.DataTableAssetName, PetProduceDataTableAssetName, StringComparison.Ordinal))
-        {
-            Log.Error("加载宠物产出数据表失败：{0}", ne.ErrorMessage);
-            Clear<PetProduceDataRow>();
-        }
-        else if (string.Equals(ne.DataTableAssetName, GameplayRuleDataTableAssetName, StringComparison.Ordinal))
-        {
-            Log.Error("加载全局玩法规则表失败：{0}", ne.ErrorMessage);
-            Clear<GameplayRuleDataRow>();
-        }
-        else if (string.Equals(ne.DataTableAssetName, ArchitectureSlotDataTableAssetName, StringComparison.Ordinal))
-        {
-            Log.Error("加载建筑槽位配置表失败：{0}", ne.ErrorMessage);
-            Clear<ArchitectureSlotDataRow>();
-        }
-        else if (string.Equals(ne.DataTableAssetName, ArchitectureUpgradeDataTableAssetName, StringComparison.Ordinal))
-        {
-            Log.Error("加载建筑升级配置表失败：{0}", ne.ErrorMessage);
-            Clear<ArchitectureUpgradeDataRow>();
-        }
-        else if (string.Equals(ne.DataTableAssetName, DailyChallengeScoreDataTableAssetName, StringComparison.Ordinal))
-        {
-            Log.Error("加载每日一关得分配置表失败：{0}", ne.ErrorMessage);
-            Clear<DailyChallengeScoreDataRow>();
-        }
-        else if (string.Equals(ne.DataTableAssetName, DailyChallengeCostDataTableAssetName, StringComparison.Ordinal))
-        {
-            Log.Error("加载每日一关价格配置表失败：{0}", ne.ErrorMessage);
-            Clear<DailyChallengeCostDataRow>();
+            case nameof(EggDataRow): Clear<EggDataRow>(); break;
+            case nameof(PetDataRow): Clear<PetDataRow>(); break;
+            case nameof(FruitDataRow): Clear<FruitDataRow>(); break;
+            case nameof(PetProduceDataRow): Clear<PetProduceDataRow>(); break;
+            case nameof(GameplayRuleDataRow): Clear<GameplayRuleDataRow>(); break;
+            case nameof(ArchitectureSlotDataRow): Clear<ArchitectureSlotDataRow>(); break;
+            case nameof(ArchitectureUpgradeDataRow): Clear<ArchitectureUpgradeDataRow>(); break;
+            case nameof(ArchitectureDataRow): Clear<ArchitectureDataRow>(); break;
+            case nameof(DailyChallengeScoreDataRow): Clear<DailyChallengeScoreDataRow>(); break;
+            case nameof(DailyChallengeCostDataRow): Clear<DailyChallengeCostDataRow>(); break;
+            case nameof(HeadPortraitDataRow): Clear<HeadPortraitDataRow>(); break;
+            case nameof(HeadPortraitFrameDataRow): Clear<HeadPortraitFrameDataRow>(); break;
+            default:
+                Log.Warning("GameDataTableModule 加载失败回调遇到未识别的 RowType '{0}'。", rowType.Name);
+                break;
         }
     }
 
@@ -834,6 +816,26 @@ public sealed class GameDataTableModule
     }
 
     /// <summary>
+    /// 注册建筑图片配置表到通用模块。
+    /// </summary>
+    private bool TryRegisterArchitectureDataTable(IDataTable<ArchitectureDataRow> architectureDataTable)
+    {
+        if (!ValidateArchitectureDataRows(architectureDataTable))
+        {
+            Clear<ArchitectureDataRow>();
+            return false;
+        }
+
+        if (!Register(architectureDataTable))
+        {
+            Log.Error("建筑图片配置表注册失败。");
+            return false;
+        }
+
+        return TryWarmupPlayerRuntimeState();
+    }
+
+    /// <summary>
     /// 注册每日一关得分配置表到通用模块。
     /// </summary>
     private bool TryRegisterDailyChallengeScoreDataTable(IDataTable<DailyChallengeScoreDataRow> dailyChallengeScoreDataTable)
@@ -855,6 +857,34 @@ public sealed class GameDataTableModule
         if (!Register(dailyChallengeCostDataTable))
         {
             Log.Error("每日一关价格配置表注册失败。");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 注册头像配置表到通用模块。
+    /// </summary>
+    private bool TryRegisterHeadPortraitDataTable(IDataTable<HeadPortraitDataRow> headPortraitDataTable)
+    {
+        if (!Register(headPortraitDataTable))
+        {
+            Log.Error("头像配置表注册失败。");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 注册头像框配置表到通用模块。
+    /// </summary>
+    private bool TryRegisterHeadPortraitFrameDataTable(IDataTable<HeadPortraitFrameDataRow> headPortraitFrameDataTable)
+    {
+        if (!Register(headPortraitFrameDataTable))
+        {
+            Log.Error("头像框配置表注册失败。");
             return false;
         }
 
@@ -984,7 +1014,8 @@ public sealed class GameDataTableModule
         return IsAvailable<FruitDataRow>()
             && IsAvailable<GameplayRuleDataRow>()
             && IsAvailable<ArchitectureSlotDataRow>()
-            && IsAvailable<ArchitectureUpgradeDataRow>();
+            && IsAvailable<ArchitectureUpgradeDataRow>()
+            && IsAvailable<ArchitectureDataRow>();
     }
 
     /// <summary>
@@ -1219,6 +1250,78 @@ public sealed class GameDataTableModule
                     Log.Error("校验建筑升级配置表失败，类别 '{0}' 缺少 CurrentLevel '{1}' 的升级配置。", category, level);
                     return false;
                 }
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 校验建筑图片配置表。
+    /// 每个建筑类别必须包含 0~MaxLevel 共 (MaxLevel+1) 行配置，且 Level 不重复。
+    /// </summary>
+    private static bool ValidateArchitectureDataRows(IDataTable<ArchitectureDataRow> architectureDataTable)
+    {
+        if (architectureDataTable == null)
+        {
+            Log.Error("校验建筑图片配置表失败，数据表为空。");
+            return false;
+        }
+
+        ArchitectureDataRow[] rows = architectureDataTable.GetAllDataRows();
+        if (rows == null || rows.Length == 0)
+        {
+            Log.Error("校验建筑图片配置表失败，数据表为空。");
+            return false;
+        }
+
+        // 按类别收集已配置的等级集合。
+        Dictionary<PlayerRuntimeModule.ArchitectureCategory, HashSet<int>> levelsByCategory =
+            new Dictionary<PlayerRuntimeModule.ArchitectureCategory, HashSet<int>>();
+
+        for (int i = 0; i < rows.Length; i++)
+        {
+            ArchitectureDataRow row = rows[i];
+            if (row == null)
+            {
+                Log.Error("校验建筑图片配置表失败，存在空行。");
+                return false;
+            }
+
+            if (!levelsByCategory.TryGetValue(row.Category, out HashSet<int> levels))
+            {
+                levels = new HashSet<int>();
+                levelsByCategory.Add(row.Category, levels);
+            }
+
+            if (!levels.Add(row.Level))
+            {
+                Log.Error("校验建筑图片配置表失败，类别 '{0}' 的 Level '{1}' 重复。", row.Category, row.Level);
+                return false;
+            }
+        }
+
+        // 每个类别必须包含 0 级（未解锁占位）。
+        PlayerRuntimeModule.ArchitectureCategory[] categories =
+        {
+            PlayerRuntimeModule.ArchitectureCategory.Hatch,
+            PlayerRuntimeModule.ArchitectureCategory.Diet,
+            PlayerRuntimeModule.ArchitectureCategory.Fruiter,
+        };
+
+        for (int i = 0; i < categories.Length; i++)
+        {
+            PlayerRuntimeModule.ArchitectureCategory category = categories[i];
+            if (!levelsByCategory.TryGetValue(category, out HashSet<int> levels) || levels == null || levels.Count == 0)
+            {
+                Log.Error("校验建筑图片配置表失败，类别 '{0}' 没有任何配置。", category);
+                return false;
+            }
+
+            if (!levels.Contains(0))
+            {
+                Log.Error("校验建筑图片配置表失败，类别 '{0}' 缺少 Level 0（未解锁占位）配置。", category);
+                return false;
             }
         }
 

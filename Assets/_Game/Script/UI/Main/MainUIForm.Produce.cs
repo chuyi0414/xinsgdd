@@ -9,6 +9,28 @@ using UnityGameFramework.Runtime;
 public partial class MainUIForm
 {
     /// <summary>
+    /// 待展示的产出物掉落请求。
+    /// 当主界面不在宠物页时，先缓存世界坐标，等回到中页再统一回放。
+    /// </summary>
+    private struct PendingProduceDropRequest
+    {
+        /// <summary>
+        /// 产出物出生动画起点世界坐标。
+        /// </summary>
+        public Vector3 StartWorldPos;
+
+        /// <summary>
+        /// 产出物出生动画终点世界坐标。
+        /// </summary>
+        public Vector3 EndWorldPos;
+
+        /// <summary>
+        /// 本次产出物 Code。
+        /// </summary>
+        public string ProduceCode;
+    }
+
+    /// <summary>
     /// 产出物掉落容器根节点名称。
     /// 若预制体未提前放置该节点，则运行时在 BJ 页面根节点下动态创建。
     /// </summary>
@@ -40,6 +62,12 @@ public partial class MainUIForm
     private RectTransform _produceDropRoot;
 
     /// <summary>
+    /// 产出物奖励层的 CanvasGroup。
+    /// 用来在翻页前后统一隐藏/显示整层产出物，而不是回收现有按钮。
+    /// </summary>
+    private CanvasGroup _produceDropCanvasGroup;
+
+    /// <summary>
     /// 当前场上存活的产出物按钮列表。
     /// </summary>
     private readonly List<OutputProduceItem> _activeProduceItems = new List<OutputProduceItem>();
@@ -53,6 +81,11 @@ public partial class MainUIForm
     /// 产出物容器是否由运行时动态创建。
     /// </summary>
     private bool _isRuntimeCreatedProduceDropRoot;
+
+    /// <summary>
+    /// 待展示的产出物掉落请求列表。
+    /// </summary>
+    private readonly List<PendingProduceDropRequest> _pendingProduceDropRequests = new List<PendingProduceDropRequest>(8);
 
     /// <summary>
     /// 是否已经订阅产出物相关事件。
@@ -83,6 +116,7 @@ public partial class MainUIForm
     private void OpenProduceView()
     {
         EnsureProduceDropRoot();
+        UpdateProduceRewardUiVisibility(CanPresentPetRewardDropsNow());
     }
 
     /// <summary>
@@ -91,6 +125,7 @@ public partial class MainUIForm
     private void CloseProduceView()
     {
         ReleaseAllActiveProduceItems();
+        ClearPendingProduceDropRequests();
     }
 
     /// <summary>
@@ -100,6 +135,8 @@ public partial class MainUIForm
     {
         ReleaseProduceEventSubscription();
         DestroyAllProduceItems();
+        ClearPendingProduceDropRequests();
+        _produceDropCanvasGroup = null;
         _produceDropRoot = null;
     }
 
@@ -155,47 +192,27 @@ public partial class MainUIForm
     /// <param name="produceCode">产出物 Code。</param>
     private void OnProduceDropRequested(int petInstanceId, string produceCode)
     {
-        if (string.IsNullOrWhiteSpace(produceCode) || GameEntry.PlayfieldEntities == null)
+        if (string.IsNullOrWhiteSpace(produceCode))
         {
             return;
         }
 
-        if (!GameEntry.PlayfieldEntities.TryGetPetEntityLogic(petInstanceId, out PetEntityLogic petEntityLogic)
-            || petEntityLogic == null)
+        if (!TryBuildPetRewardWorldPositions(
+                petInstanceId,
+                ProduceOffsetMinX,
+                ProduceOffsetMaxX,
+                ProduceOffsetMinY,
+                ProduceOffsetMaxY,
+                out Vector3 startWorldPos,
+                out Vector3 endWorldPos))
         {
             return;
         }
 
-        Camera worldCamera = GetPlayfieldWorldCamera();
-        if (worldCamera == null)
+        if (!CanPresentPetRewardDropsNow() || !TryPresentProduceDrop(startWorldPos, endWorldPos, produceCode))
         {
-            return;
+            EnqueuePendingProduceDropRequest(startWorldPos, endWorldPos, produceCode);
         }
-
-        Vector3 petWorldPos = petEntityLogic.CachedTransform.position;
-        float offsetX = UnityEngine.Random.Range(ProduceOffsetMinX, ProduceOffsetMaxX);
-        float offsetY = UnityEngine.Random.Range(ProduceOffsetMinY, ProduceOffsetMaxY);
-        Vector3 targetWorldPos = petWorldPos + new Vector3(offsetX, offsetY, 0f);
-
-        EnsureProduceDropRoot();
-        if (_produceDropRoot == null)
-        {
-            return;
-        }
-
-        Camera uiCamera = GetProduceUICamera();
-        Vector2 startLocalPos = WorldToProduceLocalPos(petWorldPos, worldCamera, uiCamera);
-        Vector2 endLocalPos = WorldToProduceLocalPos(targetWorldPos, worldCamera, uiCamera);
-
-        OutputProduceItem produceItem = AcquireOutputProduceItem();
-        if (produceItem == null)
-        {
-            return;
-        }
-
-        produceItem.Bind(produceCode, OnOutputProduceItemCollected);
-        produceItem.PlaySpawnAnimation(startLocalPos, endLocalPos);
-        _activeProduceItems.Add(produceItem);
     }
 
     /// <summary>
@@ -250,6 +267,123 @@ public partial class MainUIForm
         return localPoint;
     }
 
+    /// <summary>
+    /// 根据当前分页状态刷新产出物奖励层的显隐。
+    /// 这里只改整层 CanvasGroup，不中断现有产出物按钮的生命周期。
+    /// </summary>
+    /// <param name="isVisible">true 显示；false 隐藏。</param>
+    private void UpdateProduceRewardUiVisibility(bool isVisible)
+    {
+        EnsureProduceDropCanvasGroup();
+        if (_produceDropCanvasGroup == null)
+        {
+            return;
+        }
+
+        float targetAlpha = isVisible ? 1f : 0f;
+        if (!Mathf.Approximately(_produceDropCanvasGroup.alpha, targetAlpha))
+        {
+            _produceDropCanvasGroup.alpha = targetAlpha;
+        }
+
+        _produceDropCanvasGroup.interactable = isVisible;
+        _produceDropCanvasGroup.blocksRaycasts = isVisible;
+    }
+
+    /// <summary>
+    /// 尝试把一条产出物掉落请求真正呈现到当前 UI 上。
+    /// </summary>
+    /// <param name="startWorldPos">产出物起点世界坐标。</param>
+    /// <param name="endWorldPos">产出物终点世界坐标。</param>
+    /// <param name="produceCode">产出物 Code。</param>
+    /// <returns>成功创建返回 true；否则返回 false，调用方应继续保留缓存。</returns>
+    private bool TryPresentProduceDrop(Vector3 startWorldPos, Vector3 endWorldPos, string produceCode)
+    {
+        if (string.IsNullOrWhiteSpace(produceCode))
+        {
+            return true;
+        }
+
+        Camera worldCamera = GetPlayfieldWorldCamera();
+        if (worldCamera == null)
+        {
+            return false;
+        }
+
+        EnsureProduceDropRoot();
+        if (_produceDropRoot == null)
+        {
+            return false;
+        }
+
+        Camera uiCamera = GetProduceUICamera();
+        Vector2 startLocalPos = WorldToProduceLocalPos(startWorldPos, worldCamera, uiCamera);
+        Vector2 endLocalPos = WorldToProduceLocalPos(endWorldPos, worldCamera, uiCamera);
+
+        OutputProduceItem produceItem = AcquireOutputProduceItem();
+        if (produceItem == null)
+        {
+            return false;
+        }
+
+        produceItem.Bind(produceCode, OnOutputProduceItemCollected);
+        produceItem.PlaySpawnAnimation(startLocalPos, endLocalPos);
+        _activeProduceItems.Add(produceItem);
+        return true;
+    }
+
+    /// <summary>
+    /// 缓存一条待展示的产出物掉落请求。
+    /// </summary>
+    /// <param name="startWorldPos">产出物起点世界坐标。</param>
+    /// <param name="endWorldPos">产出物终点世界坐标。</param>
+    /// <param name="produceCode">产出物 Code。</param>
+    private void EnqueuePendingProduceDropRequest(Vector3 startWorldPos, Vector3 endWorldPos, string produceCode)
+    {
+        if (string.IsNullOrWhiteSpace(produceCode))
+        {
+            return;
+        }
+
+        PendingProduceDropRequest pendingRequest = new PendingProduceDropRequest
+        {
+            StartWorldPos = startWorldPos,
+            EndWorldPos = endWorldPos,
+            ProduceCode = produceCode,
+        };
+        _pendingProduceDropRequests.Add(pendingRequest);
+    }
+
+    /// <summary>
+    /// 回放所有待展示的产出物掉落请求。
+    /// </summary>
+    private void FlushPendingProduceDropRequests()
+    {
+        if (_pendingProduceDropRequests.Count <= 0 || !CanPresentPetRewardDropsNow())
+        {
+            return;
+        }
+
+        for (int i = 0; i < _pendingProduceDropRequests.Count;)
+        {
+            PendingProduceDropRequest pendingRequest = _pendingProduceDropRequests[i];
+            if (!TryPresentProduceDrop(pendingRequest.StartWorldPos, pendingRequest.EndWorldPos, pendingRequest.ProduceCode))
+            {
+                break;
+            }
+
+            _pendingProduceDropRequests.RemoveAt(i);
+        }
+    }
+
+    /// <summary>
+    /// 清空所有待展示的产出物掉落请求。
+    /// </summary>
+    private void ClearPendingProduceDropRequests()
+    {
+        _pendingProduceDropRequests.Clear();
+    }
+
     // ──────────────────────────────────────────────────────────
     //  产出物 UI 容器 & 池化
     // ──────────────────────────────────────────────────────────
@@ -286,6 +420,24 @@ public partial class MainUIForm
 
         _produceDropRoot = rootRectTransform;
         _isRuntimeCreatedProduceDropRoot = true;
+    }
+
+    /// <summary>
+    /// 确保产出物奖励层存在 CanvasGroup，便于翻页前后整层控制显隐。
+    /// </summary>
+    private void EnsureProduceDropCanvasGroup()
+    {
+        EnsureProduceDropRoot();
+        if (_produceDropRoot == null || _produceDropCanvasGroup != null)
+        {
+            return;
+        }
+
+        _produceDropCanvasGroup = _produceDropRoot.GetComponent<CanvasGroup>();
+        if (_produceDropCanvasGroup == null)
+        {
+            _produceDropCanvasGroup = _produceDropRoot.gameObject.AddComponent<CanvasGroup>();
+        }
     }
 
     /// <summary>

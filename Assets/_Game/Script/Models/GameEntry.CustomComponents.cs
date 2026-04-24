@@ -52,6 +52,12 @@ public partial class GameEntry
     public static PlayfieldEntityModule PlayfieldEntities { get; private set; }
 
     /// <summary>
+    /// 广告管理模块。
+    /// 负责激励视频广告等广告能力的生命周期管理与统一入口。
+    /// </summary>
+    public static AdvertisementModule Advertisement { get; private set; }
+
+    /// <summary>
     /// 初始化自定义组件。
     /// 与框架组件保持统一获取方式，方便业务层通过 GameEntry 静态入口访问。
     /// </summary>
@@ -66,10 +72,13 @@ public partial class GameEntry
         PetPlacement = new PetPlacementModule();
         Orchards = new OrchardModule();
         PlayfieldEntities = new PlayfieldEntityModule();
+        Advertisement = new AdvertisementModule();
+        Advertisement.PreloadRewardedVideoAd();
 
         // 从 PlayerRuntimeModule 读取运行时数量，驱动各模块延迟初始化数组
         PetPlacement.Initialize(Fruits.DiningSeatCount);
         Orchards.Initialize(Fruits.OrchardSlotCount);
-        PlayfieldEntities.Initialize(Fruits.DiningSeatCount, Fruits.OrchardSlotCount);
+        // PlayfieldEntities 使用总槽位数初始化，确保未解锁槽位也有实体数组
+        PlayfieldEntities.Initialize(Fruits.TotalDiningSeatCount, Fruits.TotalOrchardSlotCount);
     }
 }

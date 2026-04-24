@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityGameFramework.Runtime;
 using WeChatWASM;
 
 /// <summary>
@@ -421,7 +422,7 @@ public class SafeAreaAdapter : MonoBehaviour
 
             if (logChanges)
             {
-                Debug.Log($"[SafeAreaAdapter] 初始锚点设置 - Min: {_initialAnchorMin}, Max: {_initialAnchorMax} " +
+                Log.Info($"[SafeAreaAdapter] 初始锚点设置 - Min: {_initialAnchorMin}, Max: {_initialAnchorMax} " +
                     $"(左:{initialAnchorMinX:F2} 右:{initialAnchorMaxX:F2} 顶部位置:{topPosition:F2} 底部位置:{bottomPosition:F2})");
             }
         }
@@ -439,7 +440,7 @@ public class SafeAreaAdapter : MonoBehaviour
 
             if (logChanges)
             {
-                Debug.Log($"[SafeAreaAdapter] 重置为初始锚点 - Min: {_initialAnchorMin}, Max: {_initialAnchorMax}");
+                Log.Info($"[SafeAreaAdapter] 重置为初始锚点 - Min: {_initialAnchorMin}, Max: {_initialAnchorMax}");
             }
         }
     }
@@ -652,18 +653,18 @@ public class SafeAreaAdapter : MonoBehaviour
 
         if (logChanges)
         {
-            Debug.Log($"[SafeAreaAdapter] ========== 应用安全区域 ==========");
-            Debug.Log($"  SafeRect: {safeRect}, 屏幕: {screenSize.x}x{screenSize.y}");
-            Debug.Log($"  初始锚点: anchorMin={_initialAnchorMin}, anchorMax={_initialAnchorMax}");
-            Debug.Log($"  最终锚点: anchorMin={anchorMin}, anchorMax={anchorMax}");
-            Debug.Log($"  偏移量: offsetMin={offsetMin}, offsetMax={offsetMax}");
-            Debug.Log($"  应用边: 左={applyLeft}, 右={applyRight}, 上={applyTop}, 下={applyBottom}");
+            Log.Info($"[SafeAreaAdapter] ========== 应用安全区域 ==========");
+            Log.Info($"  SafeRect: {safeRect}, 屏幕: {screenSize.x}x{screenSize.y}");
+            Log.Info($"  初始锚点: anchorMin={_initialAnchorMin}, anchorMax={_initialAnchorMax}");
+            Log.Info($"  最终锚点: anchorMin={anchorMin}, anchorMax={anchorMax}");
+            Log.Info($"  偏移量: offsetMin={offsetMin}, offsetMax={offsetMax}");
+            Log.Info($"  应用边: 左={applyLeft}, 右={applyRight}, 上={applyTop}, 下={applyBottom}");
 
             // 计算实际偏移用于调试
             float debugLeftOffset = screenSize.x > 0 ? Mathf.Clamp01(safeRect.x / screenSize.x) : 0f;
             float debugTopOffset = screenSize.y > 0 ? Mathf.Clamp01((screenSize.y - (safeRect.y + safeRect.height)) / screenSize.y) : 0f;
-            Debug.Log($"  安全区域偏移百分比: 左={debugLeftOffset:F3}, 顶={debugTopOffset:F3}");
-            Debug.Log($"  顶部像素偏移: {screenSize.y - (safeRect.y + safeRect.height)}px");
+            Log.Info($"  安全区域偏移百分比: 左={debugLeftOffset:F3}, 顶={debugTopOffset:F3}");
+            Log.Info($"  顶部像素偏移: {screenSize.y - (safeRect.y + safeRect.height)}px");
         }
     }
 
@@ -723,9 +724,9 @@ public class SafeAreaAdapter : MonoBehaviour
                             // 完整适配模式：确保top至少包含胶囊底部
                             if (logChanges)
                             {
-                                Debug.Log($"[SafeAreaAdapter] <color=green>=========== 完整适配模式 ===========</color>");
-                                Debug.Log($"[SafeAreaAdapter] 屏幕尺寸: {screenSize.x} x {screenSize.y}");
-                                Debug.Log($"[SafeAreaAdapter] safeArea原始值: left={left}, right={right}, top={top}, bottom={bottom}");
+                                Log.Info($"[SafeAreaAdapter] <color=green>=========== 完整适配模式 ===========</color>");
+                                Log.Info($"[SafeAreaAdapter] 屏幕尺寸: {screenSize.x} x {screenSize.y}");
+                                Log.Info($"[SafeAreaAdapter] safeArea原始值: left={left}, right={right}, top={top}, bottom={bottom}");
                             }
 
                             // 获取胶囊信息并修正top值
@@ -738,8 +739,8 @@ public class SafeAreaAdapter : MonoBehaviour
 
                                     if (logChanges)
                                     {
-                                        Debug.Log($"[SafeAreaAdapter] <color=yellow>胶囊位置: left={menuButton.left}, top={menuButton.top}, width={menuButton.width}, height={menuButton.height}</color>");
-                                        Debug.Log($"[SafeAreaAdapter] <color=yellow>胶囊底部: {capsuleBottom}px, safeArea.top: {top}px</color>");
+                                        Log.Info($"[SafeAreaAdapter] <color=yellow>胶囊位置: left={menuButton.left}, top={menuButton.top}, width={menuButton.width}, height={menuButton.height}</color>");
+                                        Log.Info($"[SafeAreaAdapter] <color=yellow>胶囊底部: {capsuleBottom}px, safeArea.top: {top}px</color>");
                                     }
 
                                     // 如果胶囊底部大于safeArea.top，使用胶囊底部
@@ -750,14 +751,14 @@ public class SafeAreaAdapter : MonoBehaviour
 
                                         if (logChanges)
                                         {
-                                            Debug.Log($"[SafeAreaAdapter] <color=cyan>✓ 修正top值: {oldTop}px → {top}px（使用胶囊底部）</color>");
+                                            Log.Info($"[SafeAreaAdapter] <color=cyan>✓ 修正top值: {oldTop}px → {top}px（使用胶囊底部）</color>");
                                         }
                                     }
                                     else
                                     {
                                         if (logChanges)
                                         {
-                                            Debug.Log($"[SafeAreaAdapter] <color=green>✓ safeArea.top 已包含胶囊区域</color>");
+                                            Log.Info($"[SafeAreaAdapter] <color=green>✓ safeArea.top 已包含胶囊区域</color>");
                                         }
                                     }
                                 }
@@ -765,7 +766,7 @@ public class SafeAreaAdapter : MonoBehaviour
                                 {
                                     if (logChanges)
                                     {
-                                        Debug.LogWarning("[SafeAreaAdapter] 无法获取胶囊按钮信息（menuButton为null）");
+                                        Log.Warning("[SafeAreaAdapter] 无法获取胶囊按钮信息（menuButton为null）");
                                     }
                                 }
                             }
@@ -773,7 +774,7 @@ public class SafeAreaAdapter : MonoBehaviour
                             {
                                 if (logChanges)
                                 {
-                                    Debug.LogWarning($"[SafeAreaAdapter] 获取胶囊信息异常: {ex.Message}");
+                                    Log.Warning($"[SafeAreaAdapter] 获取胶囊信息异常: {ex.Message}");
                                 }
                             }
                         }
@@ -800,7 +801,7 @@ public class SafeAreaAdapter : MonoBehaviour
 
                                         if (logChanges)
                                         {
-                                            Debug.Log($"[SafeAreaAdapter] <color=cyan>仅系统安全区域模式</color> - 使用状态栏高度: {statusBarHeight}px (原safeArea.top: {top}px, 胶囊底部: {capsuleBottom}px)");
+                                            Log.Info($"[SafeAreaAdapter] <color=cyan>仅系统安全区域模式</color> - 使用状态栏高度: {statusBarHeight}px (原safeArea.top: {top}px, 胶囊底部: {capsuleBottom}px)");
                                         }
                                     }
                                 }
@@ -809,7 +810,7 @@ public class SafeAreaAdapter : MonoBehaviour
                             {
                                 if (logChanges)
                                 {
-                                    Debug.LogWarning($"[SafeAreaAdapter] 获取胶囊信息失败，使用原始safeArea: {ex.Message}");
+                                    Log.Warning($"[SafeAreaAdapter] 获取胶囊信息失败，使用原始safeArea: {ex.Message}");
                                 }
                             }
                         }
@@ -827,11 +828,11 @@ public class SafeAreaAdapter : MonoBehaviour
                             string strategyDesc = wechatStrategy == WeChatAdaptStrategy.SystemOnly
                                 ? "<color=cyan>仅系统安全区域</color>"
                                 : "<color=green>完整适配（含胶囊）</color>";
-                            Debug.Log($"[SafeAreaAdapter] 使用微信API获取安全区域成功 [{strategyDesc}]");
-                            Debug.Log($"  计算结果: width={width}, height={height}, yFromBottom={yFromBottom}");
-                            Debug.Log($"  最终safeRect: x={safeRect.x}, y={safeRect.y}, width={safeRect.width}, height={safeRect.height}");
-                            Debug.Log($"  顶部偏移量(从屏幕顶部): {top}px");
-                            Debug.Log($"  底部偏移量(从屏幕底部): {screenSize.y - bottom}px");
+                            Log.Info($"[SafeAreaAdapter] 使用微信API获取安全区域成功 [{strategyDesc}]");
+                            Log.Info($"  计算结果: width={width}, height={height}, yFromBottom={yFromBottom}");
+                            Log.Info($"  最终safeRect: x={safeRect.x}, y={safeRect.y}, width={safeRect.width}, height={safeRect.height}");
+                            Log.Info($"  顶部偏移量(从屏幕顶部): {top}px");
+                            Log.Info($"  底部偏移量(从屏幕底部): {screenSize.y - bottom}px");
                         }
                         return true;
                     }
@@ -841,13 +842,13 @@ public class SafeAreaAdapter : MonoBehaviour
             {
                 if (logChanges)
                 {
-                    Debug.LogWarning($"[SafeAreaAdapter] 获取微信安全区域失败，降级使用标准模式: {e.Message}");
+                    Log.Warning($"[SafeAreaAdapter] 获取微信安全区域失败，降级使用标准模式: {e.Message}");
                 }
             }
 #else
                 if (logChanges)
                 {
-                    Debug.LogWarning("[SafeAreaAdapter] 当前平台不支持微信API，降级使用标准模式");
+                    Log.Warning("[SafeAreaAdapter] 当前平台不支持微信API，降级使用标准模式");
                 }
 #endif
         }
@@ -873,7 +874,7 @@ public class SafeAreaAdapter : MonoBehaviour
 
             if (logChanges)
             {
-                Debug.Log($"[SafeAreaAdapter] <color=yellow>编辑器模拟模式</color> - 模拟SafeArea: {unitySafeArea}, 屏幕: {screenSize}");
+                Log.Info($"[SafeAreaAdapter] <color=yellow>编辑器模拟模式</color> - 模拟SafeArea: {unitySafeArea}, 屏幕: {screenSize}");
             }
         }
         else
@@ -896,11 +897,11 @@ public class SafeAreaAdapter : MonoBehaviour
 
             if (hasSafeArea)
             {
-                Debug.Log($"[SafeAreaAdapter] 使用标准模式 Screen.safeArea: {unitySafeArea}, 屏幕: {screenSize}");
+                Log.Info($"[SafeAreaAdapter] 使用标准模式 Screen.safeArea: {unitySafeArea}, 屏幕: {screenSize}");
             }
             else
             {
-                Debug.LogWarning($"[SafeAreaAdapter] 使用标准模式，但Screen.safeArea等于全屏（没有刘海/圆角）\n" +
+                Log.Warning($"[SafeAreaAdapter] 使用标准模式，但Screen.safeArea等于全屏（没有刘海/圆角）\n" +
                                $"SafeArea: {unitySafeArea}, 屏幕: {screenSize}\n" +
                                $"这是正常的，说明当前设备/编辑器没有需要适配的安全区域");
             }

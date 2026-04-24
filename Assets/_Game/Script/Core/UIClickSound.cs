@@ -12,13 +12,13 @@ public static class UIInteractionSound
     /// UI 交互音效所属的声音组名称。
     /// 所有 UI 交互音效统一归入此组，便于后续独立控制音量、静音等。
     /// </summary>
-    private const string SoundGroupName = "UI";
+    public const string SoundGroupName = "UI";
 
     /// <summary>
     /// 背景音乐所属的声音组名称。
     /// 与 UI 音效组分离，便于独立控制 BGM 音量、静音、暂停等。
     /// </summary>
-    private const string BgmSoundGroupName = "BGM";
+    public const string BgmSoundGroupName = "BGM";
 
     /// <summary>
     /// 默认点击音效资源名。
@@ -48,7 +48,7 @@ public static class UIInteractionSound
     /// 特效音效所属的声音组名称。
     /// 与 UI 点击音效、BGM 分离，便于独立控制特效音量、静音等。
     /// </summary>
-    private const string EffectSoundGroupName = "Effect";
+    public const string EffectSoundGroupName = "Effect";
 
     /// <summary>
     /// 消除音效资源名。
@@ -129,6 +129,43 @@ public static class UIInteractionSound
         playSoundParams.Loop = true;
 
         soundComponent.PlaySound(bgmAssetName, BgmSoundGroupName, playSoundParams);
+
+        ApplySavedSoundSettings();
+    }
+
+    /// <summary>
+    /// 应用玩家本地保存的声音开关设置。
+    /// 在 InitializeSoundSystem 之后调用，确保启动时即恢复上次的 BGM / 音效静音状态。
+    /// </summary>
+    private static void ApplySavedSoundSettings()
+    {
+        SoundComponent soundComponent = global::GameEntry.Sound;
+        if (soundComponent == null)
+        {
+            return;
+        }
+
+        // ── 背景音乐 ──
+        bool bgmEnabled = PlayerPrefs.GetInt("Setting_BgmEnabled", 1) != 0;
+        ISoundGroup bgmGroup = soundComponent.GetSoundGroup(BgmSoundGroupName);
+        if (bgmGroup != null)
+        {
+            bgmGroup.Mute = !bgmEnabled;
+        }
+
+        // ── 音效（UI + Effect 两组统一控制） ──
+        bool sfxEnabled = PlayerPrefs.GetInt("Setting_SfxEnabled", 1) != 0;
+        ISoundGroup uiGroup = soundComponent.GetSoundGroup(SoundGroupName);
+        if (uiGroup != null)
+        {
+            uiGroup.Mute = !sfxEnabled;
+        }
+
+        ISoundGroup effectGroup = soundComponent.GetSoundGroup(EffectSoundGroupName);
+        if (effectGroup != null)
+        {
+            effectGroup.Mute = !sfxEnabled;
+        }
     }
 
     /// <summary>

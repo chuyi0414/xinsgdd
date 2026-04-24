@@ -270,7 +270,7 @@ public partial class MainUIForm
             return;
         }
 
-        _purchaseEggsUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.PurchaseEggsUIForm, UIFormDefine.MainGroup);
+        _purchaseEggsUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.PurchaseEggsUIForm, UIFormDefine.PopupGroup);
     }
 
     /// <summary>

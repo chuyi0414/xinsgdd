@@ -26,6 +26,12 @@ public sealed class IncubatorEntityLogic : EntityLogic
     private Color _defaultColor = Color.white;
 
     /// <summary>
+    /// 孵化器 prefab 上配置的默认精灵。
+    /// 未解锁时被替换为 Level 0 占位精灵，解锁后需要恢复。
+    /// </summary>
+    private Sprite _defaultSprite;
+
+    /// <summary>
     /// 是否已经成功缓存过 prefab 默认颜色。
     /// 只在第一次拿到 SpriteRenderer 时记录，后续始终恢复这一份原始颜色。
     /// </summary>
@@ -53,6 +59,7 @@ public sealed class IncubatorEntityLogic : EntityLogic
 
     /// <summary>
     /// 应用孵化器实体显示数据。
+    /// 未解锁时从配置表加载 Level 0 精灵替换正常外观。
     /// </summary>
     /// <param name="entityData">孵化器显示数据。</param>
     public void ApplyData(IncubatorEntityData entityData)
@@ -64,6 +71,69 @@ public sealed class IncubatorEntityLogic : EntityLogic
 
         CacheReferences();
         SetWorldPosition(entityData.WorldPosition);
+
+        // 未解锁时替换为 Level 0 占位精灵；已解锁时根据等级加载对应精灵。
+        if (!entityData.IsUnlocked)
+        {
+            ApplyLockedPlaceholderSprite(PlayerRuntimeModule.ArchitectureCategory.Hatch);
+        }
+        else
+        {
+            ApplyLevelSprite(PlayerRuntimeModule.ArchitectureCategory.Hatch, entityData.Level);
+        }
+    }
+
+    /// <summary>
+    /// 从 GameAssetModule 预加载缓存中读取 Level 0 的实体精灵并赋给 SpriteRenderer。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    private void ApplyLockedPlaceholderSprite(PlayerRuntimeModule.ArchitectureCategory category)
+    {
+        if (_spriteRenderer == null || GameEntry.Fruits == null || GameEntry.GameAssets == null)
+        {
+            return;
+        }
+
+        string spritePath = GameEntry.Fruits.GetEntitySpritePath(category, 0);
+        if (string.IsNullOrEmpty(spritePath))
+        {
+            return;
+        }
+
+        if (GameEntry.GameAssets.TryGetArchitectureSprite(spritePath, out Sprite loadedSprite) && loadedSprite != null)
+        {
+            _spriteRenderer.sprite = loadedSprite;
+        }
+    }
+
+    /// <summary>
+    /// 从 GameAssetModule 预加载缓存中读取指定等级的实体精灵并赋给 SpriteRenderer。
+    /// 如果缓存中没有对应等级的精灵，则恢复 prefab 原始精灵。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="level">建筑等级。</param>
+    private void ApplyLevelSprite(PlayerRuntimeModule.ArchitectureCategory category, int level)
+    {
+        if (_spriteRenderer == null || GameEntry.Fruits == null)
+        {
+            return;
+        }
+
+        string spritePath = GameEntry.Fruits.GetEntitySpritePath(category, level);
+        if (GameEntry.GameAssets != null && !string.IsNullOrEmpty(spritePath))
+        {
+            if (GameEntry.GameAssets.TryGetArchitectureSprite(spritePath, out Sprite loadedSprite) && loadedSprite != null)
+            {
+                _spriteRenderer.sprite = loadedSprite;
+                if (_hasCachedDefaultColor)
+                {
+                    _spriteRenderer.color = _defaultColor;
+                }
+                return;
+            }
+        }
+
+        return;
     }
 
     /// <summary>
@@ -88,6 +158,7 @@ public sealed class IncubatorEntityLogic : EntityLogic
             if (_spriteRenderer != null)
             {
                 _defaultColor = _spriteRenderer.color;
+                _defaultSprite = _spriteRenderer.sprite;
                 _hasCachedDefaultColor = true;
             }
         }

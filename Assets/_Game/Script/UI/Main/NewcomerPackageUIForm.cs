@@ -16,7 +16,7 @@ public sealed class NewcomerPackageUIForm : UIFormLogic
     /// <summary>
     /// 新人礼包发放的金币数量。
     /// </summary>
-    private const int RewardGoldAmount = 10000;
+    private const int RewardGoldAmount = 1000000;
 
     /// <summary>
     /// 确认领取按钮。

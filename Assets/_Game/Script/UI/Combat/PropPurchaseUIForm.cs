@@ -58,6 +58,12 @@ public sealed class PropPurchaseUIForm : UIFormLogic
     private Button _buttonAdvertising;
 
     /// <summary>
+    /// 广告购买流程防重入锁。
+    /// 防止玩家在广告播放期间重复点击广告按钮。
+    /// </summary>
+    private bool _isAdPurchasing;
+
+    /// <summary>
     /// 半透明遮罩。
     /// 点击遮罩等同于取消。
     /// </summary>
@@ -155,6 +161,7 @@ public sealed class PropPurchaseUIForm : UIFormLogic
         if (_buttonAdvertising != null)
         {
             _buttonAdvertising.onClick.RemoveListener(OnBtnAdvertising);
+            _buttonAdvertising.onClick.AddListener(OnBtnAdvertising);
         }
 
         if (_buttonBJ != null)
@@ -183,6 +190,15 @@ public sealed class PropPurchaseUIForm : UIFormLogic
 
         // 更新提示文本
         UpdatePromptText();
+    }
+
+    /// <summary>
+    /// 关闭时重置广告防重入锁，防止窗体回池后残留状态。
+    /// </summary>
+    protected override void OnClose(bool isShutdown, object userData)
+    {
+        _isAdPurchasing = false;
+        base.OnClose(isShutdown, userData);
     }
 
     /// <summary>
@@ -225,12 +241,36 @@ public sealed class PropPurchaseUIForm : UIFormLogic
 
     /// <summary>
     /// 广告获取按钮回调。
-    /// 当前按钮不绑定到 Button.onClick，仅保留旧接口占位。
+    /// 调用微信小游戏激励视频广告，完整观看后免费获得当前道具。
     /// </summary>
     private void OnBtnAdvertising()
     {
         UIInteractionSound.PlayClick();
-        TrySpendGoldAndCompletePurchase();
+
+        if (_isAdPurchasing)
+        {
+            return;
+        }
+
+        if (GameEntry.Advertisement == null)
+        {
+            Log.Warning("[PropPurchaseUIForm] AdvertisementModule 未初始化，无法播放广告。");
+            return;
+        }
+
+        _isAdPurchasing = true;
+        GameEntry.Advertisement.ShowRewardedVideoAdGuarded(
+            button: _buttonAdvertising,
+            onSuccess: () =>
+            {
+                _isAdPurchasing = false;
+                CompletePurchase();
+            },
+            onFail: error =>
+            {
+                _isAdPurchasing = false;
+                Log.Info("[PropPurchaseUIForm] 广告观看失败：{0}", error);
+            });
     }
 
     /// <summary>
@@ -326,38 +366,20 @@ public sealed class PropPurchaseUIForm : UIFormLogic
 
     /// <summary>
     /// 获取指定道具的价格。
+    /// 委托给 GameDataTableModule 统一查询方法，避免各 UIForm 各自手写数据表读取逻辑。
     /// </summary>
     /// <param name="propType">目标道具类型。</param>
     /// <param name="goldCost">输出的价格。</param>
     /// <returns>true=读取成功；false=读取失败。</returns>
     internal static bool TryGetPropGoldCost(PropType propType, out int goldCost)
     {
-        goldCost = 0;
-        if (GameEntry.DataTables == null || !GameEntry.DataTables.IsAvailable<DailyChallengeCostDataRow>())
+        if (GameEntry.DataTables == null)
         {
+            goldCost = 0;
             return false;
         }
 
-        DailyChallengeCostDataRow costDataRow = GameEntry.DataTables.GetDataRowByCode<DailyChallengeCostDataRow>(DailyChallengeCostDataRow.DefaultCode);
-        if (costDataRow == null)
-        {
-            return false;
-        }
-
-        switch (propType)
-        {
-            case PropType.Remove:
-                goldCost = costDataRow.RemoveGold;
-                return goldCost > 0;
-            case PropType.Retrieve:
-                goldCost = costDataRow.RetrieveGold;
-                return goldCost > 0;
-            case PropType.Shuffle:
-                goldCost = costDataRow.ShuffleGold;
-                return goldCost > 0;
-            default:
-                return false;
-        }
+        return GameEntry.DataTables.TryGetPropGoldCost((int)propType, out goldCost);
     }
 
     /// <summary>

@@ -27,14 +27,16 @@ public sealed class PlayfieldEntityModule
     public const int QueueSlotCountValue = PetPlacementModule.QueueSlotCountValue;
 
     /// <summary>
-    /// 桌位数量。从 PlayerRuntimeModule 运行时数据读取。
+    /// 桌位总数量（包含未解锁）。
+    /// 实体数组按总数量分配，未解锁槽位显示 Level 0 占位精灵。
     /// </summary>
-    public int TableCount => GameEntry.Fruits?.DiningSeatCount ?? PetPlacementModule.DefaultDiningSeatCount;
+    public int TableCount => GameEntry.Fruits?.TotalDiningSeatCount ?? PlayerRuntimeModule.DietArchitectureCountValue;
 
     /// <summary>
-    /// 果园位数量。从 PlayerRuntimeModule 运行时数据读取。
+    /// 果园位总数量（包含未解锁）。
+    /// 实体数组按总数量分配，未解锁槽位显示 Level 0 占位精灵。
     /// </summary>
-    public int OrchardCount => GameEntry.Fruits?.OrchardSlotCount ?? OrchardModule.DefaultOrchardSlotCount;
+    public int OrchardCount => GameEntry.Fruits?.TotalOrchardSlotCount ?? PlayerRuntimeModule.FruiterArchitectureCountValue;
 
     /// <summary>
     /// 每个桌位当前绑定的实体 Id。
@@ -138,12 +140,12 @@ public sealed class PlayfieldEntityModule
     {
         if (tableCount <= 0)
         {
-            tableCount = PetPlacementModule.DefaultDiningSeatCount;
+            tableCount = PlayerRuntimeModule.DietArchitectureCountValue;
         }
 
         if (orchardCount <= 0)
         {
-            orchardCount = OrchardModule.DefaultOrchardSlotCount;
+            orchardCount = PlayerRuntimeModule.FruiterArchitectureCountValue;
         }
 
         if (tableCount > _tableEntityIds.Length)
@@ -249,6 +251,44 @@ public sealed class PlayfieldEntityModule
 
         RefreshPetEntities(true);
         ProcessPendingDiningPets();
+    }
+
+    /// <summary>
+    /// 建筑状态变化后刷新对应槽位的实体。
+    /// 只刷新发生变化的那个槽位，避免全量遍历。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="slotIndex">1 基索引的建筑槽位。</param>
+    public void NotifyArchitectureSlotChanged(PlayerRuntimeModule.ArchitectureCategory category, int slotIndex)
+    {
+        if (!HasValidMarkerSnapshot)
+        {
+            return;
+        }
+
+        // slotIndex 为 1 基，数组下标为 0 基。
+        int arrayIndex = slotIndex - 1;
+
+        switch (category)
+        {
+            case PlayerRuntimeModule.ArchitectureCategory.Hatch:
+                // 孵化器：确保实体存在并重新应用数据。
+                EnsureIncubatorEntity(arrayIndex);
+                ApplySingleIncubatorEntityData(arrayIndex);
+                break;
+
+            case PlayerRuntimeModule.ArchitectureCategory.Diet:
+                // 餐桌：确保实体存在并重新应用数据。
+                EnsureTableEntity(arrayIndex);
+                ApplySingleTableEntityData(arrayIndex);
+                break;
+
+            case PlayerRuntimeModule.ArchitectureCategory.Fruiter:
+                // 果园：确保实体存在并重新应用数据。
+                EnsureOrchardEntity(arrayIndex);
+                ApplySingleOrchardEntityData(arrayIndex);
+                break;
+        }
     }
 
     /// <summary>
@@ -504,8 +544,8 @@ public sealed class PlayfieldEntityModule
     }
 
     /// <summary>
-    /// 按当前孵化槽解锁状态刷新孵化器实体。
-    /// 只要槽位已经解锁，就显示一个孵化器；是否有蛋由蛋实体自己决定。
+    /// 按当前孵化槽状态刷新孵化器实体。
+    /// 所有槽位都显示孵化器实体：已解锁的正常显示，未解锁的显示 Level 0 占位精灵。
     /// </summary>
     private void RefreshIncubatorEntities()
     {
@@ -522,13 +562,8 @@ public sealed class PlayfieldEntityModule
 
         for (int i = 0; i < _incubatorEntityIds.Length; i++)
         {
-            EggHatchSlotState slotState = eggHatch.GetSlotState(i);
-            if (slotState == null)
-            {
-                HideIncubatorEntity(i);
-                continue;
-            }
-
+            // 无论是否解锁，都创建孵化器实体。
+            // 未解锁时实体内部会自动切换为 Level 0 占位精灵。
             EnsureIncubatorEntity(i);
         }
     }
@@ -606,6 +641,7 @@ public sealed class PlayfieldEntityModule
 
     /// <summary>
     /// 确保桌位实体已创建并提交显示请求。
+    /// 所有桌位都创建实体：已解锁的正常显示，未解锁的显示 Level 0 占位精灵。
     /// </summary>
     private void EnsureTableEntities()
     {
@@ -628,12 +664,13 @@ public sealed class PlayfieldEntityModule
                 entityId,
                 EntityDefine.TableEntity,
                 EntityDefine.TableGroup,
-                new TableEntityData(i, _currentMarkerSnapshot.TableWorldPositions[i]));
+                BuildTableEntityData(i));
         }
     }
 
     /// <summary>
     /// 确保果园实体已创建并提交显示请求。
+    /// 所有果园位都创建实体：已解锁的正常显示，未解锁的显示 Level 0 占位精灵。
     /// </summary>
     private void EnsureOrchardEntities()
     {
@@ -1084,9 +1121,13 @@ public sealed class PlayfieldEntityModule
     /// </summary>
     private IncubatorEntityData BuildIncubatorEntityData(int slotIndex)
     {
+        bool isUnlocked = IsHatchSlotUnlocked(slotIndex);
+        int level = isUnlocked ? GameEntry.Fruits.GetArchitectureEntryState(PlayerRuntimeModule.ArchitectureCategory.Hatch, slotIndex + 1).Level : 0;
         return new IncubatorEntityData(
             slotIndex,
-            _currentMarkerSnapshot.HatchSlotWorldPositions[slotIndex]);
+            _currentMarkerSnapshot.HatchSlotWorldPositions[slotIndex],
+            isUnlocked,
+            level);
     }
 
     /// <summary>
@@ -1105,9 +1146,27 @@ public sealed class PlayfieldEntityModule
     /// </summary>
     private OrchardEntityData BuildOrchardEntityData(int orchardIndex)
     {
+        bool isUnlocked = IsOrchardSlotUnlocked(orchardIndex);
+        int level = isUnlocked ? GameEntry.Fruits.GetArchitectureEntryState(PlayerRuntimeModule.ArchitectureCategory.Fruiter, orchardIndex + 1).Level : 0;
         return new OrchardEntityData(
             orchardIndex,
-            _currentMarkerSnapshot.OrchardWorldPositions[orchardIndex]);
+            _currentMarkerSnapshot.OrchardWorldPositions[orchardIndex],
+            isUnlocked,
+            level);
+    }
+
+    /// <summary>
+    /// 构建餐桌实体显示数据。
+    /// </summary>
+    private TableEntityData BuildTableEntityData(int tableIndex)
+    {
+        bool isUnlocked = IsTableSlotUnlocked(tableIndex);
+        int level = isUnlocked ? GameEntry.Fruits.GetArchitectureEntryState(PlayerRuntimeModule.ArchitectureCategory.Diet, tableIndex + 1).Level : 0;
+        return new TableEntityData(
+            tableIndex,
+            _currentMarkerSnapshot.TableWorldPositions[tableIndex],
+            isUnlocked,
+            level);
     }
 
     /// <summary>
@@ -1559,8 +1618,9 @@ public sealed class PlayfieldEntityModule
                 return;
             }
 
-            EggHatchSlotState slotState = GameEntry.EggHatch != null ? GameEntry.EggHatch.GetSlotState(incubatorEntityData.SlotIndex) : null;
-            if (slotState == null || _incubatorEntityIds[incubatorEntityData.SlotIndex] != ne.Entity.Id)
+            // 实体 ID 不匹配时才隐藏（说明是过期请求）。
+            // 不再依赖 slotState 判断是否隐藏，因为未解锁槽位也需要显示孵化器实体。
+            if (_incubatorEntityIds[incubatorEntityData.SlotIndex] != ne.Entity.Id)
             {
                 HideEntityIfNeeded(ne.Entity.Id);
                 return;
@@ -1695,6 +1755,185 @@ public sealed class PlayfieldEntityModule
             ne.EntityAssetName,
             ne.EntityGroupName,
             ne.ErrorMessage);
+    }
+
+    /// <summary>
+    /// 查询指定孵化槽是否已解锁。
+    /// slotIndex 为 0 基索引，对应建筑系统的 slotIndex+1。
+    /// </summary>
+    private static bool IsHatchSlotUnlocked(int slotIndex)
+    {
+        if (GameEntry.Fruits == null)
+        {
+            return true;
+        }
+
+        PlayerRuntimeModule.ArchitectureEntryState entryState =
+            GameEntry.Fruits.GetArchitectureEntryState(PlayerRuntimeModule.ArchitectureCategory.Hatch, slotIndex + 1);
+        return entryState.IsUnlocked;
+    }
+
+    /// <summary>
+    /// 查询指定桌位是否已解锁。
+    /// tableIndex 为 0 基索引，对应建筑系统的 slotIndex+1。
+    /// </summary>
+    private static bool IsTableSlotUnlocked(int tableIndex)
+    {
+        if (GameEntry.Fruits == null)
+        {
+            return true;
+        }
+
+        PlayerRuntimeModule.ArchitectureEntryState entryState =
+            GameEntry.Fruits.GetArchitectureEntryState(PlayerRuntimeModule.ArchitectureCategory.Diet, tableIndex + 1);
+        return entryState.IsUnlocked;
+    }
+
+    /// <summary>
+    /// 查询指定果园位是否已解锁。
+    /// orchardIndex 为 0 基索引，对应建筑系统的 slotIndex+1。
+    /// </summary>
+    private static bool IsOrchardSlotUnlocked(int orchardIndex)
+    {
+        if (GameEntry.Fruits == null)
+        {
+            return true;
+        }
+
+        PlayerRuntimeModule.ArchitectureEntryState entryState =
+            GameEntry.Fruits.GetArchitectureEntryState(PlayerRuntimeModule.ArchitectureCategory.Fruiter, orchardIndex + 1);
+        return entryState.IsUnlocked;
+    }
+
+    /// <summary>
+    /// 对指定孵化器实体重新应用最新数据。
+    /// </summary>
+    /// <param name="slotIndex">0 基索引。</param>
+    private void ApplySingleIncubatorEntityData(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= _incubatorEntityIds.Length)
+        {
+            return;
+        }
+
+        int entityId = _incubatorEntityIds[slotIndex];
+        if (entityId <= 0 || !IsEntityLoaded(entityId))
+        {
+            return;
+        }
+
+        if (TryGetEntityLogic(entityId, out IncubatorEntityLogic logic))
+        {
+            logic.ApplyData(BuildIncubatorEntityData(slotIndex));
+        }
+    }
+
+    /// <summary>
+    /// 对指定餐桌实体重新应用最新数据。
+    /// </summary>
+    /// <param name="slotIndex">0 基索引。</param>
+    private void ApplySingleTableEntityData(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= _tableEntityIds.Length)
+        {
+            return;
+        }
+
+        int entityId = _tableEntityIds[slotIndex];
+        if (entityId <= 0 || !IsEntityLoaded(entityId))
+        {
+            return;
+        }
+
+        if (TryGetEntityLogic(entityId, out TableEntityLogic logic))
+        {
+            logic.ApplyData(BuildTableEntityData(slotIndex));
+        }
+    }
+
+    /// <summary>
+    /// 对指定果园实体重新应用最新数据。
+    /// </summary>
+    /// <param name="slotIndex">0 基索引。</param>
+    private void ApplySingleOrchardEntityData(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= _orchardEntityIds.Length)
+        {
+            return;
+        }
+
+        int entityId = _orchardEntityIds[slotIndex];
+        if (entityId <= 0 || !IsEntityLoaded(entityId))
+        {
+            return;
+        }
+
+        if (TryGetEntityLogic(entityId, out OrchardEntityLogic logic))
+        {
+            logic.ApplyData(BuildOrchardEntityData(slotIndex));
+        }
+    }
+
+    /// <summary>
+    /// 确保指定餐桌槽位的实体存在。
+    /// </summary>
+    /// <param name="slotIndex">0 基索引。</param>
+    private void EnsureTableEntity(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= _tableEntityIds.Length)
+        {
+            return;
+        }
+
+        int entityId = _tableEntityIds[slotIndex];
+        if (IsEntityLoaded(entityId) || IsEntityLoading(entityId))
+        {
+            return;
+        }
+
+        entityId = AcquireEntityId();
+        if (entityId <= 0)
+        {
+            return;
+        }
+
+        _tableEntityIds[slotIndex] = entityId;
+        GameEntry.Entity.ShowEntity<TableEntityLogic>(
+            entityId,
+            EntityDefine.TableEntity,
+            EntityDefine.TableGroup,
+            BuildTableEntityData(slotIndex));
+    }
+
+    /// <summary>
+    /// 确保指定果园槽位的实体存在。
+    /// </summary>
+    /// <param name="slotIndex">0 基索引。</param>
+    private void EnsureOrchardEntity(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= _orchardEntityIds.Length)
+        {
+            return;
+        }
+
+        int entityId = _orchardEntityIds[slotIndex];
+        if (IsEntityLoaded(entityId) || IsEntityLoading(entityId))
+        {
+            return;
+        }
+
+        entityId = AcquireEntityId();
+        if (entityId <= 0)
+        {
+            return;
+        }
+
+        _orchardEntityIds[slotIndex] = entityId;
+        GameEntry.Entity.ShowEntity<OrchardEntityLogic>(
+            entityId,
+            EntityDefine.OrchardEntity,
+            EntityDefine.OrchardGroup,
+            BuildOrchardEntityData(slotIndex));
     }
 
     /// <summary>

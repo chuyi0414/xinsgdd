@@ -11,6 +11,30 @@ using TMPro;
 public partial class MainUIForm
 {
     /// <summary>
+    /// 待展示的金币掉落请求。
+    /// 当主界面不在宠物页时，先缓存世界坐标，等回到中页再统一投影生成。
+    /// </summary>
+    private struct PendingGoldDropRequest
+    {
+        /// <summary>
+        /// 金币起点世界坐标。
+        /// 它对应奖励结算瞬间宠物所在的位置。
+        /// </summary>
+        public Vector3 StartWorldPos;
+
+        /// <summary>
+        /// 金币出生动画终点世界坐标。
+        /// 这里已经提前固化随机偏移，避免延迟展示后轨迹变化。
+        /// </summary>
+        public Vector3 EndWorldPos;
+
+        /// <summary>
+        /// 本次金币数量。
+        /// </summary>
+        public int CoinAmount;
+    }
+
+    /// <summary>
     /// 金币掉落容器根节点名称。
     /// 若预制体未提前放置该节点，则运行时按此名称在 BJ 页面根节点下动态创建。
     /// </summary>
@@ -50,6 +74,12 @@ public partial class MainUIForm
     private RectTransform _goldCoinRoot;
 
     /// <summary>
+    /// 金币 UI 根节点的 CanvasGroup。
+    /// 用来在翻页前后统一控制整层金币/Toast 的显隐，而不打断对象池中的实例状态。
+    /// </summary>
+    private CanvasGroup _goldCoinCanvasGroup;
+
+    /// <summary>
     /// 当前场上存活的金币 UI 列表。
     /// </summary>
     private readonly List<GoldCoinItem> _activeGoldCoins = new List<GoldCoinItem>();
@@ -63,6 +93,12 @@ public partial class MainUIForm
     /// 当前场上存活的金币点击提示 Toast 列表。
     /// </summary>
     private readonly List<GoldCoinToastItem> _activeGoldCoinToasts = new List<GoldCoinToastItem>();
+
+    /// <summary>
+    /// 待展示的金币掉落请求列表。
+    /// 只有回到中页后才会真正消费。
+    /// </summary>
+    private readonly List<PendingGoldDropRequest> _pendingGoldDropRequests = new List<PendingGoldDropRequest>(8);
 
     /// <summary>
     /// 复用的金币点击提示 Toast 池。
@@ -109,6 +145,7 @@ public partial class MainUIForm
     private void OpenGoldView()
     {
         RefreshGoldText();
+        UpdateGoldRewardUiVisibility(CanPresentPetRewardDropsNow());
     }
 
     /// <summary>
@@ -118,6 +155,7 @@ public partial class MainUIForm
     {
         ReleaseAllActiveGoldCoinToasts();
         ReleaseAllActiveGoldCoins();
+        ClearPendingGoldDropRequests();
     }
 
     /// <summary>
@@ -128,6 +166,8 @@ public partial class MainUIForm
         ReleaseGoldEventSubscription();
         DestroyAllGoldCoinToasts();
         DestroyAllGoldCoins();
+        ClearPendingGoldDropRequests();
+        _goldCoinCanvasGroup = null;
         _goldCoinRoot = null;
     }
 
@@ -193,54 +233,27 @@ public partial class MainUIForm
     /// <param name="coinAmount">金币数量。</param>
     private void OnCoinDropRequested(int petInstanceId, int coinAmount)
     {
-        if (coinAmount <= 0 || GameEntry.PlayfieldEntities == null)
+        if (coinAmount <= 0)
         {
             return;
         }
 
-        // 获取宠物实体的世界坐标
-        if (!GameEntry.PlayfieldEntities.TryGetPetEntityLogic(petInstanceId, out PetEntityLogic petEntityLogic)
-            || petEntityLogic == null)
+        if (!TryBuildPetRewardWorldPositions(
+                petInstanceId,
+                CoinOffsetMinX,
+                CoinOffsetMaxX,
+                CoinOffsetMinY,
+                CoinOffsetMaxY,
+                out Vector3 startWorldPos,
+                out Vector3 endWorldPos))
         {
             return;
         }
 
-        Camera worldCamera = GetPlayfieldWorldCamera();
-        if (worldCamera == null)
+        if (!CanPresentPetRewardDropsNow() || !TryPresentGoldDrop(startWorldPos, endWorldPos, coinAmount))
         {
-            return;
+            EnqueuePendingGoldDropRequest(startWorldPos, endWorldPos, coinAmount);
         }
-
-        // 宠物实体世界位置
-        Vector3 petWorldPos = petEntityLogic.CachedTransform.position;
-
-        // 随机世界偏移目标点
-        float offsetX = UnityEngine.Random.Range(CoinOffsetMinX, CoinOffsetMaxX);
-        float offsetY = UnityEngine.Random.Range(CoinOffsetMinY, CoinOffsetMaxY);
-        Vector3 targetWorldPos = petWorldPos + new Vector3(offsetX, offsetY, 0f);
-
-        // 世界坐标 → 屏幕坐标 → UI 局部坐标
-        EnsureGoldCoinRoot();
-        if (_goldCoinRoot == null)
-        {
-            return;
-        }
-
-        Camera uiCamera = GetGoldCoinUICamera();
-
-        Vector2 startLocalPos = WorldToGoldCoinLocalPos(petWorldPos, worldCamera, uiCamera);
-        Vector2 endLocalPos = WorldToGoldCoinLocalPos(targetWorldPos, worldCamera, uiCamera);
-
-        // 创建金币 UI 并播放动画
-        GoldCoinItem coinItem = AcquireGoldCoinItem();
-        if (coinItem == null)
-        {
-            return;
-        }
-
-        coinItem.Bind(coinAmount, OnGoldCoinFlyComplete, OnGoldCoinClicked);
-        coinItem.PlaySpawnAnimation(startLocalPos, endLocalPos);
-        _activeGoldCoins.Add(coinItem);
     }
 
     /// <summary>
@@ -332,6 +345,103 @@ public partial class MainUIForm
     }
 
     /// <summary>
+    /// 尝试把一条金币掉落请求真正呈现到当前 UI 上。
+    /// 这里要求当前已经回到中页，否则世界坐标投影会落到错误的屏幕位置。
+    /// </summary>
+    /// <param name="startWorldPos">金币起点世界坐标。</param>
+    /// <param name="endWorldPos">金币终点世界坐标。</param>
+    /// <param name="coinAmount">金币数量。</param>
+    /// <returns>成功创建返回 true；否则返回 false，调用方应继续保留缓存。</returns>
+    private bool TryPresentGoldDrop(Vector3 startWorldPos, Vector3 endWorldPos, int coinAmount)
+    {
+        if (coinAmount <= 0)
+        {
+            return true;
+        }
+
+        Camera worldCamera = GetPlayfieldWorldCamera();
+        if (worldCamera == null)
+        {
+            return false;
+        }
+
+        EnsureGoldCoinRoot();
+        if (_goldCoinRoot == null)
+        {
+            return false;
+        }
+
+        Camera uiCamera = GetGoldCoinUICamera();
+        Vector2 startLocalPos = WorldToGoldCoinLocalPos(startWorldPos, worldCamera, uiCamera);
+        Vector2 endLocalPos = WorldToGoldCoinLocalPos(endWorldPos, worldCamera, uiCamera);
+
+        GoldCoinItem coinItem = AcquireGoldCoinItem();
+        if (coinItem == null)
+        {
+            return false;
+        }
+
+        coinItem.Bind(coinAmount, OnGoldCoinFlyComplete, OnGoldCoinClicked);
+        coinItem.PlaySpawnAnimation(startLocalPos, endLocalPos);
+        _activeGoldCoins.Add(coinItem);
+        return true;
+    }
+
+    /// <summary>
+    /// 缓存一条待展示的金币掉落请求。
+    /// </summary>
+    /// <param name="startWorldPos">金币起点世界坐标。</param>
+    /// <param name="endWorldPos">金币终点世界坐标。</param>
+    /// <param name="coinAmount">金币数量。</param>
+    private void EnqueuePendingGoldDropRequest(Vector3 startWorldPos, Vector3 endWorldPos, int coinAmount)
+    {
+        if (coinAmount <= 0)
+        {
+            return;
+        }
+
+        PendingGoldDropRequest pendingRequest = new PendingGoldDropRequest
+        {
+            StartWorldPos = startWorldPos,
+            EndWorldPos = endWorldPos,
+            CoinAmount = coinAmount,
+        };
+        _pendingGoldDropRequests.Add(pendingRequest);
+    }
+
+    /// <summary>
+    /// 回放所有待展示的金币掉落请求。
+    /// 只要其中有一条因为相机或资源未就绪而失败，就保留剩余请求等待下次重试。
+    /// </summary>
+    private void FlushPendingGoldDropRequests()
+    {
+        if (_pendingGoldDropRequests.Count <= 0 || !CanPresentPetRewardDropsNow())
+        {
+            return;
+        }
+
+        for (int i = 0; i < _pendingGoldDropRequests.Count;)
+        {
+            PendingGoldDropRequest pendingRequest = _pendingGoldDropRequests[i];
+            if (!TryPresentGoldDrop(pendingRequest.StartWorldPos, pendingRequest.EndWorldPos, pendingRequest.CoinAmount))
+            {
+                break;
+            }
+
+            _pendingGoldDropRequests.RemoveAt(i);
+        }
+    }
+
+    /// <summary>
+    /// 清空所有待展示的金币掉落请求。
+    /// 主界面关闭或销毁时必须收口，避免跨界面残留。
+    /// </summary>
+    private void ClearPendingGoldDropRequests()
+    {
+        _pendingGoldDropRequests.Clear();
+    }
+
+    /// <summary>
     /// 将世界坐标转换为金币容器下的 UI 局部坐标。
     /// </summary>
     /// <param name="worldPos">世界坐标。</param>
@@ -388,6 +498,29 @@ public partial class MainUIForm
         _activeGoldCoinToasts.Add(toastItem);
     }
 
+    /// <summary>
+    /// 根据当前分页状态刷新金币奖励层的显隐。
+    /// 这里控制的是整层可视性，不会销毁或回收场上已有金币/Toast。
+    /// </summary>
+    /// <param name="isVisible">true 显示；false 隐藏。</param>
+    private void UpdateGoldRewardUiVisibility(bool isVisible)
+    {
+        EnsureGoldCoinCanvasGroup();
+        if (_goldCoinCanvasGroup == null)
+        {
+            return;
+        }
+
+        float targetAlpha = isVisible ? 1f : 0f;
+        if (!Mathf.Approximately(_goldCoinCanvasGroup.alpha, targetAlpha))
+        {
+            _goldCoinCanvasGroup.alpha = targetAlpha;
+        }
+
+        _goldCoinCanvasGroup.interactable = isVisible;
+        _goldCoinCanvasGroup.blocksRaycasts = isVisible;
+    }
+
     // ──────────────────────────────────────────────────────────
     //  金币 UI / Toast 容器 & 池化
     // ──────────────────────────────────────────────────────────
@@ -424,6 +557,24 @@ public partial class MainUIForm
 
         _goldCoinRoot = rootRectTransform;
         _isRuntimeCreatedGoldCoinRoot = true;
+    }
+
+    /// <summary>
+    /// 确保金币奖励层存在可用于统一显隐控制的 CanvasGroup。
+    /// </summary>
+    private void EnsureGoldCoinCanvasGroup()
+    {
+        EnsureGoldCoinRoot();
+        if (_goldCoinRoot == null || _goldCoinCanvasGroup != null)
+        {
+            return;
+        }
+
+        _goldCoinCanvasGroup = _goldCoinRoot.GetComponent<CanvasGroup>();
+        if (_goldCoinCanvasGroup == null)
+        {
+            _goldCoinCanvasGroup = _goldCoinRoot.gameObject.AddComponent<CanvasGroup>();
+        }
     }
 
     /// <summary>
