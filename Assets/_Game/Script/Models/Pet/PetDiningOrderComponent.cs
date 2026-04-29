@@ -47,6 +47,12 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
     private const float ProducingFallbackToleranceSeconds = 1f;
 
     /// <summary>
+    /// 奖励动画完成回调丢失时的兜底秒数。
+    /// 该时间只兜底异常链路，正常情况下会由 Spine TrackEntry.Complete 提前结束。
+    /// </summary>
+    private const float RewardAnimationFallbackToleranceSeconds = 0.5f;
+
+    /// <summary>
     /// 当前组件是否可用。
     /// </summary>
     public bool IsAvailable => _isInitialized && _isAvailable;
@@ -276,6 +282,10 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
             case PetDiningWishState.Serving:
                 UpdateServingOrder(petState, deltaTime);
                 break;
+
+            case PetDiningWishState.RewardAnimating:
+                UpdateRewardAnimatingOrder(petState, deltaTime);
+                break;
         }
     }
 
@@ -450,9 +460,92 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
         // 未命中金币的剩余概率全部进入产出物分支。
         ResolveMealReward(petState);
 
+        petState.DiningWishState = PetDiningWishState.RewardAnimating;
+        petState.RemainingDiningStageSeconds = RewardAnimationFallbackToleranceSeconds;
+
+        if (GameEntry.PlayfieldEntities == null
+            || !GameEntry.PlayfieldEntities.TryPlayPetGiveGoldAnimation(petState.InstanceId, HandlePetRewardAnimationComplete, out float rewardAnimationDuration))
+        {
+            CompleteRewardAnimatingOrder(petState.InstanceId);
+            return;
+        }
+
+        petState.RemainingDiningStageSeconds = Mathf.Max(RewardAnimationFallbackToleranceSeconds, rewardAnimationDuration + RewardAnimationFallbackToleranceSeconds);
+    }
+
+    /// <summary>
+    /// 推进奖励动画阶段的兜底倒计时。
+    /// 正常流程依赖 Spine Complete 回调结束，这里只防止动画回调丢失导致宠物永久占桌。
+    /// </summary>
+    /// <param name="petState">宠物运行时状态。</param>
+    /// <param name="deltaTime">本帧推进秒数。</param>
+    private void UpdateRewardAnimatingOrder(PetRuntimeState petState, float deltaTime)
+    {
+        if (petState == null || petState.DiningWishState != PetDiningWishState.RewardAnimating)
+        {
+            return;
+        }
+
+        petState.RemainingDiningStageSeconds -= deltaTime;
+        if (petState.RemainingDiningStageSeconds > 0f)
+        {
+            return;
+        }
+
+        CompleteRewardAnimatingOrder(petState.InstanceId);
+    }
+
+    /// <summary>
+    /// 宠物奖励动画播放完成回调。
+    /// </summary>
+    /// <param name="petInstanceId">完成动画的宠物实例 Id。</param>
+    public void HandlePetRewardAnimationComplete(int petInstanceId)
+    {
+        CompleteRewardAnimatingOrder(petInstanceId);
+    }
+
+    /// <summary>
+    /// 刷新奖励动画兜底等待时间。
+    /// 外部实体刷新如果发现 Attack 被打断，会重新播放 Attack，并通过该接口把兜底时间延长到新动画时长之后。
+    /// </summary>
+    /// <param name="petInstanceId">宠物实例 Id。</param>
+    /// <param name="animationDuration">本次重新播放的奖励动画时长。</param>
+    public void RefreshPetRewardAnimationFallback(int petInstanceId, float animationDuration)
+    {
+        if (petInstanceId <= 0 || GameEntry.PetPlacement == null)
+        {
+            return;
+        }
+
+        PetRuntimeState petState = GameEntry.PetPlacement.GetPetStateByInstanceId(petInstanceId);
+        if (petState == null || petState.DiningWishState != PetDiningWishState.RewardAnimating)
+        {
+            return;
+        }
+
+        petState.RemainingDiningStageSeconds = Mathf.Max(RewardAnimationFallbackToleranceSeconds, animationDuration + RewardAnimationFallbackToleranceSeconds);
+    }
+
+    /// <summary>
+    /// 完成奖励动画阶段，并进入吃完饭后的去向判定。
+    /// </summary>
+    /// <param name="petInstanceId">宠物实例 Id。</param>
+    private void CompleteRewardAnimatingOrder(int petInstanceId)
+    {
+        if (petInstanceId <= 0 || GameEntry.PetPlacement == null)
+        {
+            return;
+        }
+
+        PetRuntimeState petState = GameEntry.PetPlacement.GetPetStateByInstanceId(petInstanceId);
+        if (petState == null || petState.DiningWishState != PetDiningWishState.RewardAnimating)
+        {
+            return;
+        }
+
         petState.DiningWishState = PetDiningWishState.Completed;
         petState.RemainingDiningStageSeconds = 0f;
-        GameEntry.PetPlacement?.ResolvePostMealOutcome(petState.InstanceId);
+        GameEntry.PetPlacement.ResolvePostMealOutcome(petInstanceId);
     }
 
     /// <summary>

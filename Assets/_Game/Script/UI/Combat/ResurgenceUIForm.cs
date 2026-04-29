@@ -119,6 +119,16 @@ public sealed class ResurgenceUIForm : UIFormLogic
             return;
         }
 
+        // 先检查金币余额，不足时只提示，留在复活窗不跳转
+        if (GameEntry.DataTables != null
+            && GameEntry.DataTables.TryGetResurgenceGoldCost(out int cost)
+            && GameEntry.Fruits != null
+            && GameEntry.Fruits.CurrentGold < cost)
+        {
+            ToastUtility.Show("金币不足");
+            return;
+        }
+
         if (!combatUIForm.TryReviveAfterFailure())
         {
             combatUIForm.EnterFailureSettlementAfterResurgence();

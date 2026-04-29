@@ -21,6 +21,12 @@ public partial class GameEntry
     public static GameAssetModule GameAssets { get; private set; }
 
     /// <summary>
+    /// Addressables 大资源统一加载模块。
+    /// 用于按需加载 Arts、Audio 等大体积资源，并统一管理资源句柄生命周期。
+    /// </summary>
+    public static GameAddressableAssetModule AddressableAssets { get; private set; }
+
+    /// <summary>
     /// 玩家运行时模块（水果解锁 + 金币管理）。
     /// </summary>
     public static PlayerRuntimeModule Fruits { get; private set; }
@@ -67,6 +73,7 @@ public partial class GameEntry
         EggHatch = GFGameEntry.GetComponent<EggHatchComponent>();
         PetDiningOrders = GFGameEntry.GetComponent<PetDiningOrderComponent>();
         DataTables = new GameDataTableModule();
+        AddressableAssets = new GameAddressableAssetModule();
         GameAssets = new GameAssetModule();
         Fruits = new PlayerRuntimeModule();
         PetPlacement = new PetPlacementModule();

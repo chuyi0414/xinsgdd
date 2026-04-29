@@ -806,6 +806,28 @@ namespace UnityGameFramework.Runtime
         }
 
         /// <summary>
+        /// 设置 Addressables 资源路由委托。
+        /// 编辑器资源模式不参与 Addressables 路由：业务请求统一走 AssetDatabase 加载，不咨询任何路由委托。
+        /// 仅为满足 IResourceManager 接口约束而保留实现，实际调用应抛出不支持异常以便 fail-fast 发现错误调用路径。
+        /// </summary>
+        /// <param name="router">路由委托。</param>
+        public void SetAddressablesAssetRouter(AddressablesAssetRouter router)
+        {
+            throw new NotSupportedException("SetAddressablesAssetRouter");
+        }
+
+        /// <summary>
+        /// 设置 Addressables 资源释放路由委托。
+        /// 编辑器资源模式不参与 Addressables 释放路由：业务请求统一走 AssetDatabase，资源释放由 Unity 编辑器自身管理。
+        /// 仅为满足 IResourceManager 接口约束而保留实现，实际调用应抛出不支持异常以便 fail-fast 发现错误调用路径。
+        /// </summary>
+        /// <param name="releaseRouter">释放路由委托。</param>
+        public void SetAddressablesAssetReleaseRouter(AddressablesAssetReleaseRouter releaseRouter)
+        {
+            throw new NotSupportedException("SetAddressablesAssetReleaseRouter");
+        }
+
+        /// <summary>
         /// 增加加载资源代理辅助器。
         /// </summary>
         /// <param name="loadResourceAgentHelper">要增加的加载资源代理辅助器。</param>

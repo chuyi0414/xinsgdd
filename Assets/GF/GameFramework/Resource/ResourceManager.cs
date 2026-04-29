@@ -47,6 +47,8 @@ namespace GameFramework.Resource
         private ResourceUpdater m_ResourceUpdater;
         private ResourceLoader m_ResourceLoader;
         private IResourceHelper m_ResourceHelper;
+        private AddressablesAssetRouter m_AddressablesAssetRouter;
+        private AddressablesAssetReleaseRouter m_AddressablesAssetReleaseRouter;
 
         private string m_ReadOnlyPath;
         private string m_ReadWritePath;
@@ -102,6 +104,8 @@ namespace GameFramework.Resource
             m_ResourceLoader = new ResourceLoader(this);
 
             m_ResourceHelper = null;
+            m_AddressablesAssetRouter = null;
+            m_AddressablesAssetReleaseRouter = null;
             m_ReadOnlyPath = null;
             m_ReadWritePath = null;
             m_ResourceMode = ResourceMode.Unspecified;
@@ -1062,6 +1066,46 @@ namespace GameFramework.Resource
         }
 
         /// <summary>
+        /// 设置 Addressables 资源路由委托。
+        /// 由项目层注入；GF 内核 LoadAsset 入口会优先咨询路由，命中则放弃 GF 主链路。
+        /// </summary>
+        /// <param name="router">路由委托；null 表示禁用。</param>
+        public void SetAddressablesAssetRouter(AddressablesAssetRouter router)
+        {
+            // 备注：允许运行时随时切换或清空，便于热修复或调试关闭 Addressables 路由。
+            m_AddressablesAssetRouter = router;
+        }
+
+        /// <summary>
+        /// 当前已注入的 Addressables 路由委托。
+        /// internal 访问：仅 ResourceLoader.LoadAsset 入口在咨询时使用。
+        /// </summary>
+        internal AddressablesAssetRouter AddressablesAssetRouter
+        {
+            get { return m_AddressablesAssetRouter; }
+        }
+
+        /// <summary>
+        /// 设置 Addressables 资源释放路由委托。
+        /// 由项目层注入；UnloadAsset 入口会优先咨询路由，命中则跳过 m_AssetPool.Unspawn（Addressables 资源未注册到对象池）。
+        /// </summary>
+        /// <param name="releaseRouter">释放路由委托；null 表示禁用。</param>
+        public void SetAddressablesAssetReleaseRouter(AddressablesAssetReleaseRouter releaseRouter)
+        {
+            // 备注：允许运行时随时切换或清空，便于热修复或调试关闭 Addressables 释放路由。
+            m_AddressablesAssetReleaseRouter = releaseRouter;
+        }
+
+        /// <summary>
+        /// 当前已注入的 Addressables 释放路由委托。
+        /// internal 访问：仅 UnloadAsset 入口在咨询时使用。
+        /// </summary>
+        internal AddressablesAssetReleaseRouter AddressablesAssetReleaseRouter
+        {
+            get { return m_AddressablesAssetReleaseRouter; }
+        }
+
+        /// <summary>
         /// 增加加载资源代理辅助器。
         /// </summary>
         /// <param name="loadResourceAgentHelper">要增加的加载资源代理辅助器。</param>
@@ -1650,6 +1694,17 @@ namespace GameFramework.Resource
             }
 
             if (m_ResourceLoader == null)
+            {
+                return;
+            }
+
+            // ⭐ 项目层 Addressables 释放路由优先判定。
+            // 路由委托返回 true 表示该 asset 是 Addressables 加载产物，已通过 Addressables.Release(handle) 完成释放，
+            // GF 主链路必须跳过 m_AssetPool.Unspawn —— 因为 Addressables 资源根本未注册到对象池，强行 Unspawn 会抛
+            // GameFrameworkException("Can not find target in object pool")。
+            // 返回 false 表示该 asset 不是 Addressables 产物，继续走 m_AssetPool.Unspawn 引用计数链路。
+            AddressablesAssetReleaseRouter releaseRouter = m_AddressablesAssetReleaseRouter;
+            if (releaseRouter != null && releaseRouter(asset))
             {
                 return;
             }

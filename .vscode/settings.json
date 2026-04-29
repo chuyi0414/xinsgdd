@@ -1,3 +1,6 @@
 {
-    "dotnet.preferCSharpExtension": true
+    "dotnet.preferCSharpExtension": true,
+    "files.associations": {
+        "**/Assets/_Game/Resources/DataTable/*.txt": "tsv"
+    }
 }

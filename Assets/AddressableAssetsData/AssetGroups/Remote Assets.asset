@@ -1,0 +1,73 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Remote Assets
+  m_EditorClassIdentifier: 
+  m_GroupName: Remote Assets
+  m_Data:
+    m_SerializedData: []
+  m_GUID: fe45ca490f4f818469cc29147bc706d5
+  m_SerializeEntries:
+  - m_GUID: 243e816478afd0c47aba1b9310c0f18b
+    m_Address: Arts/Load/UI_Jiazai_005
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Load
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 280bce4e4ffede3449920327355a03ff
+    m_Address: Arts/Load/UI_Jiazai_003
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Load
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 33c265aa21167d54a878cf135042a97e
+    m_Address: Arts/Load/UI_Jiazai_002
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Load
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3c369aea5001ced4284ea91dac74aa7a
+    m_Address: Prefabs/UI/Load/LoadUIForm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Load
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 66e7b867170d4f34380027087338623d
+    m_Address: Arts/Load/UI_Jiazai_004
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Load
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 774d69d9d8b694d4191ef7f788182eb8
+    m_Address: "Arts/Load/\u9002\u9F8412+"
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Load
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d44180fcda31e3d40a03cff0fbc1026b
+    m_Address: Arts/Load/UI_Jiazai_001
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Load
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ee4b9c044f9ffe54d8f102a62655c683
+    m_Address: Arts/Load/UI_Jiazai_004 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Load
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 037329be66bb390418a43cb9b9520078, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: bf23c6b1cdf55a24fa0e5edde8d9c88b, type: 2}
+    - {fileID: 11400000, guid: fcfc6f6f09b780b40817696c0998d4d3, type: 2}

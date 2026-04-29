@@ -130,6 +130,17 @@ public class ShuiGuoTJUIForm : UIFormLogic
     private const string DetailUnlockGoldFormat = "需要{0}金币解锁";
 
     /// <summary>
+    /// 列表条目按钮已解锁文案。
+    /// </summary>
+    private const string ListItemUnlockedText = "已解锁";
+
+    /// <summary>
+    /// 列表条目按钮未解锁文案格式。
+    /// 参数为 FruitDataRow.UnlockGold。
+    /// </summary>
+    private const string ListItemLockedGoldFormat = "{0}";
+
+    /// <summary>
     /// 已解锁水果图标颜色。
     /// 使用纯白乘色，保证 ImgSG 原始 Sprite 颜色完整显示。
     /// </summary>
@@ -139,7 +150,7 @@ public class ShuiGuoTJUIForm : UIFormLogic
     /// 未解锁水果图标置灰颜色。
     /// 这是 UGUI Image 的顶点乘色，不会修改 Sprite 资源本体，只影响当前 Image 显示。
     /// </summary>
-    private static readonly Color LockedFruitIconColor = new Color(0.45f, 0.45f, 0.45f, 1f);
+    private static readonly Color LockedFruitIconColor = Color.white;
 
     /// <summary>
     /// Scroll View → Viewport → Content 容器，所有水果条目的父节点。
@@ -324,9 +335,17 @@ public class ShuiGuoTJUIForm : UIFormLogic
         for (int i = 0; i < _fruitEntries.Count; i++)
         {
             FruitItemEntry entry = _fruitEntries[i];
-            if (entry != null && entry.ItemButton != null && entry.OnItemClicked != null)
+            if (entry != null && entry.OnItemClicked != null)
             {
-                entry.ItemButton.onClick.RemoveListener(entry.OnItemClicked);
+                if (entry.ItemButton != null)
+                {
+                    entry.ItemButton.onClick.RemoveListener(entry.OnItemClicked);
+                }
+
+                if (entry.BtnUnlock != null)
+                {
+                    entry.BtnUnlock.onClick.RemoveListener(entry.OnItemClicked);
+                }
             }
         }
 
@@ -494,13 +513,24 @@ public class ShuiGuoTJUIForm : UIFormLogic
         for (int i = 0; i < _fruitEntries.Count; i++)
         {
             FruitItemEntry entry = _fruitEntries[i];
-            if (entry == null || entry.ItemButton == null || entry.OnItemClicked == null)
+            if (entry == null || entry.OnItemClicked == null)
             {
                 continue;
             }
 
-            entry.ItemButton.onClick.RemoveListener(entry.OnItemClicked);
-            entry.ItemButton.onClick.AddListener(entry.OnItemClicked);
+            // 条目卡片按钮：点击打开 GoParticulars。
+            if (entry.ItemButton != null)
+            {
+                entry.ItemButton.onClick.RemoveListener(entry.OnItemClicked);
+                entry.ItemButton.onClick.AddListener(entry.OnItemClicked);
+            }
+
+            // 条目内解锁/已解锁按钮：点击同样打开 GoParticulars。
+            if (entry.BtnUnlock != null)
+            {
+                entry.BtnUnlock.onClick.RemoveListener(entry.OnItemClicked);
+                entry.BtnUnlock.onClick.AddListener(entry.OnItemClicked);
+            }
         }
     }
 
@@ -566,13 +596,24 @@ public class ShuiGuoTJUIForm : UIFormLogic
             entry.ImgSG.color = isUnlocked ? UnlockedFruitIconColor : LockedFruitIconColor;
         }
 
-        // 列表内原解锁按钮已废弃：购买入口统一迁移到 GoParticulars 详情按钮。
+        // 列表条目按钮：始终可见，文案按解锁状态切换。
+        // 已解锁显示"已解锁"，未解锁显示解锁金币数；点击统一打开 GoParticulars 详情面板。
         if (entry.BtnUnlock != null)
         {
-            entry.BtnUnlock.gameObject.SetActive(false);
-        }
+            entry.BtnUnlock.gameObject.SetActive(true);
 
-        // 列表解锁文案不再显示，避免用户误以为列表按钮仍可购买。
+            if (entry.TxtUnlockCost != null)
+            {
+                if (isUnlocked)
+                {
+                    entry.TxtUnlockCost.SetText(ListItemUnlockedText);
+                }
+                else
+                {
+                    entry.TxtUnlockCost.SetText(ListItemLockedGoldFormat, entry.DataRow.UnlockGold);
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -597,11 +638,16 @@ public class ShuiGuoTJUIForm : UIFormLogic
         // 调用原子购买接口：校验数据行 → 校验未解锁 → 校验金币 → 扣金币 → 解锁
         if (GameEntry.Fruits.TryPurchaseFruit(entry.DataRow.Code))
         {
+            ToastUtility.Show("解锁成功");
             RefreshItem(entry);
             if (ReferenceEquals(_detailView.CurrentDataRow, entry.DataRow))
             {
                 ShowDetail(entry.DataRow);
             }
+        }
+        else
+        {
+            ToastUtility.Show("金币不足");
         }
     }
 

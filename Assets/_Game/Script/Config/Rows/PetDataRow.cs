@@ -15,7 +15,7 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
     /// <summary>
     /// 数据表固定列数。
     /// </summary>
-    private const int ColumnCount = 11;
+    private const int ColumnCount = 12;
 
     /// <summary>
     /// 合法宠物 Code 的前缀。
@@ -68,6 +68,12 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
     /// 移动动画名。
     /// </summary>
     public string MoveAnimationName { get; private set; }
+
+    /// <summary>
+    /// 宠物吃完饭后用于表现奖励产出的非循环动画名。
+    /// 当前表内 LuLu 使用 Attack1，其余宠物使用 Attack。
+    /// </summary>
+    public string GiveGoldAnimationName { get; private set; }
 
     /// <summary>
     /// 属性类型。
@@ -159,15 +165,22 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        if (!Enum.TryParse(columns[8].Trim(), true, out PetAttributeType attributeType) || !Enum.IsDefined(typeof(PetAttributeType), attributeType))
+        string giveGoldAnimationName = columns[8].Trim();
+        if (string.IsNullOrWhiteSpace(giveGoldAnimationName))
         {
-            Log.Warning("PetDataRow parse failed because AttributeType '{0}' is invalid, code '{1}'.", columns[8], code);
+            Log.Warning("PetDataRow parse failed because GiveGoldAnimationName is empty, code '{0}'.", code);
             return false;
         }
 
-        if (!int.TryParse(columns[9], out int attributeValue))
+        if (!Enum.TryParse(columns[9].Trim(), true, out PetAttributeType attributeType) || !Enum.IsDefined(typeof(PetAttributeType), attributeType))
         {
-            Log.Warning("PetDataRow parse failed because AttributeValue '{0}' is invalid, code '{1}'.", columns[9], code);
+            Log.Warning("PetDataRow parse failed because AttributeType '{0}' is invalid, code '{1}'.", columns[9], code);
+            return false;
+        }
+
+        if (!int.TryParse(columns[10], out int attributeValue))
+        {
+            Log.Warning("PetDataRow parse failed because AttributeValue '{0}' is invalid, code '{1}'.", columns[10], code);
             return false;
         }
 
@@ -191,9 +204,10 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
         UiSkeletonDataPath = uiSkeletonDataPath;
         IdleAnimationName = idleAnimationName;
         MoveAnimationName = moveAnimationName;
+        GiveGoldAnimationName = giveGoldAnimationName;
         AttributeType = attributeType;
         AttributeValue = attributeValue;
-        Description = columns[10].Trim();
+        Description = columns[11].Trim();
         return true;
     }
 

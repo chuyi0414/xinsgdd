@@ -25,17 +25,17 @@ public sealed class ToastUIForm : UIFormLogic
     /// <summary>
     /// Toast 上飘距离（anchoredPosition Y 偏移）。
     /// </summary>
-    private const float FloatOffsetY = 80f;
+    private const float FloatOffsetY = 500f;
 
     /// <summary>
     /// 多条 Toast 之间的垂直间距。
     /// </summary>
-    private const float StackSpacing = 60f;
+    private const float StackSpacing = 0f;
 
     /// <summary>
-    /// 上飘渐隐动画时长（秒）。
+    /// 渐隐动画时长（秒）。渐隐在上飘末尾叠加进行，不影响总时长。
     /// </summary>
-    private const float FadeDuration = 0.3f;
+    private const float FadeDuration = 0.5f;
 
     /// <summary>
     /// Toast 子物体模板（包含 TMP_Text）。
@@ -213,9 +213,9 @@ public sealed class ToastUIForm : UIFormLogic
     /// 单条 Toast 子物体。
     /// 挂在 ToastTemplate 克隆体上，负责显示文本并播放上飘渐隐动画。
     /// 
-    /// 动画分两阶段：
-    /// 1. 停留阶段：文本完全可见，等待 duration 秒；
-    /// 2. 上飘渐隐阶段：向上漂移 FloatOffsetY 并同时淡出。
+    /// 动画全程上飘，渐隐在末尾叠加：
+    /// 1. 上飘阶段：全程 duration 秒向上漂移 FloatOffsetY；
+    /// 2. 渐隐阶段：在最后 FadeDuration 秒叠加淡出，期间继续上飘。
     /// </summary>
     private sealed class ToastItem : MonoBehaviour
     {
@@ -288,29 +288,30 @@ public sealed class ToastUIForm : UIFormLogic
             _rectTransform.anchoredPosition = new Vector2(0f, stackOffsetY);
             _rectTransform.localScale = Vector3.one;
 
+            // 置顶渲染层级，确保新 Toast 压住旧的
+            _rectTransform.SetAsLastSibling();
+
             if (_text != null)
             {
                 _text.text = message;
                 ResetTextColor();
             }
 
-            // 构建动画序列：停留 → 上飘渐隐
+            // 构建动画序列：上飘全程 duration 秒，渐隐在末尾 FadeDuration 秒叠加
             _sequence = DOTween.Sequence()
                 .SetUpdate(true)
                 .OnComplete(OnSequenceComplete);
 
-            // 阶段1：停留 duration 秒
-            _sequence.AppendInterval(duration);
-
-            // 阶段2：上飘 + 渐隐
+            // 上飘：全程 duration 秒
             float endY = stackOffsetY + FloatOffsetY;
             _sequence.Append(
-                _rectTransform.DOAnchorPosY(endY, FadeDuration).SetEase(Ease.OutCubic));
+                _rectTransform.DOAnchorPosY(endY, duration).SetEase(Ease.Linear));
 
+            // 渐隐：在 duration - FadeDuration 时刻插入，与上飘并行
             if (_text != null)
             {
-                _sequence.Join(
-                    _text.DOFade(0f, FadeDuration).SetEase(Ease.InQuad));
+                _sequence.Insert(duration - FadeDuration,
+                    _text.DOFade(0f, FadeDuration).SetEase(Ease.Linear));
             }
         }
 

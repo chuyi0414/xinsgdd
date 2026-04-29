@@ -15,7 +15,7 @@ MonoBehaviour:
   ProjectConf:
     projectName: sgdd
     Appid: wxbc329108ab20d4d1
-    CDN: 
+    CDN: https://7469-tianxing-001-2g9lrxwh45e5182d-1385561715.tcb.qcloud.la/ServerData_sgdd/WebGL
     assetLoadType: 1
     compressDataPackage: 0
     VideoUrl: 
@@ -24,13 +24,13 @@ MonoBehaviour:
     StreamCDN: 
     bundleHashLength: 32
     bundlePathIdentifier: StreamingAssets;
-    bundleExcludeExtensions: json;
+    bundleExcludeExtensions: 
     AssetsUrl: 
     MemorySize: 256
     HideAfterCallMain: 1
     preloadFiles: 
     Orientation: 0
-    bgImageSrc: Assets/WX-WASM-SDK-V2/Runtime/wechat-default/images/background.jpg
+    bgImageSrc: Assets/_Game/Resources_moved/Arts/Load/UI_Jiazai_001.png
     dataFileSubPrefix: 
     maxStorage: 200
     defaultReleaseSize: 31457280
@@ -55,7 +55,7 @@ MonoBehaviour:
     profilingFuncs: 0
     Webgl2: 1
     fbslim: 1
-    DeleteStreamingAssets: 1
+    DeleteStreamingAssets: 0
     ProfilingMemory: 0
     CleanBuild: 1
     CustomNodePath: 

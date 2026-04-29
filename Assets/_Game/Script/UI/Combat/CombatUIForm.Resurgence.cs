@@ -53,6 +53,7 @@ public sealed partial class CombatUIForm
 
         controller.ApplyResurgenceComboBonus(10);
         _hasRevivedThisBattle = true;
+        ToastUtility.Show("复活成功，连击×10");
         CloseResurgenceUIForm();
         return true;
     }
@@ -82,6 +83,7 @@ public sealed partial class CombatUIForm
 
         controller.ApplyResurgenceComboBonus(10);
         _hasRevivedThisBattle = true;
+        ToastUtility.Show("复活成功，连击×10");
         CloseResurgenceUIForm();
         return true;
     }

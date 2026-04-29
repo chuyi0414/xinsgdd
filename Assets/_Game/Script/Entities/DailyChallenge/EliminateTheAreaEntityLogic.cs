@@ -301,6 +301,14 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     /// </summary>
     private bool _isWaitingAreaOpRunning;
 
+    /// <summary>
+    /// 已通过 TryRequestInsert 入队但尚未被 ExecuteInsertOp 消费的插入操作数量。
+    /// ⚠️ 避坑：容量判断必须用 _currentCardCount + _pendingInsertCount，
+    /// 否则快速连点不同卡片时，_currentCardCount 尚未被 ExecuteInsertOp 更新，
+    /// 两次 TryRequestInsert 都看到同一个过时计数，均通过检查导致超容。
+    /// </summary>
+    private int _pendingInsertCount;
+
     // ───────────── 满格结算 ─────────────
 
     /// <summary>
@@ -350,6 +358,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         _isWaitingAreaOpRunning = false;
         _settlementDirty = false;
         _waitingAreaOpQueue.Clear();
+        _pendingInsertCount = 0;
 
         // 重置双端快照排序追踪状态，避免跨局残留
         ResetDualEndLayoutState();
@@ -401,6 +410,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         _waitingOrder.Clear();
         _waitingAreaOpQueue.Clear();
         _currentCardCount = 0;
+        _pendingInsertCount = 0;
         _isWaitingAreaOpRunning = false;
         _settlementDirty = false;
         OnSettlementCleared = null;
@@ -468,11 +478,17 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
             return false;
         }
 
-        // 等待区已满，拒绝插入
-        if (_currentCardCount >= _maxCardCount)
+        // 等待区已满（含已预留的待执行插入），拒绝插入
+        if (_currentCardCount + _pendingInsertCount >= _maxCardCount)
         {
             return false;
         }
+
+        // ⚠️ 避坑：立即预留槽位计数，防止快速连点不同卡片时 TOCTOU 竞态超容。
+        // _currentCardCount 在 ExecuteInsertOp 中才被 _waitingOrder.Count 校正为真实值，
+        // 中间窗口内必须靠 _pendingInsertCount 占位，否则两次 TryRequestInsert 都看到
+        // 同一个过时的 _currentCardCount，均通过检查导致超容。
+        _pendingInsertCount++;
 
         // 立即标记为移动中，避免快速连点重复入队
         card.SetMoving(true);
@@ -487,9 +503,9 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     }
 
     /// <summary>
-    /// 当前等待区是否已满。
+    /// 当前等待区是否已满（含已预留的待执行插入）。
     /// </summary>
-    public bool IsFull => _currentCardCount >= _maxCardCount;
+    public bool IsFull => _currentCardCount + _pendingInsertCount >= _maxCardCount;
 
     /// <summary>
     /// 当前等待区卡片数量。
@@ -1232,6 +1248,12 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     /// <param name="card">待插入的卡片实体逻辑。</param>
     private void ExecuteInsertOp(EliminateCardEntityLogic card)
     {
+        // ⚠️ 避坑：无论 card 是否为 null，预留计数都必须回退，
+        // 因为 TryRequestInsert 已经为这次插入预留了一个 _pendingInsertCount 槽位。
+        // 正常路径：_pendingInsertCount 回退后，_currentCardCount 由 _waitingOrder.Count 校正；
+        // null 兜底路径：_pendingInsertCount 回退即可，_currentCardCount 不受影响。
+        _pendingInsertCount--;
+
         if (card == null)
         {
             FinishWaitingAreaOp();

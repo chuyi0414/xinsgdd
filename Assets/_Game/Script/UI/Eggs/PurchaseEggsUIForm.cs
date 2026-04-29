@@ -519,6 +519,18 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
         if (!GameEntry.EggHatch.TryPurchaseEgg(eggDataRow.Code, out EggHatchComponent.EggPurchaseFailure failure))
         {
             Log.Warning("PurchaseEggsUIForm 购买蛋 '{0}' 失败，原因：'{1}'。", eggDataRow.Code, failure);
+            switch (failure)
+            {
+                case EggHatchComponent.EggPurchaseFailure.InsufficientGold:
+                    ToastUtility.Show("金币不足");
+                    break;
+                case EggHatchComponent.EggPurchaseFailure.InventoryFull:
+                    ToastUtility.Show("蛋槽已满");
+                    break;
+                default:
+                    ToastUtility.Show("购买失败");
+                    break;
+            }
             return;
         }
 

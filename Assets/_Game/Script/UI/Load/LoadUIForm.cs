@@ -3,191 +3,112 @@ using UnityEngine.UI;
 using UnityGameFramework.Runtime;
 
 /// <summary>
-/// 加载界面
+/// 加载界面。
+/// 预制体本身已注册到 Addressables（群组 Remote Assets，label "Load"）；
+/// 6 张加载用图作为 prefab 的直接引用，会随 bundle 由 Addressables 依赖追踪自动加载，
+/// 因此脚本不再持有 Image 引用，也无需运行时 LoadAssetsByLabel + 名字分发。
+/// 注意：该结论的前提是 prefab 上 6 个 Image 节点的 m_Sprite 已在编辑器中拖入对应 Sprite asset。
 /// </summary>
 public class LoadUIForm : UIFormLogic
 {
-    // 加载按钮
-    [SerializeField]
-    private Button _btnLoad;
+    // 「进入游戏」按钮：DataTable 与 GameAssets 双就绪后由 LoadProcedure 主动激活。
+    [SerializeField] private Button _btnLoad;
+    // 进度条：值域 [0, 1]，由 OnUpdate 内部计算出的「伪进度 + 真进度」混合驱动。
+    [SerializeField] private Slider _progressSlider;
 
-    // 进度条 Slider，需在 Inspector 中拖入
-    [SerializeField]
-    private Slider _progressSlider;
-
-    // 假加载持续时间（秒），此阶段内从 0% 缓动到 80%
     private const float FakeDuration = 3f;
-
-    // 假加载目标进度（0~1）
     private const float FakeTarget = 0.8f;
-
-    // 实际初始化阶段进度缓动速率（每秒增量 0~1）
     private const float RealLerpSpeed = 0.5f;
 
-    // 当前显示的进度值（0~1）
     private float _displayProgress;
-
-    // 从 OnOpen 开始累计的真实时间
     private float _elapsedTime;
-
-    // 假加载是否已完成（达到 80%）
     private bool _fakeDone;
-
-    // 是否已触发进入主界面
     private bool _enteredMain;
 
-    /// <summary>
-    /// 初始化加载界面并绑定按钮事件，进度条归零。
-    /// </summary>
     protected override void OnInit(object userData)
     {
         base.OnInit(userData);
-
-        if (_btnLoad == null)
-        {
-            Log.Warning("LoadUIForm 找不到 BtnLoad。");
-        }
-        else
-        {
-            _btnLoad.onClick.AddListener(OnBtnLoad);
-        }
-
-        if (_progressSlider == null)
-        {
-            Log.Warning("LoadUIForm 找不到 ProgressSlider，进度条功能不可用。");
-        }
-
-        // 进度条初始归零
+        if (_btnLoad != null) _btnLoad.onClick.AddListener(OnBtnLoad);
         SetProgress(0f);
         SetLoadButtonInteractable(false);
     }
 
-    /// <summary>
-    /// 打开界面时重置假加载状态并启动进度驱动。
-    /// </summary>
     protected override void OnOpen(object userData)
     {
         base.OnOpen(userData);
 
+        // 每次重新打开都从零状态进入，避免上一次未完成的进度/标志位残留。
         _displayProgress = 0f;
         _elapsedTime = 0f;
         _fakeDone = false;
         _enteredMain = false;
         SetProgress(0f);
+        // 数据/资源未就绪前禁止点击；CanEnterMain 通过后由 OnUpdate 主动解锁。
         SetLoadButtonInteractable(false);
     }
 
-    /// <summary>
-    /// 每帧驱动进度条：假加载阶段 + 实际初始化阶段。
-    /// </summary>
-    /// <param name="elapseSeconds">逻辑流逝时间（秒）。</param>
-    /// <param name="realElapseSeconds">真实流逝时间（秒）。</param>
     protected override void OnUpdate(float elapseSeconds, float realElapseSeconds)
     {
         base.OnUpdate(elapseSeconds, realElapseSeconds);
-
-        if (_enteredMain)
-        {
-            return;
-        }
+        if (_enteredMain) return;
 
         if (!_fakeDone)
         {
-            // ---- 假加载阶段：3 秒内用 EaseOutQuad 缓动从 0 → 80% ----
             _elapsedTime += realElapseSeconds;
             float t = Mathf.Clamp01(_elapsedTime / FakeDuration);
-            // EaseOutQuad: f(t) = 1 - (1-t)^2，先快后慢，视觉上更自然
             float eased = 1f - (1f - t) * (1f - t);
             _displayProgress = eased * FakeTarget;
             SetProgress(_displayProgress);
-
-            if (t >= 1f)
-            {
-                _fakeDone = true;
-            }
+            if (t >= 1f) _fakeDone = true;
         }
         else
         {
-            // ---- 实际初始化阶段：检测 CanEnterMain，满足则缓动到 100% ----
             float target = CanEnterMain() ? 1f : FakeTarget;
             _displayProgress = Mathf.MoveTowards(_displayProgress, target, RealLerpSpeed * realElapseSeconds);
             SetProgress(_displayProgress);
         }
 
-        // 进度满且尚未进入主界面 → 仅启用按钮，等待玩家手动点击
         if (_displayProgress >= 1f && !_enteredMain)
         {
             SetLoadButtonInteractable(true);
         }
     }
 
-    /// <summary>
-    /// 销毁时移除按钮监听。
-    /// </summary>
+    protected override void OnClose(bool isShutdown, object userData)
+    {
+        base.OnClose(isShutdown, userData);
+        // 已无业务向 Temporary scope 注册资源；prefab 自身的依赖资源由 GF 关闭流程统一回收，无需手动 ReleaseScope。
+    }
+
     private void OnDestroy()
     {
-        if (_btnLoad != null)
-        {
-            _btnLoad.onClick.RemoveListener(OnBtnLoad);
-        }
+        if (_btnLoad != null) _btnLoad.onClick.RemoveListener(OnBtnLoad);
     }
 
-    /// <summary>
-    /// 设置加载按钮是否可点击。
-    /// </summary>
     public void SetLoadButtonInteractable(bool isInteractable)
     {
-        if (_btnLoad == null)
-        {
-            return;
-        }
-
-        _btnLoad.interactable = isInteractable;
+        if (_btnLoad != null) _btnLoad.interactable = isInteractable;
     }
 
-    /// <summary>
-    /// 加载按钮点击逻辑：仅当初始化完成时允许手动进入。
-    /// </summary>
     private void OnBtnLoad()
     {
-        // 播放点击音效
         UIInteractionSound.PlayClick();
-        
-        // 进度未满时按钮不可交互，此处无需再检查 CanEnterMain
-        // _enteredMain 防止重复点击导致多次状态切换
-        if (_enteredMain)
-        {
-            return;
-        }
-
+        if (_enteredMain) return;
         _enteredMain = true;
         EnterMain();
     }
 
-    /// <summary>
-    /// 执行进入主界面的流程切换。
-    /// </summary>
     private void EnterMain()
     {
         GameFramework.Procedure.ProcedureBase currentProcedure = GameEntry.Procedure.CurrentProcedure;
         currentProcedure.ChangeState<MainProcedure>(currentProcedure.procedureOwner);
     }
 
-    /// <summary>
-    /// 设置进度条显示值（0~1）。Slider 为空时安全跳过。
-    /// </summary>
-    /// <param name="progress">进度值，范围 0~1。</param>
     private void SetProgress(float progress)
     {
-        if (_progressSlider != null)
-        {
-            _progressSlider.value = progress;
-        }
+        if (_progressSlider != null) _progressSlider.value = progress;
     }
 
-    /// <summary>
-    /// 当前是否允许进入主界面。
-    /// </summary>
     private static bool CanEnterMain()
     {
         return GameEntry.DataTables != null

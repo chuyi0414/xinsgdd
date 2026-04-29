@@ -17,7 +17,7 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
     /// <summary>
     /// 数据表固定列数。
     /// </summary>
-    private const int ColumnCount = 17;
+    private const int ColumnCount = 19;
 
     /// <summary>
     /// 合法规则 Code 的前缀。
@@ -95,9 +95,20 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
     public float DeliverAnimationDuration { get; private set; }
 
     /// <summary>
-    /// 点餐偏向已解锁水果桶的概率。
+    /// 宠物点餐时直接抽取当前最高已解锁水果的概率。
     /// </summary>
-    public int PreferUnlockedFruitProbability { get; private set; }
+    public int DiningHighestUnlockedFruitProbability { get; private set; }
+
+    /// <summary>
+    /// 宠物点餐时从其他已解锁水果中随机抽取的概率。
+    /// 这里明确排除当前最高已解锁水果，避免最高水果吃掉 40% 随机池。
+    /// </summary>
+    public int DiningOtherUnlockedFruitProbability { get; private set; }
+
+    /// <summary>
+    /// 宠物点餐时从未解锁水果中随机抽取的概率。
+    /// </summary>
+    public int DiningLockedFruitProbability { get; private set; }
 
     /// <summary>
     /// 宠物产出初级物的概率。
@@ -215,27 +226,48 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        if (!TryParseProbability(columns[12], out int preferUnlockedFruitProbability))
+        if (!TryParseProbability(columns[12], out int diningHighestUnlockedFruitProbability))
         {
-            Log.Warning("GameplayRuleDataRow parse failed because PreferUnlockedFruitProbability '{0}' is invalid, code '{1}'.", columns[12], code);
+            Log.Warning("GameplayRuleDataRow parse failed because DiningHighestUnlockedFruitProbability '{0}' is invalid, code '{1}'.", columns[12], code);
             return false;
         }
 
-        if (!TryParseProbability(columns[13], out int primaryProduceProbability))
+        if (!TryParseProbability(columns[13], out int diningOtherUnlockedFruitProbability))
         {
-            Log.Warning("GameplayRuleDataRow parse failed because PrimaryProduceProbability '{0}' is invalid, code '{1}'.", columns[13], code);
+            Log.Warning("GameplayRuleDataRow parse failed because DiningOtherUnlockedFruitProbability '{0}' is invalid, code '{1}'.", columns[13], code);
             return false;
         }
 
-        if (!TryParseProbability(columns[14], out int intermediateProduceProbability))
+        if (!TryParseProbability(columns[14], out int diningLockedFruitProbability))
         {
-            Log.Warning("GameplayRuleDataRow parse failed because IntermediateProduceProbability '{0}' is invalid, code '{1}'.", columns[14], code);
+            Log.Warning("GameplayRuleDataRow parse failed because DiningLockedFruitProbability '{0}' is invalid, code '{1}'.", columns[14], code);
             return false;
         }
 
-        if (!TryParseProbability(columns[15], out int advancedProduceProbability))
+        if (diningHighestUnlockedFruitProbability + diningOtherUnlockedFruitProbability + diningLockedFruitProbability != 100)
         {
-            Log.Warning("GameplayRuleDataRow parse failed because AdvancedProduceProbability '{0}' is invalid, code '{1}'.", columns[15], code);
+            Log.Warning(
+                "GameplayRuleDataRow parse failed because dining wish probabilities total is '{0}', code '{1}'.",
+                diningHighestUnlockedFruitProbability + diningOtherUnlockedFruitProbability + diningLockedFruitProbability,
+                code);
+            return false;
+        }
+
+        if (!TryParseProbability(columns[15], out int primaryProduceProbability))
+        {
+            Log.Warning("GameplayRuleDataRow parse failed because PrimaryProduceProbability '{0}' is invalid, code '{1}'.", columns[15], code);
+            return false;
+        }
+
+        if (!TryParseProbability(columns[16], out int intermediateProduceProbability))
+        {
+            Log.Warning("GameplayRuleDataRow parse failed because IntermediateProduceProbability '{0}' is invalid, code '{1}'.", columns[16], code);
+            return false;
+        }
+
+        if (!TryParseProbability(columns[17], out int advancedProduceProbability))
+        {
+            Log.Warning("GameplayRuleDataRow parse failed because AdvancedProduceProbability '{0}' is invalid, code '{1}'.", columns[17], code);
             return false;
         }
 
@@ -260,11 +292,13 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
         PlayAreaStaySeconds = playAreaStaySeconds;
         ServingDurationSeconds = servingDurationSeconds;
         DeliverAnimationDuration = deliverAnimationDuration;
-        PreferUnlockedFruitProbability = preferUnlockedFruitProbability;
+        DiningHighestUnlockedFruitProbability = diningHighestUnlockedFruitProbability;
+        DiningOtherUnlockedFruitProbability = diningOtherUnlockedFruitProbability;
+        DiningLockedFruitProbability = diningLockedFruitProbability;
         PrimaryProduceProbability = primaryProduceProbability;
         IntermediateProduceProbability = intermediateProduceProbability;
         AdvancedProduceProbability = advancedProduceProbability;
-        Description = columns[16].Trim();
+        Description = columns[18].Trim();
         return true;
     }
 

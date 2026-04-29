@@ -106,7 +106,7 @@ MonoBehaviour:
   m_GenerateReadWriteVersionListLength: 1048576
   m_UpdateRetryCount: 3
   m_InstanceRoot: {fileID: 0}
-  m_ResourceHelperTypeName: UnityGameFramework.Runtime.DefaultResourceHelper
+  m_ResourceHelperTypeName: HybridResourceHelper
   m_CustomResourceHelper: {fileID: 0}
   m_LoadResourceAgentHelperTypeName: UnityGameFramework.Runtime.DefaultLoadResourceAgentHelper
   m_CustomLoadResourceAgentHelper: {fileID: 0}

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using DG.Tweening;
 using Spine;
 using Spine.Unity;
@@ -20,6 +20,18 @@ public sealed class PetEntityLogic : EntityLogic
     /// 当前项目所有宠物默认朝左。
     /// </summary>
     private const int DefaultFacingDirection = -1;
+
+    /// <summary>
+    /// 宠物正常行走时的渲染顺序。
+    /// 高于蛋实体(EggSortingOrder=10)，保证宠物走在蛋上方。
+    /// </summary>
+    private const int PetNormalSortingOrder = 20;
+
+    /// <summary>
+    /// 宠物在孵化器内时的渲染顺序。
+    /// 低于孵化器(IncubatorSortingOrder=0)，保证孵化器框架覆盖宠物。
+    /// </summary>
+    private const int PetBehindIncubatorSortingOrder = 0;
 
     /// <summary>
     /// Spine 动画组件。
@@ -48,6 +60,24 @@ public sealed class PetEntityLogic : EntityLogic
     private Tweener _moveTween;
 
     /// <summary>
+    /// 当前奖励表现动画对应的 Spine TrackEntry。
+    /// 该字段只在播放 Attack/Attack1 的非循环动画期间持有，用于隐藏或复用实体时解除 Complete 订阅。
+    /// </summary>
+    private TrackEntry _rewardAnimationTrackEntry;
+
+    /// <summary>
+    /// 当前奖励表现动画结束后的回调。
+    /// 回调参数是宠物实例 Id，便于订单组件精确完成对应宠物的 RewardAnimating 状态。
+    /// </summary>
+    private Action<int> _rewardAnimationCompleteCallback;
+
+    /// <summary>
+    /// 当前正在播放奖励表现动画的宠物实例 Id。
+    /// 初始值为 0，表示没有进行中的奖励动画。
+    /// </summary>
+    private int _rewardAnimationPetInstanceId;
+
+    /// <summary>
     /// 宠物头顶 Bubble 挂点。
     /// UI 会把屏幕空间气泡投影到这里。
     /// </summary>
@@ -70,6 +100,12 @@ public sealed class PetEntityLogic : EntityLogic
     public bool IsMoving => _moveTween != null && _moveTween.IsActive();
 
     /// <summary>
+    /// 当前是否正在播放吃完饭后的奖励表现动画。
+    /// 场地刷新会用它避免重复播放 Idle/Move 打断 Attack/Attack1。
+    /// </summary>
+    public bool IsPlayingRewardAnimation => _rewardAnimationTrackEntry != null;
+
+    /// <summary>
     /// 对外暴露的 Bubble 挂点。
     /// </summary>
     public Transform BubbleAnchor => _bubbleAnchor;
@@ -77,7 +113,7 @@ public sealed class PetEntityLogic : EntityLogic
     /// <summary>
     /// 初始化并缓存 Spine 组件。
     /// </summary>
-    protected  override void OnInit(object userData)
+    protected override void OnInit(object userData)
     {
         base.OnInit(userData);
         CacheComponents();
@@ -97,6 +133,7 @@ public sealed class PetEntityLogic : EntityLogic
     /// </summary>
     protected override void OnHide(bool isShutdown, object userData)
     {
+        ClearRewardAnimationCallback();
         StopMoveTween();
         base.OnHide(isShutdown, userData);
     }
@@ -104,7 +141,7 @@ public sealed class PetEntityLogic : EntityLogic
     /// <summary>
     /// 挂接到父实体时重置局部变换。
     /// </summary>
-    protected  override void OnAttachTo(EntityLogic parentEntity, Transform parentTransform, object userData)
+    protected override void OnAttachTo(EntityLogic parentEntity, Transform parentTransform, object userData)
     {
         CachedTransform.SetParent(parentTransform, false);
         CachedTransform.localPosition = Vector3.zero;
@@ -195,12 +232,56 @@ public sealed class PetEntityLogic : EntityLogic
     /// </summary>
     public void PlayIdleAnimation()
     {
+        ClearRewardAnimationCallback();
         if (!TryGetCurrentPetDataRow(out PetDataRow petDataRow))
         {
             return;
         }
 
         PlayAnimation(petDataRow.IdleAnimationName);
+    }
+
+    /// <summary>
+    /// 播放宠物吃完饭后的奖励表现动画。
+    /// 成功播放时会在动画 Complete 后自动恢复待机动画，并把宠物实例 Id 回传给订单组件。
+    /// </summary>
+    /// <param name="petInstanceId">当前宠物实例 Id。</param>
+    /// <param name="onComplete">奖励表现动画完成回调。</param>
+    /// <param name="animationDuration">实际播放动画的时长，供订单组件设置兜底超时。</param>
+    /// <returns>是否成功开始播放非循环奖励动画。</returns>
+    public bool TryPlayGiveGoldAnimation(int petInstanceId, Action<int> onComplete, out float animationDuration)
+    {
+        animationDuration = 0f;
+        ClearRewardAnimationCallback();
+        CacheComponents();
+        if (petInstanceId <= 0 || _skeletonAnimation == null || _skeletonAnimation.AnimationState == null)
+        {
+            return false;
+        }
+
+        if (!TryGetCurrentPetDataRow(out PetDataRow petDataRow) || string.IsNullOrWhiteSpace(petDataRow.GiveGoldAnimationName))
+        {
+            return false;
+        }
+
+        if (_skeletonAnimation.Skeleton == null || _skeletonAnimation.Skeleton.Data == null)
+        {
+            return false;
+        }
+
+        Spine.Animation giveGoldAnimation = _skeletonAnimation.Skeleton.Data.FindAnimation(petDataRow.GiveGoldAnimationName);
+        if (giveGoldAnimation == null)
+        {
+            Log.Warning("PetEntityLogic can not play give gold animation '{0}' because animation is missing, pet code '{1}'.", petDataRow.GiveGoldAnimationName, petDataRow.Code);
+            return false;
+        }
+
+        animationDuration = giveGoldAnimation.Duration;
+        _rewardAnimationPetInstanceId = petInstanceId;
+        _rewardAnimationCompleteCallback = onComplete;
+        _rewardAnimationTrackEntry = _skeletonAnimation.AnimationState.SetAnimation(0, giveGoldAnimation, false);
+        _rewardAnimationTrackEntry.Complete += OnRewardAnimationComplete;
+        return true;
     }
 
     /// <summary>
@@ -225,13 +306,17 @@ public sealed class PetEntityLogic : EntityLogic
         {
             _skeletonAnimation = GetComponentInChildren<SkeletonAnimation>(true);
 
-            // 首次缓存时设置排序层，避免每次换宠物重复赋值。
+            // 首次缓存时设置排序层与渲染顺序。
+            // 改为与孵化器/蛋同处 Default 层，靠 sortingOrder 动态控制前后。
+            // 默认 PetNormalSortingOrder=20（走在蛋上方），
+            // 进入孵化器触发区时由 IncubatorEntityLogic 调用 SetBehindIncubator 降为 -10。
             if (_skeletonAnimation != null)
             {
                 MeshRenderer meshRenderer = _skeletonAnimation.GetComponent<MeshRenderer>();
                 if (meshRenderer != null)
                 {
-                    meshRenderer.sortingLayerName = "Pet";
+                    meshRenderer.sortingLayerName = "Default";
+                    meshRenderer.sortingOrder = PetNormalSortingOrder;
                 }
             }
         }
@@ -246,6 +331,30 @@ public sealed class PetEntityLogic : EntityLogic
         {
             _hasLoggedMissingBubbleAnchor = true;
             Log.Warning("PetEntityLogic bubble anchor is not assigned.");
+        }
+    }
+
+    /// <summary>
+    /// 设置宠物是否渲染在孵化器后方。
+    /// 由 IncubatorEntityLogic 的触发器调用：
+    /// 宠物进入孵化区触发器 → behind=true，sortingOrder 降为 -10，被孵化器覆盖；
+    /// 宠物离开孵化区触发器 → behind=false，sortingOrder 恢复 20，走在蛋上方。
+    /// </summary>
+    /// <param name="behind">true=退到孵化器后方；false=恢复正常层级。</param>
+    public void SetBehindIncubator(bool behind)
+    {
+        CacheComponents();
+        if (_skeletonAnimation == null)
+        {
+            return;
+        }
+
+        MeshRenderer meshRenderer = _skeletonAnimation.GetComponent<MeshRenderer>();
+        if (meshRenderer != null)
+        {
+            meshRenderer.sortingOrder = behind
+                ? PetBehindIncubatorSortingOrder
+                : PetNormalSortingOrder;
         }
     }
 
@@ -360,6 +469,7 @@ public sealed class PetEntityLogic : EntityLogic
     /// </summary>
     private void PlayAnimation(string animationName)
     {
+        ClearRewardAnimationCallback();
         if (_skeletonAnimation == null || _skeletonAnimation.AnimationState == null || string.IsNullOrWhiteSpace(animationName))
         {
             return;
@@ -374,6 +484,45 @@ public sealed class PetEntityLogic : EntityLogic
         }
 
         _skeletonAnimation.AnimationState.SetAnimation(0, animationName, true);
+    }
+
+    /// <summary>
+    /// Spine 奖励表现动画完成回调。
+    /// </summary>
+    /// <param name="trackEntry">完成播放的 Spine TrackEntry。</param>
+    private void OnRewardAnimationComplete(TrackEntry trackEntry)
+    {
+        if (!ReferenceEquals(trackEntry, _rewardAnimationTrackEntry))
+        {
+            return;
+        }
+
+        int petInstanceId = _rewardAnimationPetInstanceId;
+        Action<int> completeCallback = _rewardAnimationCompleteCallback;
+        ClearRewardAnimationCallback();
+
+        if (TryGetCurrentPetDataRow(out PetDataRow petDataRow))
+        {
+            PlayAnimation(petDataRow.IdleAnimationName);
+        }
+
+        completeCallback?.Invoke(petInstanceId);
+    }
+
+    /// <summary>
+    /// 清理奖励表现动画回调缓存。
+    /// 该方法不会停止 Spine 当前动画，只负责解除事件订阅，避免对象池复用后旧回调误触发。
+    /// </summary>
+    private void ClearRewardAnimationCallback()
+    {
+        if (_rewardAnimationTrackEntry != null)
+        {
+            _rewardAnimationTrackEntry.Complete -= OnRewardAnimationComplete;
+        }
+
+        _rewardAnimationTrackEntry = null;
+        _rewardAnimationCompleteCallback = null;
+        _rewardAnimationPetInstanceId = 0;
     }
 
     /// <summary>

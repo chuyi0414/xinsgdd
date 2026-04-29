@@ -191,6 +191,7 @@ public sealed class PurchaseUIForm : UIFormLogic
             if (GameEntry.Fruits == null || !GameEntry.Fruits.TryConsumeGold(_currentData.AcquireParam))
             {
                 Log.Warning("PurchaseUIForm 购买失败，金币不足或扣费失败，Item='{0}'。", _currentData.ItemName);
+                ToastUtility.Show("金币不足");
                 CloseSelf();
                 return;
             }

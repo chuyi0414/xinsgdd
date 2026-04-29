@@ -14,9 +14,9 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 数据表固定列数。
-    /// 当前 Fruit.txt 结构为：Id、Code、Name、IsUnlocked、IconPath、UnlockGold、CoinProbability、CoinAmount、ProduceSeconds、SaveGoldPerMinute、Description。
+    /// 当前 Fruit.txt 结构为：Id、Code、Name、IsUnlocked、IconPath、DailyChallengePath、UnlockGold、CoinProbability、CoinAmount、ProduceSeconds、SaveGoldPerMinute、Description。
     /// </summary>
-    private const int ColumnCount = 11;
+    private const int ColumnCount = 12;
 
     /// <summary>
     /// 合法水果 Code 的前缀。
@@ -50,8 +50,24 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 图标资源路径。
+    /// 用于水果图鉴、水果实体等常规展示场景。
     /// </summary>
     public string IconPath { get; private set; }
+
+    /// <summary>
+    /// 每日关卡图资源路径。
+    /// 专供每日一关消除卡使用的卡图路径，与 IconPath 区分。
+    /// 允许为空：为空时回退到 IconPath（通过 EffectiveDailyChallengePath 统一获取）。
+    /// </summary>
+    public string DailyChallengePath { get; private set; }
+
+    /// <summary>
+    /// 获取每日关卡实际使用的资源路径。
+    /// 若 DailyChallengePath 非空则直接返回，否则回退到 IconPath。
+    /// 业务层应始终通过此属性取路径，避免手动判空。
+    /// </summary>
+    public string EffectiveDailyChallengePath
+        => !string.IsNullOrWhiteSpace(DailyChallengePath) ? DailyChallengePath : IconPath;
 
     /// <summary>
     /// 解锁所需金币。
@@ -144,9 +160,12 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        if (!int.TryParse(columns[5], out int unlockGold) || unlockGold < 0)
+        // 每日关卡图路径：允许为空，为空时回退到 IconPath。
+        string dailyChallengePath = columns[5].Trim();
+
+        if (!int.TryParse(columns[6], out int unlockGold) || unlockGold < 0)
         {
-            Log.Warning("FruitDataRow parse failed because UnlockGold '{0}' is invalid, code '{1}'.", columns[5], code);
+            Log.Warning("FruitDataRow parse failed because UnlockGold '{0}' is invalid, code '{1}'.", columns[6], code);
             return false;
         }
 
@@ -162,31 +181,31 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        if (!int.TryParse(columns[6], out int coinProbability) || coinProbability < 0 || coinProbability > 100)
+        if (!int.TryParse(columns[7], out int coinProbability) || coinProbability < 0 || coinProbability > 100)
         {
-            Log.Warning("FruitDataRow parse failed because CoinProbability '{0}' is invalid, code '{1}'.", columns[6], code);
+            Log.Warning("FruitDataRow parse failed because CoinProbability '{0}' is invalid, code '{1}'.", columns[7], code);
             return false;
         }
 
-        if (!int.TryParse(columns[7], out int coinAmount) || coinAmount <= 0)
+        if (!int.TryParse(columns[8], out int coinAmount) || coinAmount <= 0)
         {
-            Log.Warning("FruitDataRow parse failed because CoinAmount '{0}' is invalid, code '{1}'.", columns[7], code);
+            Log.Warning("FruitDataRow parse failed because CoinAmount '{0}' is invalid, code '{1}'.", columns[8], code);
             return false;
         }
 
-        if (!int.TryParse(columns[8], out int produceSeconds) || produceSeconds <= 0)
+        if (!int.TryParse(columns[9], out int produceSeconds) || produceSeconds <= 0)
         {
-            Log.Warning("FruitDataRow parse failed because ProduceSeconds '{0}' is invalid, code '{1}'.", columns[8], code);
+            Log.Warning("FruitDataRow parse failed because ProduceSeconds '{0}' is invalid, code '{1}'.", columns[9], code);
             return false;
         }
 
-        if (!int.TryParse(columns[9], out int saveGoldPerMinute) || saveGoldPerMinute < 0)
+        if (!int.TryParse(columns[10], out int saveGoldPerMinute) || saveGoldPerMinute < 0)
         {
-            Log.Warning("FruitDataRow parse failed because SaveGoldPerMinute '{0}' is invalid, code '{1}'.", columns[9], code);
+            Log.Warning("FruitDataRow parse failed because SaveGoldPerMinute '{0}' is invalid, code '{1}'.", columns[10], code);
             return false;
         }
 
-        string description = columns[10].Trim();
+        string description = columns[11].Trim();
         if (string.IsNullOrWhiteSpace(description))
         {
             Log.Warning("FruitDataRow parse failed because Description is empty, code '{0}'.", code);
@@ -198,6 +217,7 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
         Name = name;
         IsUnlocked = isUnlocked;
         IconPath = iconPath;
+        DailyChallengePath = dailyChallengePath;
         UnlockGold = unlockGold;
         CoinProbability = coinProbability;
         CoinAmount = coinAmount;

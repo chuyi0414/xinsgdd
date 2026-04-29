@@ -7,6 +7,14 @@ using UnityGameFramework.Runtime;
 public sealed class OrchardEntityLogic : EntityLogic
 {
     /// <summary>
+    /// 水果出生挂点。
+    /// 由 Inspector 手动拖入 OrchardEntity prefab 内的子节点，
+    /// 水果生成时将以此点作为初始世界位置与挂接后的局部坐标。
+    /// </summary>
+    [SerializeField]
+    private Transform _fruitGenericPoint;
+
+    /// <summary>
     /// 果树的精灵渲染器缓存。
     /// 未解锁时用于替换 Level 0 占位精灵。
     /// </summary>
@@ -74,9 +82,48 @@ public sealed class OrchardEntityLogic : EntityLogic
     /// <summary>
     /// 更新果园实体世界位置。
     /// </summary>
+    /// <param name="worldPosition">目标世界坐标。</param>
     public void SetWorldPosition(Vector3 worldPosition)
     {
         CachedTransform.position = worldPosition;
+    }
+
+    /// <summary>
+    /// 获取水果出生挂点的世界坐标。
+    /// 供 PlayfieldEntityModule 在创建果树水果时使用，
+    /// 优先返回 prefab 上手动拖入的 _fruitGenericPoint 世界坐标。
+    /// </summary>
+    /// <param name="worldPosition">命中 _fruitGenericPoint 时输出该挂点的世界坐标。</param>
+    /// <returns>是否成功获取到有效的水果出生挂点。</returns>
+    public bool TryGetFruitGenericWorldPosition(out Vector3 worldPosition)
+    {
+        if (_fruitGenericPoint != null)
+        {
+            worldPosition = _fruitGenericPoint.position;
+            return true;
+        }
+
+        worldPosition = Vector3.zero;
+        return false;
+    }
+
+    /// <summary>
+    /// 获取水果出生挂点相对于果树根节点的局部坐标。
+    /// 供水果 AttachEntity 后设置正确的 localPosition 使用，
+    /// 使水果在挂接为果树子节点后仍对齐到 _fruitGenericPoint 的位置。
+    /// </summary>
+    /// <param name="localPosition">命中 _fruitGenericPoint 时输出该挂点的局部坐标。</param>
+    /// <returns>是否成功获取到有效的水果出生挂点局部坐标。</returns>
+    public bool TryGetFruitGenericLocalPosition(out Vector3 localPosition)
+    {
+        if (_fruitGenericPoint != null)
+        {
+            localPosition = _fruitGenericPoint.localPosition;
+            return true;
+        }
+
+        localPosition = Vector3.zero;
+        return false;
     }
 
     /// <summary>

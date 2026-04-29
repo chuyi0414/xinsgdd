@@ -65,6 +65,42 @@ public sealed class IncubatorEntityLogic : EntityLogic
     }
 
     /// <summary>
+    /// 宠物进入孵化区触发器：将宠物渲染层级降到孵化器后方。
+    /// ⚠️ 避坑：Unity 在 Collider 被创建/激活到 Trigger 内部时，
+    /// 会在下一个 Physics 更新触发 OnTriggerEnter2D，所以宠物刚出生在触发区内也能自动命中。
+    /// ⚠️ 避坑：用 GetComponentInParent 而非 GetComponent，因为 PetEntityLogic 挂在根节点，
+    /// 而 BoxCollider2D 可能挂在 Spine 子物体上。
+    /// </summary>
+    /// <param name="other">进入触发区的碰撞体。</param>
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        PetEntityLogic petEntityLogic = other.GetComponentInParent<PetEntityLogic>();
+        if (petEntityLogic == null)
+        {
+            return;
+        }
+
+        petEntityLogic.SetBehindIncubator(true);
+    }
+
+    /// <summary>
+    /// 宠物离开孵化区触发器：恢复宠物正常渲染层级（走在蛋上方）。
+    /// 这才是用户期望的"走到孵化区中间再出来"的切换时机，
+    /// 而不是一离开孵化器出生点就切层。
+    /// </summary>
+    /// <param name="other">离开触发区的碰撞体。</param>
+    private void OnTriggerExit2D(Collider2D other)
+    {
+        PetEntityLogic petEntityLogic = other.GetComponentInParent<PetEntityLogic>();
+        if (petEntityLogic == null)
+        {
+            return;
+        }
+
+        petEntityLogic.SetBehindIncubator(false);
+    }
+
+    /// <summary>
     /// 应用孵化器实体显示数据。
     /// 未解锁时从配置表加载 Level 0 精灵替换正常外观。
     /// </summary>

@@ -290,6 +290,7 @@ public sealed partial class PlayerRuntimeModule
         _allFruitRows = fruitRows;
         _unlockedFruitCandidates = new FruitDataRow[fruitRows.Length];
         _lockedFruitCandidates = new FruitDataRow[fruitRows.Length];
+        _otherUnlockedFruitCandidates = new FruitDataRow[fruitRows.Length];
         _unlockedFruitCodes.Clear();
         _unlockedPetCodes.Clear();
 

@@ -420,6 +420,22 @@ namespace GameFramework.Resource
         void SetResourceHelper(IResourceHelper resourceHelper);
 
         /// <summary>
+        /// 设置 Addressables 资源路由委托。
+        /// 由项目层（_Game）注入；GF 内核 LoadAsset 入口会优先咨询路由，命中则放弃 GF 主链路。
+        /// 设为 null 表示禁用 Addressables 路由，全部走 GF 主链路（ResourceMode.Resource → Resources.LoadAsync）。
+        /// </summary>
+        /// <param name="router">路由委托；null 表示禁用。</param>
+        void SetAddressablesAssetRouter(AddressablesAssetRouter router);
+
+        /// <summary>
+        /// 设置 Addressables 资源释放路由委托。
+        /// 由项目层（_Game）注入；GF 内核 UnloadAsset 入口会优先咨询路由：命中则跳过 m_AssetPool.Unspawn（Addressables 资源未注册到对象池，强行 Unspawn 会抛异常）。
+        /// 设为 null 表示禁用释放路由，全部走 GF 主链路（m_AssetPool.Unspawn → 引用归零 → IResourceHelper.Release）。
+        /// </summary>
+        /// <param name="releaseRouter">释放路由委托；null 表示禁用。</param>
+        void SetAddressablesAssetReleaseRouter(AddressablesAssetReleaseRouter releaseRouter);
+
+        /// <summary>
         /// 增加加载资源代理辅助器。
         /// </summary>
         /// <param name="loadResourceAgentHelper">要增加的加载资源代理辅助器。</param>

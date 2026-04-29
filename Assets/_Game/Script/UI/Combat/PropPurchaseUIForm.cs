@@ -306,6 +306,7 @@ public sealed class PropPurchaseUIForm : UIFormLogic
 
         if (!GameEntry.Fruits.TryConsumeGold(goldCost))
         {
+            ToastUtility.Show("金币不足");
             return;
         }
 

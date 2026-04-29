@@ -32,6 +32,18 @@ public sealed partial class PlayerRuntimeModule
     private FruitDataRow[] _lockedFruitCandidates = Array.Empty<FruitDataRow>();
 
     /// <summary>
+    /// 已解锁但排除最高水果后的候选桶缓存。
+    /// GameplayRule 中 DiningOtherUnlockedFruitProbability 概率从此桶随机抽取。
+    /// </summary>
+    private FruitDataRow[] _otherUnlockedFruitCandidates = Array.Empty<FruitDataRow>();
+
+    /// <summary>
+    /// 当前最高已解锁水果（Id 最大的已解锁水果）。
+    /// GameplayRule 中 DiningHighestUnlockedFruitProbability 概率直接命中此水果。
+    /// </summary>
+    private FruitDataRow _highestUnlockedFruit;
+
+    /// <summary>
     /// 已解锁候选数量。
     /// </summary>
     private int _unlockedFruitCandidateCount;
@@ -40,6 +52,11 @@ public sealed partial class PlayerRuntimeModule
     /// 未解锁候选数量。
     /// </summary>
     private int _lockedFruitCandidateCount;
+
+    /// <summary>
+    /// 排除最高水果后的已解锁候选数量。
+    /// </summary>
+    private int _otherUnlockedFruitCandidateCount;
 
     /// <summary>
     /// 候选桶缓存是否需要重建。
@@ -135,6 +152,11 @@ public sealed partial class PlayerRuntimeModule
 
     /// <summary>
     /// 为入座宠物抽取本次期望水果。
+    /// 三档概率从 GameplayRule.txt 读取：
+    /// DiningHighestUnlockedFruitProbability → 最高已解锁；
+    /// DiningOtherUnlockedFruitProbability → 其他已解锁（排除最高）；
+    /// DiningLockedFruitProbability → 未解锁。
+    /// 每档命中后若桶为空则逐级降级，确保总能抽到水果。
     /// </summary>
     /// <param name="fruitDataRow">命中的水果配置行。</param>
     /// <returns>是否抽取成功。</returns>
@@ -148,19 +170,66 @@ public sealed partial class PlayerRuntimeModule
 
         RebuildCandidateCachesIfNeeded();
 
-        bool preferUnlocked = UnityEngine.Random.Range(0, FullProbability) < _gameplayRuleDataRow.PreferUnlockedFruitProbability;
-        if (TryPickFruitFromBucket(preferUnlocked, out fruitDataRow))
+        int roll = UnityEngine.Random.Range(0, FullProbability);
+        int highestUnlockedProbability = _gameplayRuleDataRow.DiningHighestUnlockedFruitProbability;
+        int otherUnlockedProbability = _gameplayRuleDataRow.DiningOtherUnlockedFruitProbability;
+        int lockedFruitProbability = _gameplayRuleDataRow.DiningLockedFruitProbability;
+        int otherUnlockedThreshold = highestUnlockedProbability + otherUnlockedProbability;
+        int lockedFruitThreshold = otherUnlockedThreshold + lockedFruitProbability;
+
+        // ── 配置概率 1：直接命中当前最高已解锁水果 ──
+        if (roll < highestUnlockedProbability)
+        {
+            if (_highestUnlockedFruit != null)
+            {
+                fruitDataRow = _highestUnlockedFruit;
+                return true;
+            }
+
+            // 最高桶空，降级到其他已解锁桶
+            if (TryPickOtherUnlockedFruit(out fruitDataRow))
+            {
+                return true;
+            }
+
+            // 再降级到未解锁桶
+            return TryPickFruitFromBucket(false, out fruitDataRow);
+        }
+
+        // ── 配置概率 2：从其他已解锁水果（排除最高）中随机抽 ──
+        if (roll < otherUnlockedThreshold)
+        {
+            if (TryPickOtherUnlockedFruit(out fruitDataRow))
+            {
+                return true;
+            }
+
+            // 其他已解锁桶空，降级到最高桶
+            if (_highestUnlockedFruit != null)
+            {
+                fruitDataRow = _highestUnlockedFruit;
+                return true;
+            }
+
+            // 再降级到未解锁桶
+            return TryPickFruitFromBucket(false, out fruitDataRow);
+        }
+
+        // ── 配置概率 3：从未解锁水果中随机抽 ──
+        if (roll < lockedFruitThreshold && TryPickFruitFromBucket(false, out fruitDataRow))
         {
             return true;
         }
 
-        if (TryPickFruitFromBucket(!preferUnlocked, out fruitDataRow))
+        // 未解锁桶空，降级到最高桶
+        if (_highestUnlockedFruit != null)
         {
+            fruitDataRow = _highestUnlockedFruit;
             return true;
         }
 
-        Log.Warning("PlayerRuntimeModule can not roll dining wish fruit because both candidate buckets are empty.");
-        return false;
+        // 最终降级到其他已解锁桶
+        return TryPickOtherUnlockedFruit(out fruitDataRow);
     }
 
     // ───────────── 水果内部方法 ─────────────
@@ -188,7 +257,25 @@ public sealed partial class PlayerRuntimeModule
     }
 
     /// <summary>
-    /// 重建已解锁桶与未解锁桶缓存。
+    /// 从排除最高水果后的已解锁候选桶中随机抽取一个。
+    /// </summary>
+    /// <param name="fruitDataRow">命中的水果配置行。</param>
+    /// <returns>是否成功命中。</returns>
+    private bool TryPickOtherUnlockedFruit(out FruitDataRow fruitDataRow)
+    {
+        fruitDataRow = null;
+        if (_otherUnlockedFruitCandidateCount <= 0)
+        {
+            return false;
+        }
+
+        int randomIndex = UnityEngine.Random.Range(0, _otherUnlockedFruitCandidateCount);
+        fruitDataRow = _otherUnlockedFruitCandidates[randomIndex];
+        return fruitDataRow != null;
+    }
+
+    /// <summary>
+    /// 重建已解锁桶、排除最高桶、未解锁桶缓存，并追踪最高已解锁水果。
     /// </summary>
     private void RebuildCandidateCachesIfNeeded()
     {
@@ -199,6 +286,8 @@ public sealed partial class PlayerRuntimeModule
 
         _unlockedFruitCandidateCount = 0;
         _lockedFruitCandidateCount = 0;
+        _otherUnlockedFruitCandidateCount = 0;
+        _highestUnlockedFruit = null;
 
         for (int i = 0; i < _allFruitRows.Length; i++)
         {
@@ -212,11 +301,28 @@ public sealed partial class PlayerRuntimeModule
             {
                 _unlockedFruitCandidates[_unlockedFruitCandidateCount] = fruitRow;
                 _unlockedFruitCandidateCount++;
+
+                // 追踪最高已解锁水果（Id 最大者）
+                if (_highestUnlockedFruit == null || fruitRow.Id > _highestUnlockedFruit.Id)
+                {
+                    _highestUnlockedFruit = fruitRow;
+                }
+
                 continue;
             }
 
             _lockedFruitCandidates[_lockedFruitCandidateCount] = fruitRow;
             _lockedFruitCandidateCount++;
+        }
+
+        // 构建"排除最高的其他已解锁"候选桶
+        for (int i = 0; i < _unlockedFruitCandidateCount; i++)
+        {
+            if (_unlockedFruitCandidates[i] != _highestUnlockedFruit)
+            {
+                _otherUnlockedFruitCandidates[_otherUnlockedFruitCandidateCount] = _unlockedFruitCandidates[i];
+                _otherUnlockedFruitCandidateCount++;
+            }
         }
 
         _isCandidateCacheDirty = false;

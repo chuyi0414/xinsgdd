@@ -24,7 +24,13 @@ public enum PetDiningWishState
     Serving = 3,
 
     /// <summary>
+    /// 奖励按钮已经创建，宠物正在播放吃完饭后的 Attack 表现动画。
+    /// 该状态结束前不允许宠物离桌、去游玩区或离场。
+    /// </summary>
+    RewardAnimating = 4,
+
+    /// <summary>
     /// 本次点餐流程已经结束，不再重新出现需求。
     /// </summary>
-    Completed = 4,
+    Completed = 5,
 }

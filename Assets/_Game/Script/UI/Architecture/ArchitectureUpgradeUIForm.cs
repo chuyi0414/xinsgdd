@@ -618,6 +618,10 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
         {
             RefreshAllEntries();
         }
+        else
+        {
+            ToastUtility.Show("金币不足");
+        }
     }
 
     /// <summary>

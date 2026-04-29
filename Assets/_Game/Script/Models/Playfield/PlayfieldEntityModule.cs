@@ -17,6 +17,13 @@ public sealed class PlayfieldEntityModule
     private const float LeavingTargetY = 20f;
 
     /// <summary>
+    /// 水果送达飞行目标距右页左边界的 X 偏移量（世界单位）。
+    /// 正值 = 目标从边界往左缩进，水果不到达边界就结束动画；
+    /// 0 = 目标恰好在边界（旧行为）。
+    /// </summary>
+    private const float DeliverTargetOffsetX = -0.5f;
+
+    /// <summary>
     /// 孵化槽数量常量。
     /// </summary>
     public const int HatchSlotCountValue = 4;
@@ -310,6 +317,24 @@ public sealed class PlayfieldEntityModule
     }
 
     /// <summary>
+    /// 尝试播放指定宠物吃完饭后的奖励表现动画。
+    /// </summary>
+    /// <param name="petInstanceId">宠物实例 Id。</param>
+    /// <param name="onComplete">动画完成后的回调，参数为宠物实例 Id。</param>
+    /// <param name="animationDuration">实际播放动画的时长，供订单组件设置兜底超时。</param>
+    /// <returns>是否成功把播放请求交给宠物实体；返回 false 时调用方应立即走兜底完成逻辑。</returns>
+    public bool TryPlayPetGiveGoldAnimation(int petInstanceId, Action<int> onComplete, out float animationDuration)
+    {
+        animationDuration = 0f;
+        if (!TryGetPetEntityLogic(petInstanceId, out PetEntityLogic petEntityLogic) || petEntityLogic == null)
+        {
+            return false;
+        }
+
+        return petEntityLogic.TryPlayGiveGoldAnimation(petInstanceId, onComplete, out animationDuration);
+    }
+
+    /// <summary>
     /// 判断指定宠物当前是否已经真正挂接到某一张餐桌实体上。
     /// 只有完成入座挂接后，UI 才应该显示点餐气泡。
     /// </summary>
@@ -452,9 +477,9 @@ public sealed class PlayfieldEntityModule
 
         _orchardFruitEntityIds[orchardIndex] = fruitEntityId;
 
-        // 果树水果使用果树世界坐标作为初始位置
-        Vector3 orchardWorldPos = _currentMarkerSnapshot.OrchardWorldPositions[orchardIndex];
-        FruitEntityData fruitData = new FruitEntityData(-1, fruitCode, orchardWorldPos, orchardIndex);
+        // 果树水果优先使用 prefab 上 _fruitGenericPoint 的世界坐标，回退到 marker 快照
+        Vector3 fruitWorldPos = GetOrchardFruitGenericWorldPosition(orchardIndex);
+        FruitEntityData fruitData = new FruitEntityData(-1, fruitCode, fruitWorldPos, orchardIndex);
 
         // 临时存储生长参数，在 OnShowEntitySuccess 中取出执行动画
         // 这里不直接播动画，是因为实体要等真正 Show 成功后才能拿到对应逻辑对象。
@@ -495,8 +520,9 @@ public sealed class PlayfieldEntityModule
             return;
         }
 
-        // 飞行目标：BJRight 左边界 X，保持当前 Y
-        float targetX = _currentMarkerSnapshot.RightPageLeftEdgeWorldX;
+        // 飞行目标：BJRight 左边界 X 减去偏移量，保持当前 Y
+        // 偏移量让水果在到达边界之前就结束动画，不会真的飞到边缘
+        float targetX = _currentMarkerSnapshot.RightPageLeftEdgeWorldX - DeliverTargetOffsetX;
         Vector3 currentPos = fruitEntityLogic.CachedTransform.position;
         Vector3 deliverTarget = new Vector3(targetX, currentPos.y, currentPos.z);
 
@@ -984,6 +1010,29 @@ public sealed class PlayfieldEntityModule
             return;
         }
 
+        if (petState.DiningWishState == PetDiningWishState.RewardAnimating)
+        {
+            if (parentEntity == null || parentEntity.Id != tableEntityId)
+            {
+                GameEntry.Entity.AttachEntity(entityId, tableEntityId, TableEntityLogic.DiningAnchorTransformPath, null);
+            }
+
+            if (!petEntityLogic.IsPlayingRewardAnimation)
+            {
+                if (GameEntry.PetDiningOrders == null
+                    || !TryPlayPetGiveGoldAnimation(petState.InstanceId, GameEntry.PetDiningOrders.HandlePetRewardAnimationComplete, out float rewardAnimationDuration))
+                {
+                    GameEntry.PetDiningOrders?.HandlePetRewardAnimationComplete(petState.InstanceId);
+                    return;
+                }
+
+                GameEntry.PetDiningOrders.RefreshPetRewardAnimationFallback(petState.InstanceId, rewardAnimationDuration);
+            }
+
+            _pendingDiningPetAnimations.Remove(petState.InstanceId);
+            return;
+        }
+
         if (!shouldAnimateMovement)
         {
             if (parentEntity == null || parentEntity.Id != tableEntityId)
@@ -1424,6 +1473,32 @@ public sealed class PlayfieldEntityModule
     }
 
     /// <summary>
+    /// 获取果树水果出生世界坐标。
+    /// </summary>
+    /// <param name="orchardIndex">果树索引，用于定位对应的 OrchardEntity。</param>
+    /// <returns>优先返回 OrchardEntity 的 FruitGenericPoint；实体未就绪时回退到果园 UI marker 投影点。</returns>
+    private Vector3 GetOrchardFruitGenericWorldPosition(int orchardIndex)
+    {
+        if (orchardIndex >= 0
+            && orchardIndex < _orchardEntityIds.Length
+            && TryGetEntityLogic(_orchardEntityIds[orchardIndex], out OrchardEntityLogic orchardEntityLogic)
+            && orchardEntityLogic.TryGetFruitGenericWorldPosition(out Vector3 fruitGenericWorldPosition))
+        {
+            return fruitGenericWorldPosition;
+        }
+
+        if (_currentMarkerSnapshot != null
+            && _currentMarkerSnapshot.OrchardWorldPositions != null
+            && orchardIndex >= 0
+            && orchardIndex < _currentMarkerSnapshot.OrchardWorldPositions.Length)
+        {
+            return _currentMarkerSnapshot.OrchardWorldPositions[orchardIndex];
+        }
+
+        return Vector3.zero;
+    }
+
+    /// <summary>
     /// 获取玩耍区的目标世界坐标。
     /// </summary>
     /// <param name="petState">宠物运行时状态。</param>
@@ -1616,6 +1691,16 @@ public sealed class PlayfieldEntityModule
                 if (IsEntityLoaded(orchardEntityId))
                 {
                     GameEntry.Entity.AttachEntity(ne.Entity.Id, orchardEntityId);
+
+                    // AttachEntity 后 OnAttachTo 会把 localPosition 重置为 zero，
+                    // 需要用果树 _fruitGenericPoint 的 localPosition 覆盖回去，
+                    // 使水果在挂接为果树子节点后仍对齐到挂点位置。
+                    if (TryGetEntityLogic(orchardEntityId, out OrchardEntityLogic orchardLogic)
+                        && orchardLogic.TryGetFruitGenericLocalPosition(out Vector3 fruitLocalPos)
+                        && TryGetEntityLogic(ne.Entity.Id, out FruitEntityLogic attachedFruitLogic))
+                    {
+                        attachedFruitLogic.CachedTransform.localPosition = fruitLocalPos;
+                    }
                 }
 
                 // 取出并执行生长动画

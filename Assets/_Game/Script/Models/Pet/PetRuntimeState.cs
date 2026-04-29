@@ -44,7 +44,7 @@ public sealed class PetRuntimeState
 
     /// <summary>
     /// 当前点餐流程阶段剩余秒数。
-    /// Producing 阶段表示剩余生产时间，Serving 阶段表示剩余上桌展示时间。
+    /// Producing 阶段表示剩余生产时间，Serving 阶段表示剩余上桌展示时间，RewardAnimating 阶段表示 Attack 表现兜底等待时间。
     /// </summary>
     public float RemainingDiningStageSeconds { get; internal set; }
 

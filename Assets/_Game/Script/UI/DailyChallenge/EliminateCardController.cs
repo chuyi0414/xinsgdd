@@ -845,7 +845,7 @@ public sealed class EliminateCardController
     /// <summary>
     /// 从 Fruit 数据表中提取所有已解锁水果的卡图精灵名。
     /// 只有 IsUnlocked == true 的水果才会被纳入随机卡池。
-    /// 精灵名从 IconPath 末尾提取（如 Arts/Fruit/FruitTJ/WP_80001 -> WP_80001）。
+    /// 精灵名从 EffectiveDailyChallengePath 末尾提取（如 Arts/Fruit/FruitCard/WP_80001 -> WP_80001）。
     /// </summary>
     /// <returns>已解锁水果的精灵名数组；水果表不可用时返回 null。</returns>
     private static string[] GetUnlockedFruitSpriteNames(HashSet<string> excludedSpriteNames)
@@ -871,7 +871,7 @@ public sealed class EliminateCardController
                 continue;
             }
 
-            string spriteName = ExtractSpriteNameFromIconPath(fruit.IconPath);
+            string spriteName = ExtractSpriteNameFromIconPath(fruit.EffectiveDailyChallengePath);
             if (string.IsNullOrWhiteSpace(spriteName))
             {
                 continue;

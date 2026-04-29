@@ -90,6 +90,12 @@ public sealed class GameAssetModule
         /// 包含升级界面指示器精灵与主界面实体精灵。
         /// </summary>
         ArchitectureSprite = 14,
+
+        /// <summary>
+        /// 每日关卡卡图精灵资源。
+        /// 从 Fruit 表 DailyChallengePath 加载，专供每日一关消除卡使用。
+        /// </summary>
+        DailyChallengeCardSprite = 15,
     }
 
     /// <summary>
@@ -182,8 +188,8 @@ public sealed class GameAssetModule
 
     /// <summary>
     /// 已缓存的消除卡图，按精灵名索引。
-    /// 当前直接复用水果图预加载链路，把 IconPath 末尾的文件名反向索引成卡图名。
-    /// 例如：Arts/Fruit/FruitTJ/WP_80001 -> WP_80001。
+    /// 从 Fruit 表 EffectiveDailyChallengePath 末尾文件名反向索引成卡图名。
+    /// 例如：Arts/Fruit/DailyChallenge/WP_80001 -> WP_80001。
     /// </summary>
     private readonly Dictionary<string, Sprite> _eliminateCardSpritesByName = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
 
@@ -238,6 +244,11 @@ public sealed class GameAssetModule
     /// 当前仍在加载中的水果图标路径集合。
     /// </summary>
     private readonly HashSet<string> _loadingFruitAssetPaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 当前仍在加载中的每日关卡卡图路径集合。
+    /// </summary>
+    private readonly HashSet<string> _loadingDailyChallengeCardSpritePaths = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// 当前仍在加载中的宠物实体预制体路径集合。
@@ -315,6 +326,11 @@ public sealed class GameAssetModule
     private int _pendingFruitAssetCount;
 
     /// <summary>
+    /// 当前待完成的每日关卡卡图加载数量。
+    /// </summary>
+    private int _pendingDailyChallengeCardSpriteCount;
+
+    /// <summary>
     /// 当前待完成的宠物实体预制体加载数量。
     /// </summary>
     private int _pendingPetEntityPrefabCount;
@@ -385,6 +401,11 @@ public sealed class GameAssetModule
     private bool _fruitPreloadRequested;
 
     /// <summary>
+    /// 是否已经发起过每日关卡卡图预加载。
+    /// </summary>
+    private bool _dailyChallengeCardSpritePreloadRequested;
+
+    /// <summary>
     /// 是否已经发起过宠物实体预制体预热。
     /// </summary>
     private bool _petEntityPrefabPreloadRequested;
@@ -453,6 +474,11 @@ public sealed class GameAssetModule
     /// 水果图标预加载是否已经完成。
     /// </summary>
     private bool _fruitPreloadCompleted;
+
+    /// <summary>
+    /// 每日关卡卡图预加载是否已经完成。
+    /// </summary>
+    private bool _dailyChallengeCardSpritePreloadCompleted;
 
     /// <summary>
     /// 宠物实体预制体预热是否已经完成。
@@ -564,6 +590,7 @@ public sealed class GameAssetModule
     public bool IsReady => _eggPreloadCompleted
         && _petPreloadCompleted
         && _fruitPreloadCompleted
+        && _dailyChallengeCardSpritePreloadCompleted
         && _petEntityPrefabPreloadCompleted
         && _petFoodBubblePrefabPreloadCompleted
         && _goldCoinPrefabPreloadCompleted
@@ -974,6 +1001,12 @@ public sealed class GameAssetModule
             StartLoadFruitSprite(row);
         }
 
+        // 同步发起每日关卡卡图预加载（独立于水果图标链路）。
+        if (!_dailyChallengeCardSpritePreloadRequested)
+        {
+            BeginPreloadDailyChallengeCardSprites(rows);
+        }
+
         UpdatePreloadCompletionState();
         NotifyPreloadStateChanged();
     }
@@ -1334,6 +1367,78 @@ public sealed class GameAssetModule
     }
 
     /// <summary>
+    /// 根据水果表批量预加载每日关卡卡图精灵。
+    /// 使用 EffectiveDailyChallengePath 作为资源路径，与 IconPath 完全独立。
+    /// 当 DailyChallengePath 为空时，EffectiveDailyChallengePath 回退到 IconPath，
+    /// 此时会与 FruitSprite 加载同一路径，由 _loadingDailyChallengeCardSpritePaths 去重。
+    /// </summary>
+    /// <param name="rows">水果表行集合。</param>
+    private void BeginPreloadDailyChallengeCardSprites(FruitDataRow[] rows)
+    {
+        _dailyChallengeCardSpritePreloadRequested = true;
+        _dailyChallengeCardSpritePreloadCompleted = false;
+
+        if (rows == null || rows.Length == 0)
+        {
+            _dailyChallengeCardSpritePreloadCompleted = true;
+            return;
+        }
+
+        for (int i = 0; i < rows.Length; i++)
+        {
+            FruitDataRow row = rows[i];
+            if (row == null || !row.IsUnlocked)
+            {
+                continue;
+            }
+
+            StartLoadDailyChallengeCardSprite(row);
+        }
+
+        UpdatePreloadCompletionState();
+        NotifyPreloadStateChanged();
+    }
+
+    /// <summary>
+    /// 为单条水果表记录启动每日关卡卡图加载。
+    /// 使用 EffectiveDailyChallengePath：若 DailyChallengePath 非空则用它，否则回退到 IconPath。
+    /// </summary>
+    /// <param name="row">水果表行。</param>
+    private void StartLoadDailyChallengeCardSprite(FruitDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.Code))
+        {
+            return;
+        }
+
+        // 使用 EffectiveDailyChallengePath：优先 DailyChallengePath，为空时回退 IconPath。
+        string dailyPath = row.EffectiveDailyChallengePath;
+        if (string.IsNullOrWhiteSpace(dailyPath))
+        {
+            return;
+        }
+
+        string spriteName = ExtractAssetLeafName(dailyPath);
+        if (string.IsNullOrWhiteSpace(spriteName))
+        {
+            return;
+        }
+
+        // 已缓存或正在加载则跳过。
+        if (_eliminateCardSpritesByName.ContainsKey(spriteName) || _loadingDailyChallengeCardSpritePaths.Contains(dailyPath))
+        {
+            return;
+        }
+
+        if (!TryLoadAsset(dailyPath, typeof(Sprite), PreloadAssetKind.DailyChallengeCardSprite, row.Code))
+        {
+            RegisterFailure(Utility.Text.Format(
+                "预加载每日关卡卡图失败，无法开始加载资源，Code='{0}'，Path='{1}'。",
+                row.Code, dailyPath));
+        }
+    }
+
+    /// <summary>
     /// 为单条建筑图片路径启动精灵加载。
     /// 已缓存或已在加载中的路径会直接跳过。
     /// </summary>
@@ -1439,6 +1544,11 @@ public sealed class GameAssetModule
                 _loadingArchitectureSpritePaths.Add(assetPath);
                 _pendingArchitectureSpriteCount++;
                 break;
+
+            case PreloadAssetKind.DailyChallengeCardSprite:
+                _loadingDailyChallengeCardSpritePaths.Add(assetPath);
+                _pendingDailyChallengeCardSpriteCount++;
+                break;
         }
 
         resourceManager.LoadAsset(assetPath, assetType, _loadAssetCallbacks, loadInfo);
@@ -1524,6 +1634,12 @@ public sealed class GameAssetModule
                 _loadingArchitectureSpritePaths.Remove(loadInfo.AssetPath);
                 _pendingArchitectureSpriteCount = Mathf.Max(0, _pendingArchitectureSpriteCount - 1);
                 HandleArchitectureSpriteLoaded(loadInfo.AssetPath, asset as Sprite);
+                break;
+
+            case PreloadAssetKind.DailyChallengeCardSprite:
+                _loadingDailyChallengeCardSpritePaths.Remove(loadInfo.AssetPath);
+                _pendingDailyChallengeCardSpriteCount = Mathf.Max(0, _pendingDailyChallengeCardSpriteCount - 1);
+                HandleDailyChallengeCardSpriteLoaded(loadInfo.ContextCode, loadInfo.AssetPath, asset as Sprite);
                 break;
 
             case PreloadAssetKind.ScoreDigitSmallSprite:
@@ -1650,6 +1766,14 @@ public sealed class GameAssetModule
             _loadingHeadPortraitFrameAssetPaths.Remove(loadInfo.AssetPath);
             _pendingHeadPortraitFrameAssetCount = Mathf.Max(0, _pendingHeadPortraitFrameAssetCount - 1);
             RegisterFailure(Utility.Text.Format("头像框图标预加载失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
+        }
+        else if (loadInfo.AssetKind == PreloadAssetKind.DailyChallengeCardSprite)
+        {
+            _loadingDailyChallengeCardSpritePaths.Remove(loadInfo.AssetPath);
+            _pendingDailyChallengeCardSpriteCount = Mathf.Max(0, _pendingDailyChallengeCardSpriteCount - 1);
+            RegisterFailure(Utility.Text.Format(
+                "每日关卡卡图预加载失败，Code='{0}'，Path='{1}'，Status='{2}'，Error='{3}'。",
+                loadInfo.ContextCode, loadInfo.AssetPath, status, errorMessage));
         }
 
         UpdatePreloadCompletionState();
@@ -1837,11 +1961,32 @@ public sealed class GameAssetModule
         }
 
         _fruitSpritesByCode[fruitCode] = sprite;
+    }
 
-        // 每日一关当前阶段直接复用水果图。
-        // 这里把水果 IconPath 末尾的精灵名反向登记成“卡图名 -> Sprite”缓存，
-        // 让 DailyChallenge 业务层可以像 FruitEntityLogic 一样只走 GameAssetModule，不单独做同步加载。
-        string spriteName = ExtractAssetLeafName(iconPath);
+    /// <summary>
+    /// 处理每日关卡卡图精灵加载完成。
+    /// 将精灵按 EffectiveDailyChallengePath 末尾精灵名写入消除卡图缓存。
+    /// </summary>
+    /// <param name="fruitCode">水果 Code，用于日志定位。</param>
+    /// <param name="dailyPath">每日关卡图资源路径（EffectiveDailyChallengePath）。</param>
+    /// <param name="sprite">命中的精灵资源。</param>
+    private void HandleDailyChallengeCardSpriteLoaded(string fruitCode, string dailyPath, Sprite sprite)
+    {
+        if (string.IsNullOrWhiteSpace(dailyPath))
+        {
+            RegisterFailure(Utility.Text.Format("每日关卡卡图加载失败，资源路径为空，Code='{0}'。", fruitCode));
+            return;
+        }
+
+        if (sprite == null)
+        {
+            RegisterFailure(Utility.Text.Format("每日关卡卡图加载失败，资源类型不是 Sprite，Code='{0}'，Path='{1}'。", fruitCode, dailyPath));
+            return;
+        }
+
+        // 把 EffectiveDailyChallengePath 末尾精灵名反向登记成"卡图名 -> Sprite"缓存，
+        // 让 DailyChallenge 业务层通过 TryGetEliminateCardSprite 同步读取。
+        string spriteName = ExtractAssetLeafName(dailyPath);
         if (!string.IsNullOrWhiteSpace(spriteName))
         {
             _eliminateCardSpritesByName[spriteName] = sprite;
@@ -2178,6 +2323,11 @@ public sealed class GameAssetModule
         {
             _architectureSpritePreloadCompleted = true;
         }
+
+        if (_dailyChallengeCardSpritePreloadRequested && _pendingDailyChallengeCardSpriteCount <= 0)
+        {
+            _dailyChallengeCardSpritePreloadCompleted = true;
+        }
     }
 
     /// <summary>
@@ -2210,7 +2360,7 @@ public sealed class GameAssetModule
     {
         _hasPreloadFailure = true;
         _lastErrorMessage = errorMessage;
-        Log.Warning(errorMessage);
+        //Log.Warning(errorMessage);
     }
 
     /// <summary>

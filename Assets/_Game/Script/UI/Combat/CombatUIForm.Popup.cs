@@ -221,6 +221,8 @@ public sealed partial class CombatUIForm
     /// </summary>
     private void OnBtnEliminateRules()
     {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
         OpenEliminateRulesUIForm();
     }
 

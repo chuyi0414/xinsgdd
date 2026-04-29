@@ -319,6 +319,15 @@ namespace GameFramework.Resource
             /// <param name="userData">用户自定义数据。</param>
             public void LoadAsset(string assetName, Type assetType, int priority, LoadAssetCallbacks loadAssetCallbacks, object userData)
             {
+                // ⭐ 项目层 Addressables 路由优先判定。
+                // 路由委托返回 true 表示已接管异步加载（必须自行按 LoadAssetCallbacks 协议派发完成事件），GF 主链路放弃；
+                // 返回 false 表示当前资源不归 Addressables 管，继续走 GF 主链路（ResourceMode.Resource → Resources.LoadAsync）。
+                AddressablesAssetRouter addressablesRouter = m_ResourceManager.AddressablesAssetRouter;
+                if (addressablesRouter != null && addressablesRouter(assetName, assetType, loadAssetCallbacks, userData))
+                {
+                    return;
+                }
+
                 ResourceInfo resourceInfo = null;
                 string[] dependencyAssetNames = null;
                 if (!CheckAsset(assetName, out resourceInfo, out dependencyAssetNames))
