@@ -16,7 +16,7 @@ public sealed class ArchitectureSlotDataRow : DataRowBase, ICodeDataRow
     /// <summary>
     /// 数据表固定列数。
     /// </summary>
-    private const int ColumnCount = 9;
+    private const int ColumnCount = 10;
 
     /// <summary>
     /// 合法槽位 Code 的前缀。
@@ -70,6 +70,11 @@ public sealed class ArchitectureSlotDataRow : DataRowBase, ICodeDataRow
     /// 初始解锁位（IsInitiallyUnlocked=true）必须为 0，避免未走购买流程还送星星。
     /// </summary>
     public int RewardStars { get; private set; }
+
+    /// <summary>
+    /// 存钱。
+    /// </summary>
+    public int SaveGold { get; private set; }
 
     /// <summary>
     /// 备注描述。
@@ -167,6 +172,12 @@ public sealed class ArchitectureSlotDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
+        if (!int.TryParse(columns[8], out int saveGold) || saveGold < 0)
+        {
+            Log.Warning("ArchitectureSlotDataRow parse failed because SaveGold '{0}' is invalid, code '{1}'.", columns[8], code);
+            return false;
+        }
+
         _id = id;
         Code = code;
         Category = category;
@@ -175,7 +186,8 @@ public sealed class ArchitectureSlotDataRow : DataRowBase, ICodeDataRow
         UnlockGold = unlockGold;
         RequiredStars = requiredStars;
         RewardStars = rewardStars;
-        Description = columns[8].Trim();
+        SaveGold = saveGold;
+        Description = columns[9].Trim();
         return true;
     }
 

@@ -45,7 +45,7 @@ public sealed class ArchitectureDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 建筑等级。
-    /// 0 = 未解锁占位；1~10 = 各升级等级。
+    /// 0 = 未解锁占位；1~5 = 各升级等级。
     /// </summary>
     public int Level { get; private set; }
 

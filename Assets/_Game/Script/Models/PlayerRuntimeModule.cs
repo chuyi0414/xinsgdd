@@ -29,6 +29,11 @@ public sealed partial class PlayerRuntimeModule
         /// 农场区。
         /// </summary>
         Fruiter = 3,
+
+        /// <summary>
+        /// 存钱罐。
+        /// </summary>
+        SavingPot = 4,
     }
 
     /// <summary>
@@ -214,6 +219,12 @@ public sealed partial class PlayerRuntimeModule
     public const int FruiterArchitectureCountValue = 6;
 
     /// <summary>
+    /// 存钱罐建筑条目数量。
+    /// 存钱罐只有 1 个槽位，包含 5 个升级等级。
+    /// </summary>
+    public const int SavingPotArchitectureCountValue = 1;
+
+    /// <summary>
     /// 当前运行时模块是否已经完成初始化。
     /// </summary>
     private bool _isInitialized;
@@ -248,7 +259,8 @@ public sealed partial class PlayerRuntimeModule
             || !GameEntry.DataTables.IsAvailable<GameplayRuleDataRow>()
             || !GameEntry.DataTables.IsAvailable<ArchitectureSlotDataRow>()
             || !GameEntry.DataTables.IsAvailable<ArchitectureUpgradeDataRow>()
-            || !GameEntry.DataTables.IsAvailable<ArchitectureDataRow>())
+            || !GameEntry.DataTables.IsAvailable<ArchitectureDataRow>()
+            || !GameEntry.DataTables.IsAvailable<SavingPotDataRow>())
         {
             Log.Warning("PlayerRuntimeModule 无法初始化，所需数据表不可用。");
             return false;
@@ -279,6 +291,16 @@ public sealed partial class PlayerRuntimeModule
             Log.Warning("PlayerRuntimeModule 无法初始化，建筑配置缓存重建失败。");
             return false;
         }
+
+        // 1.1 存钱罐配置缓存
+        SavingPotDataRow[] savingPotRows = GameEntry.DataTables.GetAllDataRows<SavingPotDataRow>();
+        if (savingPotRows == null || savingPotRows.Length == 0)
+        {
+            Log.Warning("PlayerRuntimeModule 无法初始化，存钱罐数据行为空。");
+            return false;
+        }
+
+        RebuildSavingPotConfigCaches(savingPotRows);
 
         // 2. 玩法规则
         _gameplayRuleDataRow = gameplayRuleDataRow;

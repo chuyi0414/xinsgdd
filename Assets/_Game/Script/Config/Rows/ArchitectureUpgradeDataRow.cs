@@ -17,7 +17,7 @@ public sealed class ArchitectureUpgradeDataRow : DataRowBase, ICodeDataRow
     /// 数据表固定列数。
     /// 新增 SlotIndex 后为 10（Id Code Category SlotIndex CurrentLevel UpgradeGold EffectParam RequiredStars RewardStars Description）。
     /// </summary>
-    private const int ColumnCount = 10;
+    private const int ColumnCount = 11;
 
     /// <summary>
     /// 合法升级 Code 的前缀。
@@ -73,6 +73,11 @@ public sealed class ArchitectureUpgradeDataRow : DataRowBase, ICodeDataRow
     /// 升级成功后累计获得的星星。
     /// </summary>
     public int RewardStars { get; private set; }
+
+    /// <summary>
+    /// 存钱。
+    /// </summary>
+    public int SaveGold { get; private set; }
 
     /// <summary>
     /// 备注描述。
@@ -156,6 +161,12 @@ public sealed class ArchitectureUpgradeDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
+        if (!int.TryParse(columns[9], out int saveGold) || saveGold < 0)
+        {
+            Log.Warning("ArchitectureUpgradeDataRow parse failed because SaveGold '{0}' is invalid, code '{1}'.", columns[9], code);
+            return false;
+        }
+
         _id = id;
         Code = code;
         Category = category;
@@ -165,7 +176,8 @@ public sealed class ArchitectureUpgradeDataRow : DataRowBase, ICodeDataRow
         EffectParam = effectParam;
         RequiredStars = requiredStars;
         RewardStars = rewardStars;
-        Description = columns[9].Trim();
+        SaveGold = saveGold;
+        Description = columns[10].Trim();
         return true;
     }
 

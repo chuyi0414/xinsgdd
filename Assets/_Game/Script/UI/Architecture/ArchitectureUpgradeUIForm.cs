@@ -5,20 +5,19 @@ using UnityGameFramework.Runtime;
 
 /// <summary>
 /// 建筑升级界面。
-/// 负责缓存 16 个建筑条目，刷新标题、按钮文案和 10 个等级指示物。
+/// 负责缓存 17 个建筑条目，刷新标题、按钮文案和等级指示物。
 /// </summary>
 public sealed class ArchitectureUpgradeUIForm : UIFormLogic
 {
     /// <summary>
-    /// 当前 prefab 中固定存在 16 个建筑条目。
+    /// 当前 prefab 中固定存在 17 个建筑条目（4 孵化 + 6 饮食 + 6 农场 + 1 存钱罐）。
     /// </summary>
-    private const int ExpectedEntryCount = 16;
+    private const int ExpectedEntryCount = 17;
 
     /// <summary>
-    /// 每个建筑条目固定有 10 个等级指示物。
-    /// 下标 0~9 对应 Level 1~10，不显示 Level 0。
+    /// 每个建筑条目的等级指示物数量。
+    /// 由 prefab 中 Scroll View/Viewport/Content 的子节点数动态决定。
     /// </summary>
-    private const int ExpectedLevelIndicatorCount = 10;
 
     /// <summary>
     /// 已达成等级指示物的不透明度。
@@ -133,20 +132,20 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
         public TextMeshProUGUI ActionText;
 
         /// <summary>
-        /// 11 个等级指示物。
-        /// 下标 0 = Level 0（未解锁），下标 1~10 = Level 1~10。
+        /// 等级指示物数组。
+        /// 数量由 prefab 动态决定，超出当前最大等级的指示物保持暗淡。
         /// 所有物体都会保持显示，通过 Sprite 图片和透明度区分已达成与未达成。
         /// </summary>
         public GameObject[] LevelIndicators;
 
         /// <summary>
-        /// 11 个等级指示物上的 Graphic 组件缓存。
+        /// 等级指示物上的 Graphic 组件缓存。
         /// 用于低频刷新透明度，避免每次刷新再查组件。
         /// </summary>
         public Graphic[] LevelIndicatorGraphics;
 
         /// <summary>
-        /// 11 个等级指示物上的 Image 组件缓存。
+        /// 等级指示物上的 Image 组件缓存。
         /// 用于从配置表读取 Sprite 并赋值，替代纯透明度方案。
         /// </summary>
         public Image[] LevelIndicatorImages;
@@ -165,18 +164,18 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
 
         /// <summary>
         /// 条目内部横向滚动的 Content 根节点。
-        /// 10 个等级位都挂在这里。
+        /// 所有等级位都挂在这里。
         /// </summary>
         public RectTransform LevelContent;
 
         /// <summary>
-        /// 10 个等级指示物对应的 RectTransform 缓存。
+        /// 等级指示物对应的 RectTransform 缓存。
         /// 用于根据目标等级计算偏移。
         /// </summary>
         public RectTransform[] LevelIndicatorRects;
 
         /// <summary>
-        /// 10 个等级指示物的原始颜色缓存。
+        /// 等级指示物的原始颜色缓存。
         /// 只改透明度，不改资源本身的 RGB 配色。
         /// </summary>
         public Color[] LevelIndicatorBaseColors;
@@ -344,16 +343,6 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
                 || indicatorRoot == null)
             {
                 Log.Error("ArchitectureUpgradeUIForm 初始化失败，条目 '{0}' 缺少关键节点。", entryRoot.name);
-                return false;
-            }
-
-            if (indicatorRoot.childCount != ExpectedLevelIndicatorCount)
-            {
-                Log.Error(
-                    "ArchitectureUpgradeUIForm 初始化失败，条目 '{0}' 等级指示器数量为 '{1}'，期望 '{2}'。",
-                    entryRoot.name,
-                    indicatorRoot.childCount,
-                    ExpectedLevelIndicatorCount);
                 return false;
             }
 
@@ -692,7 +681,9 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
                 continue;
             }
 
-            bool isVisible = entryView.Category == _currentVisibleCategory;
+            bool isVisible = entryView.Category == _currentVisibleCategory
+                || (entryView.Category == PlayerRuntimeModule.ArchitectureCategory.SavingPot
+                    && _currentVisibleCategory == PlayerRuntimeModule.ArchitectureCategory.Hatch);
             if (entryView.Root.gameObject.activeSelf != isVisible)
             {
                 entryView.Root.gameObject.SetActive(isVisible);
@@ -750,7 +741,7 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
         LayoutRebuilder.ForceRebuildLayoutImmediate(entryView.LevelContent);
         Canvas.ForceUpdateCanvases();
 
-        // 下标 0 = Level 1，下标 9 = Level 10。
+        // 下标 0 = Level 1，以此类推。
         // 未解锁时滚到最左侧（下标 0）；已解锁时滚到当前等级（下标 = level-1）。
         int targetIndex = entryState.IsUnlocked
             ? Mathf.Clamp(entryState.Level - 1, 0, entryView.LevelIndicatorRects.Length - 1)
@@ -838,7 +829,9 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
 
         if (entryView.TitleText != null)
         {
-            string titlePrefix = GetCategoryTitlePrefix(entryView.Category) + entryView.SlotIndex + "号";
+            string titlePrefix = entryView.Category == PlayerRuntimeModule.ArchitectureCategory.SavingPot
+                ? "存钱罐"
+                : GetCategoryTitlePrefix(entryView.Category) + entryView.SlotIndex + "号";
             entryView.TitleText.SetText(
                 entryState.IsUnlocked
                     ? titlePrefix + "\t等级:" + entryState.Level
@@ -855,10 +848,10 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     /// 同时通过透明度表示"当前已达成到哪一级"。
     /// </summary>
     /// <param name="category">建筑类别，用于从配置表查询精灵路径。</param>
-    /// <param name="levelIndicators">10 个等级指示物。</param>
-    /// <param name="levelIndicatorImages">10 个等级指示物上的 Image 缓存。</param>
-    /// <param name="levelIndicatorGraphics">10 个等级指示物上的 Graphic 缓存。</param>
-    /// <param name="levelIndicatorBaseColors">10 个等级指示物的原始颜色缓存。</param>
+    /// <param name="levelIndicators">等级指示物数组。</param>
+    /// <param name="levelIndicatorImages">等级指示物上的 Image 缓存。</param>
+    /// <param name="levelIndicatorGraphics">等级指示物上的 Graphic 缓存。</param>
+    /// <param name="levelIndicatorBaseColors">等级指示物的原始颜色缓存。</param>
     /// <param name="isUnlocked">当前槽位是否已解锁。</param>
     /// <param name="level">当前等级。</param>
     private static void RefreshLevelIndicators(
@@ -891,7 +884,7 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
             }
 
             // 从配置表读取对应等级的精灵并赋给 Image。
-            // 下标 i 对应等级 i+1（0→Level1，9→Level10）。
+            // 下标 i 对应等级 i+1。
             int indicatorLevel = i + 1;
             if (levelIndicatorImages != null && i < levelIndicatorImages.Length && levelIndicatorImages[i] != null && runtimeModule != null)
             {
@@ -907,7 +900,7 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
 
             // 透明度逻辑：
             // 未解锁时，所有指示物 alpha=0.35。
-            // 已解锁时，Level 1~level alpha=1，Level (level+1)~10 alpha=0.35。
+            // 已解锁时，Level 1~level alpha=1，超出部分 alpha=0.35。
             if (levelIndicatorGraphics == null || levelIndicatorBaseColors == null || i >= levelIndicatorGraphics.Length || i >= levelIndicatorBaseColors.Length)
             {
                 continue;
@@ -927,7 +920,7 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
             }
             else
             {
-                // 已解锁：Level 1~level 亮起，Level (level+1)~10 暗淡
+                // 已解锁：Level 1~level 亮起，超出部分暗淡
                 baseColor.a = indicatorLevel <= level ? ActiveLevelIndicatorAlpha : InactiveLevelIndicatorAlpha;
             }
             levelIndicatorGraphic.color = baseColor;
@@ -1010,6 +1003,12 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
             return TryParseSlotIndex(entryName, out slotIndex);
         }
 
+        if (entryName.StartsWith("GoSavingPot ", System.StringComparison.Ordinal))
+        {
+            category = PlayerRuntimeModule.ArchitectureCategory.SavingPot;
+            return TryParseSlotIndex(entryName, out slotIndex);
+        }
+
         return false;
     }
 
@@ -1057,6 +1056,9 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
             case PlayerRuntimeModule.ArchitectureCategory.Fruiter:
                 return "农场区";
 
+            case PlayerRuntimeModule.ArchitectureCategory.SavingPot:
+                return "存钱罐";
+
             default:
                 return "未知区";
         }
@@ -1080,6 +1082,9 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
 
             case PlayerRuntimeModule.ArchitectureCategory.Fruiter:
                 return "农场";
+
+            case PlayerRuntimeModule.ArchitectureCategory.SavingPot:
+                return "存钱罐";
 
             default:
                 return "未知";

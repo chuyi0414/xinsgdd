@@ -65,10 +65,22 @@ public sealed partial class PlayerRuntimeModule
 
     /// <summary>
     /// 建筑图片配置缓存。
-    /// Key1 为建筑类别，Key2 为等级（0=未解锁，1~10=各升级等级）。
+    /// Key1 为建筑类别，Key2 为等级（0=未解锁，1~5=各升级等级）。
     /// </summary>
     private readonly Dictionary<ArchitectureCategory, Dictionary<int, ArchitectureDataRow>> _architectureRowsByCategory =
         new Dictionary<ArchitectureCategory, Dictionary<int, ArchitectureDataRow>>();
+
+    /// <summary>
+    /// 存钱罐 1 个条目的运行时状态。
+    /// 存钱罐只有 1 个槽位，初始解锁，包含 5 个升级等级。
+    /// </summary>
+    private readonly ArchitectureSlotState[] _savingPotArchitectureStates = CreateArchitectureStateArray(SavingPotArchitectureCountValue);
+
+    /// <summary>
+    /// 存钱罐配置缓存。
+    /// Key 为 CurrentLevel（1~5），Value 为对应等级的数据行。
+    /// </summary>
+    private readonly Dictionary<int, SavingPotDataRow> _savingPotRowsByLevel = new Dictionary<int, SavingPotDataRow>();
 
     /// <summary>
     /// 当前已购买的孵化槽数量，默认 1。
@@ -536,6 +548,7 @@ public sealed partial class PlayerRuntimeModule
         ResetArchitectureCategoryState(_hatchArchitectureStates, FallbackInitialUnlockedSlotCount);
         ResetArchitectureCategoryState(_dietArchitectureStates, FallbackInitialUnlockedSlotCount);
         ResetArchitectureCategoryState(_fruiterArchitectureStates, FallbackInitialUnlockedSlotCount);
+        ResetArchitectureCategoryState(_savingPotArchitectureStates, FallbackInitialUnlockedSlotCount);
     }
 
     /// <summary>
@@ -551,6 +564,9 @@ public sealed partial class PlayerRuntimeModule
         ResetArchitectureCategoryState(_hatchArchitectureStates, hatchUnlockedCount);
         ResetArchitectureCategoryState(_dietArchitectureStates, dietUnlockedCount);
         ResetArchitectureCategoryState(_fruiterArchitectureStates, fruiterUnlockedCount);
+
+        // 存钱罐始终只有 1 个槽位且初始解锁，无需容量调用。
+        ResetArchitectureCategoryState(_savingPotArchitectureStates, 1);
 
         SetHatchSlotCount(hatchUnlockedCount);
         SetDiningSeatCount(dietUnlockedCount);
@@ -644,6 +660,23 @@ public sealed partial class PlayerRuntimeModule
         return true;
     }
 
+    /// <summary>
+    /// 重建存钱罐配置缓存。
+    /// </summary>
+    /// <param name="savingPotRows">存钱罐数据行集合。</param>
+    private void RebuildSavingPotConfigCaches(SavingPotDataRow[] savingPotRows)
+    {
+        _savingPotRowsByLevel.Clear();
+        for (int i = 0; i < savingPotRows.Length; i++)
+        {
+            SavingPotDataRow row = savingPotRows[i];
+            if (row != null)
+            {
+                _savingPotRowsByLevel[row.CurrentLevel] = row;
+            }
+        }
+    }
+
     // ───────────── 建筑内部方法 ─────────────
 
     /// <summary>
@@ -663,6 +696,9 @@ public sealed partial class PlayerRuntimeModule
 
             case ArchitectureCategory.Fruiter:
                 return _fruiterArchitectureStates;
+
+            case ArchitectureCategory.SavingPot:
+                return _savingPotArchitectureStates;
 
             default:
                 return null;
@@ -735,6 +771,12 @@ public sealed partial class PlayerRuntimeModule
             return 0;
         }
 
+        // 存钱罐始终解锁，无购买价格。
+        if (category == ArchitectureCategory.SavingPot)
+        {
+            return 0;
+        }
+
         if (!_architectureSlotRowsByCategory.TryGetValue(category, out Dictionary<int, ArchitectureSlotDataRow> rowsBySlotIndex)
             || rowsBySlotIndex == null
             || !rowsBySlotIndex.TryGetValue(slotIndex, out ArchitectureSlotDataRow row)
@@ -759,6 +801,13 @@ public sealed partial class PlayerRuntimeModule
         if (currentLevel < InitialArchitectureLevel || slotIndex <= 0)
         {
             return 0;
+        }
+
+        // 存钱罐使用独立数据表，升级消耗存储在目标等级行中（CurrentLevel = currentLevel + 1）。
+        if (category == ArchitectureCategory.SavingPot)
+        {
+            int targetLevel = currentLevel + 1;
+            return _savingPotRowsByLevel.TryGetValue(targetLevel, out SavingPotDataRow savingPotRow) ? savingPotRow.UpgradeGold : 0;
         }
 
         if (!_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow> rowsBySlotAndLevel)
@@ -792,6 +841,10 @@ public sealed partial class PlayerRuntimeModule
 
             case ArchitectureCategory.Fruiter:
                 SetOrchardSlotCount(slotIndex);
+                break;
+
+            case ArchitectureCategory.SavingPot:
+                // 存钱罐没有物理实体，无需调整容量。
                 break;
         }
     }
@@ -946,6 +999,13 @@ public sealed partial class PlayerRuntimeModule
             return 0;
         }
 
+        // 存钱罐使用独立数据表，星星阈值存储在目标等级行中（CurrentLevel = currentLevel + 1）。
+        if (category == ArchitectureCategory.SavingPot)
+        {
+            int targetLevel = currentLevel + 1;
+            return _savingPotRowsByLevel.TryGetValue(targetLevel, out SavingPotDataRow savingPotRow) ? savingPotRow.RequiredStars : 0;
+        }
+
         if (!_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow> rowsBySlotAndLevel)
             || rowsBySlotAndLevel == null
             || !rowsBySlotAndLevel.TryGetValue((slotIndex, currentLevel), out ArchitectureUpgradeDataRow row)
@@ -969,6 +1029,13 @@ public sealed partial class PlayerRuntimeModule
         if (currentLevel < InitialArchitectureLevel || slotIndex <= 0)
         {
             return 0;
+        }
+
+        // 存钱罐使用独立数据表，奖励星星存储在目标等级行中（CurrentLevel = currentLevel + 1）。
+        if (category == ArchitectureCategory.SavingPot)
+        {
+            int targetLevel = currentLevel + 1;
+            return _savingPotRowsByLevel.TryGetValue(targetLevel, out SavingPotDataRow savingPotRow) ? savingPotRow.RewardStars : 0;
         }
 
         if (!_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow> rowsBySlotAndLevel)
@@ -1015,6 +1082,21 @@ public sealed partial class PlayerRuntimeModule
     /// <returns>最大等级。</returns>
     private int GetMaxArchitectureLevel(ArchitectureCategory category)
     {
+        // 存钱罐的最大等级直接取数据表中最高的 CurrentLevel（不 +1）。
+        if (category == ArchitectureCategory.SavingPot)
+        {
+            int savingPotMaxLevel = InitialArchitectureLevel;
+            foreach (KeyValuePair<int, SavingPotDataRow> pair in _savingPotRowsByLevel)
+            {
+                if (pair.Key > savingPotMaxLevel)
+                {
+                    savingPotMaxLevel = pair.Key;
+                }
+            }
+
+            return savingPotMaxLevel;
+        }
+
         return _maxArchitectureLevelsByCategory.TryGetValue(category, out int maxLevel)
             ? Mathf.Max(InitialArchitectureLevel, maxLevel)
             : InitialArchitectureLevel;
@@ -1035,7 +1117,7 @@ public sealed partial class PlayerRuntimeModule
     /// 获取指定建筑类别和等级对应的升级界面指示器精灵路径。
     /// </summary>
     /// <param name="category">建筑类别。</param>
-    /// <param name="level">建筑等级（0=未解锁，1~10=各升级等级）。</param>
+    /// <param name="level">建筑等级（0=未解锁，1~5=各升级等级）。</param>
     /// <returns>精灵路径；未找到时返回空字符串。</returns>
     public string GetIndicatorSpritePath(ArchitectureCategory category, int level)
     {
@@ -1054,7 +1136,7 @@ public sealed partial class PlayerRuntimeModule
     /// 获取指定建筑类别和等级对应的主界面实体占位精灵路径。
     /// </summary>
     /// <param name="category">建筑类别。</param>
-    /// <param name="level">建筑等级（0=未解锁，1~10=各升级等级）。</param>
+    /// <param name="level">建筑等级（0=未解锁，1~5=各升级等级）。</param>
     /// <returns>精灵路径；未找到时返回空字符串。</returns>
     public string GetEntitySpritePath(ArchitectureCategory category, int level)
     {

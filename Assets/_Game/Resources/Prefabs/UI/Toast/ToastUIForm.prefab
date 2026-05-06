@@ -102,8 +102,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: "\u63D0\u793A\u63D0\u793A\u63D0\u793A\u63D0\u793A\u63D0\u793A\u63D0\u793A\u63D0\u793A\u63D0\u793A\u63D0\u793A\u63D0\u793A"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 2483608077a62f34c84a1bbb6ac8e055, type: 2}
-  m_sharedMaterial: {fileID: 2979193228837331801, guid: 2483608077a62f34c84a1bbb6ac8e055, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 08fd7092508dae745b6388a862f6a458, type: 2}
+  m_sharedMaterial: {fileID: 2562566506443233013, guid: 08fd7092508dae745b6388a862f6a458, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []

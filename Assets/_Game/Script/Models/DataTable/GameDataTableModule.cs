@@ -56,6 +56,7 @@ public sealed class GameDataTableModule
         new DataTableEntry(typeof(DailyChallengeCostDataRow), AssetPath.GetDataTable("DailyChallengeCost")),
         new DataTableEntry(typeof(HeadPortraitDataRow), AssetPath.GetDataTable("HeadPortrait")),
         new DataTableEntry(typeof(HeadPortraitFrameDataRow), AssetPath.GetDataTable("HeadPortraitFrame")),
+        new DataTableEntry(typeof(SavingPotDataRow), AssetPath.GetDataTable("SavingPot")),
     };
 
     /// <summary>
@@ -451,6 +452,7 @@ public sealed class GameDataTableModule
             case nameof(DailyChallengeCostDataRow): BeginLoadCore<DailyChallengeCostDataRow>(entry.AssetName); break;
             case nameof(HeadPortraitDataRow): BeginLoadCore<HeadPortraitDataRow>(entry.AssetName); break;
             case nameof(HeadPortraitFrameDataRow): BeginLoadCore<HeadPortraitFrameDataRow>(entry.AssetName); break;
+            case nameof(SavingPotDataRow): BeginLoadCore<SavingPotDataRow>(entry.AssetName); break;
             default:
                 Log.Error("GameDataTableModule 遇到未识别的 RowType '{0}'，请补充 case 分支。", entry.RowType.Name);
                 break;
@@ -590,6 +592,9 @@ public sealed class GameDataTableModule
             case nameof(HeadPortraitFrameDataRow):
                 TryRegisterHeadPortraitFrameDataTable(GameEntry.DataTable.GetDataTable<HeadPortraitFrameDataRow>());
                 break;
+            case nameof(SavingPotDataRow):
+                TryRegisterSavingPotDataTable(GameEntry.DataTable.GetDataTable<SavingPotDataRow>());
+                break;
             default:
                 Log.Warning("GameDataTableModule 加载成功回调遇到未识别的 RowType '{0}'。", rowType.Name);
                 break;
@@ -638,6 +643,7 @@ public sealed class GameDataTableModule
             case nameof(DailyChallengeCostDataRow): Clear<DailyChallengeCostDataRow>(); break;
             case nameof(HeadPortraitDataRow): Clear<HeadPortraitDataRow>(); break;
             case nameof(HeadPortraitFrameDataRow): Clear<HeadPortraitFrameDataRow>(); break;
+            case nameof(SavingPotDataRow): Clear<SavingPotDataRow>(); break;
             default:
                 Log.Warning("GameDataTableModule 加载失败回调遇到未识别的 RowType '{0}'。", rowType.Name);
                 break;
@@ -892,6 +898,88 @@ public sealed class GameDataTableModule
     }
 
     /// <summary>
+    /// 注册存钱罐配置表到通用模块。
+    /// </summary>
+    private bool TryRegisterSavingPotDataTable(IDataTable<SavingPotDataRow> savingPotDataTable)
+    {
+        if (!ValidateSavingPotDataRows(savingPotDataTable))
+        {
+            Clear<SavingPotDataRow>();
+            return false;
+        }
+
+        if (!Register(savingPotDataTable))
+        {
+            Log.Error("存钱罐配置表注册失败。");
+            return false;
+        }
+
+        return TryWarmupPlayerRuntimeState();
+    }
+
+    /// <summary>
+    /// 校验存钱罐配置表。
+    /// 必须包含 5 行，等级 1~5 连续，1 级初始解锁。
+    /// </summary>
+    private static bool ValidateSavingPotDataRows(IDataTable<SavingPotDataRow> savingPotDataTable)
+    {
+        if (savingPotDataTable == null)
+        {
+            Log.Error("校验存钱罐配置表失败，数据表为空。");
+            return false;
+        }
+
+        SavingPotDataRow[] rows = savingPotDataTable.GetAllDataRows();
+        if (rows == null || rows.Length == 0)
+        {
+            Log.Error("校验存钱罐配置表失败，数据表为空。");
+            return false;
+        }
+
+        bool[] levelPresent = new bool[6];
+        for (int i = 0; i < rows.Length; i++)
+        {
+            SavingPotDataRow row = rows[i];
+            if (row == null)
+            {
+                Log.Error("校验存钱罐配置表失败，存在空行。");
+                return false;
+            }
+
+            if (row.CurrentLevel < 1 || row.CurrentLevel > 5)
+            {
+                Log.Error("校验存钱罐配置表失败，CurrentLevel '{0}' 超出范围 1~5，code '{1}'。", row.CurrentLevel, row.Code);
+                return false;
+            }
+
+            if (levelPresent[row.CurrentLevel])
+            {
+                Log.Error("校验存钱罐配置表失败，CurrentLevel '{0}' 重复。", row.CurrentLevel);
+                return false;
+            }
+
+            levelPresent[row.CurrentLevel] = true;
+        }
+
+        if (!levelPresent[1])
+        {
+            Log.Error("校验存钱罐配置表失败，缺少 CurrentLevel=1 的行。");
+            return false;
+        }
+
+        for (int level = 1; level <= 5; level++)
+        {
+            if (!levelPresent[level])
+            {
+                Log.Error("校验存钱罐配置表失败，缺少 CurrentLevel='{0}' 的行。", level);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// 当蛋表与玩法规则表都准备好后，初始化蛋孵化运行时缓存。
     /// </summary>
     /// <returns>是否初始化成功。</returns>
@@ -1015,7 +1103,8 @@ public sealed class GameDataTableModule
             && IsAvailable<GameplayRuleDataRow>()
             && IsAvailable<ArchitectureSlotDataRow>()
             && IsAvailable<ArchitectureUpgradeDataRow>()
-            && IsAvailable<ArchitectureDataRow>();
+            && IsAvailable<ArchitectureDataRow>()
+            && IsAvailable<SavingPotDataRow>();
     }
 
     /// <summary>

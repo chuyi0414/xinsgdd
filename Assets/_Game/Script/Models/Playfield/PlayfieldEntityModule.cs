@@ -295,6 +295,10 @@ public sealed class PlayfieldEntityModule
                 EnsureOrchardEntity(arrayIndex);
                 ApplySingleOrchardEntityData(arrayIndex);
                 break;
+
+            case PlayerRuntimeModule.ArchitectureCategory.SavingPot:
+                // 存钱罐没有对应的场地实体，无需刷新。
+                break;
         }
     }
 
