@@ -614,13 +614,24 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
             return;
         }
 
-        if (GameEntry.Fruits.TryExecuteArchitectureAction(entryView.Category, entryView.SlotIndex))
+        if (GameEntry.Fruits.TryExecuteArchitectureAction(entryView.Category, entryView.SlotIndex, out PlayerRuntimeModule.ArchitectureActionFailureReason reason))
         {
             RefreshAllEntries();
+            return;
         }
-        else
+
+        // 按底层返回的原因分流 Toast，避免“金币不足”这一条文案吞掉星星不足等真实原因。
+        switch (reason)
         {
-            ToastUtility.Show("金币不足");
+            case PlayerRuntimeModule.ArchitectureActionFailureReason.NotEnoughStars:
+                ToastUtility.Show("星星不足");
+                break;
+            case PlayerRuntimeModule.ArchitectureActionFailureReason.NotEnoughGold:
+                ToastUtility.Show("金币不足");
+                break;
+            default:
+                ToastUtility.Show("当前无法操作");
+                break;
         }
     }
 

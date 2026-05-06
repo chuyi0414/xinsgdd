@@ -14,8 +14,10 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 数据表固定列数。
+    /// 新增 EatFruitCount / ProduceProbability 后为 15
+    /// （Id Code Name Quality EntitySkeletonDataPath UiSkeletonDataPath IdleAnimationName MoveAnimationName GiveGoldAnimationName AttributeType AttributeValue RequiredStars EatFruitCount ProduceProbability Description）。
     /// </summary>
-    private const int ColumnCount = 12;
+    private const int ColumnCount = 15;
 
     /// <summary>
     /// 合法宠物 Code 的前缀。
@@ -84,6 +86,27 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
     /// 属性数值。
     /// </summary>
     public int AttributeValue { get; private set; }
+
+    /// <summary>
+    /// 该宠物进入孵化候选池所需的玩家累计星星阈值（含）。
+    /// 0 表示无星星限制；运行时按品质抽取宠物时，会过滤掉 RequiredStars > GameEntry.Fruits.CurrentStars 的项。
+    /// 与 EggDataRow.RequiredStars / ArchitectureSlotDataRow.RequiredStars 同语义，方便策划在不同维度统一调控解锁节奏。
+    /// </summary>
+    public int RequiredStars { get; private set; }
+
+    /// <summary>
+    /// 一只宠物从 Spawn 到离场的总进餐次数（即“吃水果次数”）。
+    /// 必须为正整数；运行时由 PetRuntimeState.RemainingEatFruitCount 跟踪剩余次数。
+    /// 进餐节奏：每次完整走完“上桌→生产→吃→奖励动画”流程消耗 1 次。
+    /// </summary>
+    public int EatFruitCount { get; private set; }
+
+    /// <summary>
+    /// 每次吃完水果时单独掷一次的“是否掉落产出物”概率（0-100 整数）。
+    /// 该判定与 FruitDataRow.CoinProbability 完全独立，不再使用旧的“互斥分支”模型。
+    /// 命中后，再从 PetProduce 同 PetId 池中等概率随机挑 1 条产出物。
+    /// </summary>
+    public int ProduceProbability { get; private set; }
 
     /// <summary>
     /// 备注描述。
@@ -196,6 +219,28 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
+        // RequiredStars：进入孵化候选池所需的玩家星星阈值；0 表示不限，负值不合法。
+        // 之所以放在 AttributeValue 与 EatFruitCount 之间，是为了与 Egg/ArchitectureSlot/ArchitectureUpgrade 三表的列序保持完全一致，便于策划维护。
+        if (!int.TryParse(columns[11], out int requiredStars) || requiredStars < 0)
+        {
+            Log.Warning("PetDataRow parse failed because RequiredStars '{0}' is invalid, code '{1}'.", columns[11], code);
+            return false;
+        }
+
+        // EatFruitCount：必须为正整数。0 等价于“宠物不会吃饭”，没有任何业务意义，禁止配置。
+        if (!int.TryParse(columns[12], out int eatFruitCount) || eatFruitCount <= 0)
+        {
+            Log.Warning("PetDataRow parse failed because EatFruitCount '{0}' is invalid, code '{1}'.", columns[12], code);
+            return false;
+        }
+
+        // ProduceProbability：0-100 整数；0 表示宠物永远不掉产出物，100 表示每次必掉。
+        if (!int.TryParse(columns[13], out int produceProbability) || produceProbability < 0 || produceProbability > 100)
+        {
+            Log.Warning("PetDataRow parse failed because ProduceProbability '{0}' is invalid, code '{1}'.", columns[13], code);
+            return false;
+        }
+
         _id = id;
         Code = code;
         Name = name;
@@ -207,7 +252,10 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
         GiveGoldAnimationName = giveGoldAnimationName;
         AttributeType = attributeType;
         AttributeValue = attributeValue;
-        Description = columns[11].Trim();
+        RequiredStars = requiredStars;
+        EatFruitCount = eatFruitCount;
+        ProduceProbability = produceProbability;
+        Description = columns[14].Trim();
         return true;
     }
 

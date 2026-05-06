@@ -105,6 +105,17 @@ public sealed partial class PlayerRuntimeModule
         }
 
         _isCandidateCacheDirty = true;
+
+        // 首次解锁发星：仅 RewardStars > 0 才调 AddStars（同为 partial 内部可见，无须改可见性）。
+        // 故意放在 TryUnlockFruit 而非 TryPurchaseFruit，让未来"看广告解锁/任务奖励解锁"等路径
+        // 直接调 TryUnlockFruit 也能自动发星，单点收口。
+        // 默认解锁的水果走 InitializeFruitCatalog 直接 _unlockedFruitCodes.Add 不会到这里，
+        // 算上 FruitDataRow 校验"IsUnlocked=true → RewardStars=0"，双保险阻止默认解锁误发星。
+        if (fruitRow.RewardStars > 0)
+        {
+            AddStars(fruitRow.RewardStars);
+        }
+
         return true;
     }
 
@@ -134,19 +145,20 @@ public sealed partial class PlayerRuntimeModule
             return false;
         }
 
-        // 解锁金币必须大于 0（数据表校验保证了这一点，此处做防御性检查）
-        if (fruitRow.UnlockGold <= 0)
+        // 解锁金币防御：禁止负数（数据表已经挡住，这里二次保险）；允许 0（免费解锁）。
+        if (fruitRow.UnlockGold < 0)
         {
             return false;
         }
 
-        // 扣金币失败说明余额不足
-        if (!TryConsumeGold(fruitRow.UnlockGold))
+        // UnlockGold > 0 走金币购买路径：扣金币失败说明余额不足，整个事务终止。
+        // UnlockGold == 0 直接跳过扣费，进入 TryUnlockFruit；保持发星与解锁集合写入语义统一。
+        if (fruitRow.UnlockGold > 0 && !TryConsumeGold(fruitRow.UnlockGold))
         {
             return false;
         }
 
-        // 扣款成功，执行解锁
+        // 扣款成功（或免费），执行解锁；TryUnlockFruit 内部按 RewardStars 自动发星。
         return TryUnlockFruit(fruitCode);
     }
 

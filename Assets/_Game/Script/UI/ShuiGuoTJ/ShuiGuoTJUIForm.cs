@@ -89,9 +89,6 @@ public class ShuiGuoTJUIForm : UIFormLogic
         /// <summary>详情面板中的宠物回馈金币文本，用于显示“宠物会回馈 金币+xxx”。</summary>
         public TextMeshProUGUI TxtPetFeedbackGold;
 
-        /// <summary>详情面板中的每分钟存钱金币文本，用于显示“每分钟存钱 金币+x”。</summary>
-        public TextMeshProUGUI TxtSaveGoldPerMinute;
-
         /// <summary>详情面板中的解锁金币文本，用于显示“需要xxxxxxxx金币解锁”。</summary>
         public TextMeshProUGUI TxtUnlockGold;
 
@@ -116,12 +113,6 @@ public class ShuiGuoTJUIForm : UIFormLogic
     /// 这里的金币数来自 FruitDataRow.CoinAmount，对应水果表 CoinAmount 列。
     /// </summary>
     private const string DetailPetFeedbackGoldFormat = "！宠物会回馈\t金币+{0}";
-
-    /// <summary>
-    /// 每分钟存钱金币文本格式。
-    /// 当前仅做显示，无点击或结算效果；金币数来自 FruitDataRow.SaveGoldPerMinute。
-    /// </summary>
-    private const string DetailSaveGoldPerMinuteFormat = "！每分钟存钱\t金币+{0}";
 
     /// <summary>
     /// 解锁金币文本格式。
@@ -213,14 +204,8 @@ public class ShuiGuoTJUIForm : UIFormLogic
     private TextMeshProUGUI _txtParticularsPetFeedbackGold;
 
     /// <summary>
-    /// 详情面板每分钟存钱金币文本，对应现有 TxtParticulars (3) 节点。
-    /// 暂时没有功能效果，只负责展示“每分钟存钱 金币+x”。
-    /// </summary>
-    [SerializeField]
-    private TextMeshProUGUI _txtParticularsSaveGoldPerMinute;
-
-    /// <summary>
     /// 详情面板解锁金币文本，对应现有 TxtParticulars (4) 节点。
+    /// 该节点名由 prefab 制作时保留，删除 (3) 后 Unity 不会自动重命名 (4)。
     /// </summary>
     [SerializeField]
     private TextMeshProUGUI _txtParticularsUnlockGold;
@@ -391,9 +376,6 @@ public class ShuiGuoTJUIForm : UIFormLogic
         _detailView.TxtPetFeedbackGold = _txtParticularsPetFeedbackGold != null
             ? _txtParticularsPetFeedbackGold
             : GetChildComponent<TextMeshProUGUI>(rootTransform, "TxtParticulars (2)");
-        _detailView.TxtSaveGoldPerMinute = _txtParticularsSaveGoldPerMinute != null
-            ? _txtParticularsSaveGoldPerMinute
-            : GetChildComponent<TextMeshProUGUI>(rootTransform, "TxtParticulars (3)");
         _detailView.TxtUnlockGold = _txtParticularsUnlockGold != null
             ? _txtParticularsUnlockGold
             : GetChildComponent<TextMeshProUGUI>(rootTransform, "TxtParticulars (4)");
@@ -750,11 +732,6 @@ public class ShuiGuoTJUIForm : UIFormLogic
         if (_detailView.TxtPetFeedbackGold != null)
         {
             _detailView.TxtPetFeedbackGold.SetText(DetailPetFeedbackGoldFormat, row.CoinAmount);
-        }
-
-        if (_detailView.TxtSaveGoldPerMinute != null)
-        {
-            _detailView.TxtSaveGoldPerMinute.SetText(DetailSaveGoldPerMinuteFormat, row.SaveGoldPerMinute);
         }
 
         if (_detailView.TxtUnlockGold != null)

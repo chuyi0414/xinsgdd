@@ -24,8 +24,9 @@ public sealed class EggDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 数据表固定列数。
+    /// 新增 RequiredStars 后为 11（Id Code Name IconPath HatchSeconds Quality HatchProbability AcquireWays PurchaseGold RequiredStars Description）。
     /// </summary>
-    private const int ColumnCount = 10;
+    private const int ColumnCount = 11;
 
     /// <summary>
     /// 合法蛋 Code 的前缀。
@@ -135,6 +136,12 @@ public sealed class EggDataRow : DataRowBase, ICodeDataRow
     public int PurchaseGold { get; private set; }
 
     /// <summary>
+    /// 购买该蛋需要玩家拥有的星星总额阈值（含）。
+    /// 0 表示无星星限制；Gift/Free 路径不走 TryPurchaseEgg，此字段对它们永远不生效（与 PurchaseGold 同语义）。
+    /// </summary>
+    public int RequiredStars { get; private set; }
+
+    /// <summary>
     /// 备注描述。
     /// </summary>
     public string Description { get; private set; }
@@ -228,6 +235,20 @@ public sealed class EggDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
+        // RequiredStars：购买需玩家星星总额 ≥ 该值；0 为无限制，负值不合法。
+        if (!int.TryParse(columns[9], out int requiredStars) || requiredStars < 0)
+        {
+            Log.Warning("EggDataRow parse failed because RequiredStars '{0}' is invalid, code '{1}'.", columns[9], code);
+            return false;
+        }
+
+        // 非购买路径（Gift/Free/Ad）不会调 TryPurchaseEgg，要求 RequiredStars=0 以避免表格出现歧义配置。
+        if (!canPurchase && requiredStars != 0)
+        {
+            Log.Warning("EggDataRow parse failed because non-shop egg '{0}' must have RequiredStars = 0.", code);
+            return false;
+        }
+
         _id = id;
         Code = code;
         Name = name;
@@ -241,7 +262,8 @@ public sealed class EggDataRow : DataRowBase, ICodeDataRow
         MythicRate = mythicRate;
         AcquireWays = acquireWays;
         PurchaseGold = purchaseGold;
-        Description = columns[9].Trim();
+        RequiredStars = requiredStars;
+        Description = columns[10].Trim();
         return true;
     }
 

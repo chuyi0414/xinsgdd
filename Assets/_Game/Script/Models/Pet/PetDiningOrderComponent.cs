@@ -155,10 +155,13 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
 
         if (GameEntry.Fruits == null || !GameEntry.Fruits.IsFruitUnlocked(petState.DesiredFruitCode))
         {
+            // 水果未解锁这条退化路径不该走常规 50/50：这次点击根本没进入“吃完一顿”的结点，
+            // 不能消耗 RemainingEatFruitCount，也不该让宠物主动插队抢餐桌。
+            // 走 ForceGoPlayArea 等价于“宠物没吃成所以去玩耍”，PlayArea 不可用时退化为留原桌（由 ForceGoPlayArea 内部处理）。
             petState.DiningWishState = PetDiningWishState.Completed;
             petState.RemainingDiningStageSeconds = 0f;
             petState.RemainingPostMealSeconds = 0f;
-            GameEntry.PetPlacement.ResolvePostMealOutcome(petInstanceId);
+            GameEntry.PetPlacement.ForceGoPlayArea(petInstanceId);
             return true;
         }
 
@@ -528,6 +531,8 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
 
     /// <summary>
     /// 完成奖励动画阶段，并进入吃完饭后的去向判定。
+    /// 另外在进入去向判定前，消耗 1 次 RemainingEatFruitCount：该函数是宠物“完整吃完一顿”的唯一结点，
+    /// 在这里记帐能保证所有进餐分支（含奖励动画充退、超时兑底）都只减 1，不会双计 1 次。
     /// </summary>
     /// <param name="petInstanceId">宠物实例 Id。</param>
     private void CompleteRewardAnimatingOrder(int petInstanceId)
@@ -545,13 +550,23 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
 
         petState.DiningWishState = PetDiningWishState.Completed;
         petState.RemainingDiningStageSeconds = 0f;
+
+        // 消耗 1 次剩余可吃次数；Clamp 到 0 避免多调用路径意外走负。
+        // 随后 ResolvePostMealOutcome 会读取这个计数判断 PlayArea/Queue/Leaving 分流。
+        if (petState.RemainingEatFruitCount > 0)
+        {
+            petState.RemainingEatFruitCount--;
+        }
+
         GameEntry.PetPlacement.ResolvePostMealOutcome(petInstanceId);
     }
 
     /// <summary>
     /// 统一结算宠物吃完后的奖励。
-    /// 奖励先按水果表 CoinProbability 掷金币概率，
-    /// 未命中金币时再进入产出物分支。
+    /// “金币”与“产出物”现为两个完全独立的概率判定：
+    /// 　- 金币分支：按 FruitDataRow.CoinProbability 单独掷 1 次。
+    /// 　- 产出物分支：按 PetDataRow.ProduceProbability 再单独掷 1 次，命中后从同 PetId 产出池随机抽 1 条。
+    /// 两者互不抢颁，可同时命中 / 同时未命中。
     /// </summary>
     /// <param name="petState">宠物运行时状态。</param>
     private void ResolveMealReward(PetRuntimeState petState)
@@ -567,16 +582,43 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
             return;
         }
 
-        // CoinProbability 本身就是金币掉落概率。
-        // 例如 CoinProbability = 80，则 80% 掉金币，剩余 20% 全部进入产出物分支。
-        int roll = UnityEngine.Random.Range(0, 100);
-        if (roll < fruitDataRow.CoinProbability)
+        // 金币分支：按 Fruit.CoinProbability 掷一次。命中不代表产出物分支被抢颁。
+        int coinRoll = UnityEngine.Random.Range(0, 100);
+        if (coinRoll < fruitDataRow.CoinProbability)
         {
             TryDropCoin(petState, fruitDataRow);
-            return;
         }
 
-        TryDropProduce(petState);
+        // 产出物分支：按宠物表 Pet.ProduceProbability 独立掷一次，与金币本颁互相独立。
+        if (TryRollPetProduceProbability(petState))
+        {
+            TryDropProduce(petState);
+        }
+    }
+
+    /// <summary>
+    /// 按宠物 Pet.ProduceProbability 独立掷 1 次“是否掉产出物”。
+    /// 仅在本业务中单点调用，进一步减低 ResolveMealReward 联合联调的心负担。
+    /// </summary>
+    /// <param name="petState">宠物运行时状态。</param>
+    /// <returns>概率是否命中。</returns>
+    private static bool TryRollPetProduceProbability(PetRuntimeState petState)
+    {
+        if (petState == null || string.IsNullOrWhiteSpace(petState.PetCode) || GameEntry.DataTables == null)
+        {
+            return false;
+        }
+
+        PetDataRow petDataRow = GameEntry.DataTables.GetDataRowByCode<PetDataRow>(petState.PetCode);
+        if (petDataRow == null || petDataRow.ProduceProbability <= 0)
+        {
+            // 0 表示宠物永远不产出物，直接未命中；Random.Range 也可处理，但这里提前返回能多省10％性能。
+            return false;
+        }
+
+        // 概率 100 表满购；Random.Range 上界不含，roll 取值 [0,99]，100 概率与 roll 永不相等，严格 "<" 判定即为必中。
+        int roll = UnityEngine.Random.Range(0, 100);
+        return roll < petDataRow.ProduceProbability;
     }
 
     /// <summary>

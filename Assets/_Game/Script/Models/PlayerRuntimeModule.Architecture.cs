@@ -51,10 +51,11 @@ public sealed partial class PlayerRuntimeModule
 
     /// <summary>
     /// 建筑升级配置缓存。
-    /// Key1 为建筑类别，Key2 为当前等级。
+    /// Key1 为建筑类别；Key2 为 (slotIndex, currentLevel) 复合键，让同类别不同位置的升级金币/效果/星星独立配置。
+    /// 警告：ValueTuple 在 Dictionary 查找中零分配/零装箱，切勿改成 Tuple<T1,T2> 引用类型。
     /// </summary>
-    private readonly Dictionary<ArchitectureCategory, Dictionary<int, ArchitectureUpgradeDataRow>> _architectureUpgradeRowsByCategory =
-        new Dictionary<ArchitectureCategory, Dictionary<int, ArchitectureUpgradeDataRow>>();
+    private readonly Dictionary<ArchitectureCategory, Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow>> _architectureUpgradeRowsByCategory =
+        new Dictionary<ArchitectureCategory, Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow>>();
 
     /// <summary>
     /// 各建筑类别的最大等级缓存。
@@ -92,6 +93,13 @@ public sealed partial class PlayerRuntimeModule
     /// </summary>
     private int _currentGold;
 
+    /// <summary>
+    /// 当前会话内的星星累计总额。
+    /// 开局从 GameplayRule.InitialStars 注入，建筑购买/升级成功后会叠加 RewardStars。
+    /// 该值不会被购买/升级消耗，仅作为阈值参与校验。
+    /// </summary>
+    private int _currentStars;
+
     // ───────────── 建筑事件 ─────────────
 
     /// <summary>
@@ -99,6 +107,12 @@ public sealed partial class PlayerRuntimeModule
     /// 参数为变化后的最新金币总额，UI 层监听此事件刷新显示。
     /// </summary>
     public event Action<int> GoldChanged;
+
+    /// <summary>
+    /// 星星累计总额发生变化时触发。
+    /// 参数为变化后的最新星星总额，需要跟踪星星进度的 UI 可订阅。
+    /// </summary>
+    public event Action<int> StarsChanged;
 
     /// <summary>
     /// 建筑状态发生变化时触发。
@@ -149,6 +163,12 @@ public sealed partial class PlayerRuntimeModule
     /// </summary>
     public int CurrentGold => _currentGold;
 
+    /// <summary>
+    /// 当前累计拥有的星星总额。
+    /// UI 可以随时查询，不会被消耗。
+    /// </summary>
+    public int CurrentStars => _currentStars;
+
     // ───────────── 建筑/金币公共接口 ─────────────
 
     /// <summary>
@@ -184,21 +204,37 @@ public sealed partial class PlayerRuntimeModule
 
     /// <summary>
     /// 尝试执行一次建筑购买或升级。
-    /// UI 层只调这一层，不直接操作金币与容量。
+    /// UI 层只调这一层，不直接操作金币、容量与星星。
+    /// 执行顺序：
+    /// 1. 验证初始化/状态合法。
+    /// 2. Buy 分支额外验证顺序解锁。
+    /// 3. 验证星星阈值（不消耗）。
+    /// 4. 验证并扣除金币。
+    /// 5. 应用购买/升级效果。
+    /// 6. 累加奖励星星、广播状态变化。
     /// </summary>
     /// <param name="category">建筑条目类型。</param>
     /// <param name="slotIndex">1 基索引。</param>
+    /// <param name="reason">失败原因。调用成功时为 None，失败时供 UI 分流 Toast。</param>
     /// <returns>是否执行成功。</returns>
-    public bool TryExecuteArchitectureAction(ArchitectureCategory category, int slotIndex)
+    public bool TryExecuteArchitectureAction(
+        ArchitectureCategory category,
+        int slotIndex,
+        out ArchitectureActionFailureReason reason)
     {
+        // 默认返回 None，后续任何 fail 分支都会重新赋值。
+        reason = ArchitectureActionFailureReason.None;
+
         if (!EnsureInitialized())
         {
+            reason = ArchitectureActionFailureReason.NotPurchasable;
             return false;
         }
 
         ArchitectureSlotState slotState = GetArchitectureSlotState(category, slotIndex);
         if (slotState == null)
         {
+            reason = ArchitectureActionFailureReason.NotPurchasable;
             return false;
         }
 
@@ -206,30 +242,73 @@ public sealed partial class PlayerRuntimeModule
         switch (actionType)
         {
             case ArchitectureActionType.Buy:
-                if (!CanUnlockArchitectureSlot(category, slotIndex) || !TryConsumeGold(cost))
+            {
+                // 跳购允许：三个区的购买不再强制按 1→2→3 顺序解锁，仅按星星条件 + 金币消耗判定。
+                // 跳购导致的未解锁"洞"由业务模块（EggHatchComponent / PetPlacementModule / OrchardModule）
+                // 通过 IsArchitectureSlotUnlocked 守卫显式跳过，不会把蛋/宠物/水果错放到锁位。
+                int requiredStars = GetSlotRequiredStars(category, slotIndex);
+                if (!HasEnoughStars(requiredStars))
                 {
+                    reason = ArchitectureActionFailureReason.NotEnoughStars;
+                    return false;
+                }
+
+                if (!TryConsumeGold(cost))
+                {
+                    reason = ArchitectureActionFailureReason.NotEnoughGold;
                     return false;
                 }
 
                 slotState.IsUnlocked = true;
                 slotState.Level = InitialArchitectureLevel;
                 ApplyArchitectureUnlock(category, slotIndex);
+                AddStars(GetSlotRewardStars(category, slotIndex));
                 NotifyArchitectureStateChanged(category, slotIndex);
                 return true;
+            }
 
             case ArchitectureActionType.Upgrade:
+            {
+                // 警告：RewardStars 必须在 Level 还是旧值时读取，避免 Mathf.Clamp 后索引偏移。
+                int requiredStars = GetUpgradeRequiredStars(category, slotIndex, slotState.Level);
+                int rewardStars = GetUpgradeRewardStars(category, slotIndex, slotState.Level);
+                if (!HasEnoughStars(requiredStars))
+                {
+                    reason = ArchitectureActionFailureReason.NotEnoughStars;
+                    return false;
+                }
+
                 if (!TryConsumeGold(cost))
                 {
+                    reason = ArchitectureActionFailureReason.NotEnoughGold;
                     return false;
                 }
 
                 slotState.Level = Mathf.Clamp(slotState.Level + 1, InitialArchitectureLevel, GetMaxArchitectureLevel(category));
+                AddStars(rewardStars);
                 NotifyArchitectureStateChanged(category, slotIndex);
                 return true;
+            }
 
             default:
+                reason = ArchitectureActionFailureReason.NotPurchasable;
                 return false;
         }
+    }
+
+    /// <summary>
+    /// 判断指定建筑槽位是否已解锁。
+    /// 业务模块（孵化、宠物、果园）按容量数组遍历时必须先调用此方法跳过跳购导致的未解锁"洞"。
+    /// 例如：玩家直接购买 3 号位，此时 1/3 号位 IsUnlocked=true 而 2 号位仍为 false，
+    /// _xxxCount 会扩张到 3，业务循环 i=0..2 必须显式跳过 2 号位避免把蛋/宠物/水果分配到锁位。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="slotIndex">1 基索引。</param>
+    /// <returns>该槽位 IsUnlocked 状态；非法索引返回 false。</returns>
+    public bool IsArchitectureSlotUnlocked(ArchitectureCategory category, int slotIndex)
+    {
+        ArchitectureSlotState slotState = GetArchitectureSlotState(category, slotIndex);
+        return slotState != null && slotState.IsUnlocked;
     }
 
     /// <summary>
@@ -382,6 +461,38 @@ public sealed partial class PlayerRuntimeModule
     }
 
     /// <summary>
+    /// 累计增加星星。
+    /// 仅 amount > 0 时生效，避免 0/负数反向扊除。
+    /// </summary>
+    /// <param name="amount">增加的星星数量；为 0 或负数时直接返回。</param>
+    private void AddStars(int amount)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        _currentStars += amount;
+        StarsChanged?.Invoke(_currentStars);
+    }
+
+    /// <summary>
+    /// 判断当前星星是否足以达到阈值。
+    /// required <= 0 表示无阈值，始终返回 true。
+    /// </summary>
+    /// <param name="required">需要达到的星星阈值。</param>
+    /// <returns>当前星星 ≥ required 返回 true，否则 false。</returns>
+    private bool HasEnoughStars(int required)
+    {
+        if (required <= 0)
+        {
+            return true;
+        }
+
+        return _currentStars >= required;
+    }
+
+    /// <summary>
     /// 获取孵化区指定槽位的孵化时长缩放因子。
     /// </summary>
     /// <param name="slotIndex">1 基索引。</param>
@@ -493,13 +604,14 @@ public sealed partial class PlayerRuntimeModule
                 continue;
             }
 
-            if (!_architectureUpgradeRowsByCategory.TryGetValue(row.Category, out Dictionary<int, ArchitectureUpgradeDataRow> rowsByCurrentLevel))
+            if (!_architectureUpgradeRowsByCategory.TryGetValue(row.Category, out Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow> rowsBySlotAndLevel))
             {
-                rowsByCurrentLevel = new Dictionary<int, ArchitectureUpgradeDataRow>();
-                _architectureUpgradeRowsByCategory.Add(row.Category, rowsByCurrentLevel);
+                rowsBySlotAndLevel = new Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow>();
+                _architectureUpgradeRowsByCategory.Add(row.Category, rowsBySlotAndLevel);
             }
 
-            rowsByCurrentLevel[row.CurrentLevel] = row;
+            // 复合键：同类别下 (槽位, 当前等级) 唯一定位一行配置。
+            rowsBySlotAndLevel[(row.SlotIndex, row.CurrentLevel)] = row;
 
             int maxLevel = row.CurrentLevel + 1;
             if (!_maxArchitectureLevelsByCategory.TryGetValue(row.Category, out int currentMaxLevel) || maxLevel > currentMaxLevel)
@@ -607,37 +719,8 @@ public sealed partial class PlayerRuntimeModule
             return ArchitectureActionType.Max;
         }
 
-        cost = GetArchitectureUpgradeCost(category, slotState.Level);
+        cost = GetArchitectureUpgradeCost(category, slotIndex, slotState.Level);
         return cost > 0 ? ArchitectureActionType.Upgrade : ArchitectureActionType.None;
-    }
-
-    /// <summary>
-    /// 判断当前锁定位是否允许购买。
-    /// 这里只允许按顺序解锁"当前下一个未解锁位"。
-    /// </summary>
-    /// <param name="category">建筑条目类型。</param>
-    /// <param name="slotIndex">1 基索引。</param>
-    /// <returns>是否允许购买。</returns>
-    private bool CanUnlockArchitectureSlot(ArchitectureCategory category, int slotIndex)
-    {
-        ArchitectureSlotState[] slotStates = GetArchitectureStateArray(category);
-        if (slotStates == null || slotIndex <= 0 || slotIndex > slotStates.Length)
-        {
-            return false;
-        }
-
-        for (int i = 0; i < slotStates.Length; i++)
-        {
-            ArchitectureSlotState slotState = slotStates[i];
-            if (slotState == null || slotState.IsUnlocked)
-            {
-                continue;
-            }
-
-            return i == slotIndex - 1;
-        }
-
-        return false;
     }
 
     /// <summary>
@@ -664,20 +747,23 @@ public sealed partial class PlayerRuntimeModule
     }
 
     /// <summary>
-    /// 获取当前等级升到下一级时的金币消耗。
+    /// 获取指定槽位当前等级升到下一级时的金币消耗。
+    /// 同 Category 下不同槽位可拥有独立金币表，须传入 slotIndex。
     /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="slotIndex">1 基索引。</param>
     /// <param name="currentLevel">当前等级。</param>
-    /// <returns>升级消耗；已满级或等级非法时返回 0。</returns>
-    private int GetArchitectureUpgradeCost(ArchitectureCategory category, int currentLevel)
+    /// <returns>升级消耗；已满级、等级非法或未命中配置时返回 0。</returns>
+    private int GetArchitectureUpgradeCost(ArchitectureCategory category, int slotIndex, int currentLevel)
     {
-        if (currentLevel < InitialArchitectureLevel)
+        if (currentLevel < InitialArchitectureLevel || slotIndex <= 0)
         {
             return 0;
         }
 
-        if (!_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<int, ArchitectureUpgradeDataRow> rowsByCurrentLevel)
-            || rowsByCurrentLevel == null
-            || !rowsByCurrentLevel.TryGetValue(currentLevel, out ArchitectureUpgradeDataRow row)
+        if (!_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow> rowsBySlotAndLevel)
+            || rowsBySlotAndLevel == null
+            || !rowsBySlotAndLevel.TryGetValue((slotIndex, currentLevel), out ArchitectureUpgradeDataRow row)
             || row == null)
         {
             return 0;
@@ -798,6 +884,104 @@ public sealed partial class PlayerRuntimeModule
         return Mathf.Max(0.01f, 1f - (effectParam * 0.01f));
     }
 
+    /// <summary>
+    /// 获取指定槽位购买前置需要的星星阈值。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="slotIndex">1 基索引。</param>
+    /// <returns>需求星星数；未命中配置时返回 0（等价于无阈值）。</returns>
+    private int GetSlotRequiredStars(ArchitectureCategory category, int slotIndex)
+    {
+        if (slotIndex <= 0)
+        {
+            return 0;
+        }
+
+        if (!_architectureSlotRowsByCategory.TryGetValue(category, out Dictionary<int, ArchitectureSlotDataRow> rowsBySlotIndex)
+            || rowsBySlotIndex == null
+            || !rowsBySlotIndex.TryGetValue(slotIndex, out ArchitectureSlotDataRow row)
+            || row == null)
+        {
+            return 0;
+        }
+
+        return row.RequiredStars;
+    }
+
+    /// <summary>
+    /// 获取指定槽位购买成功后获得的星星。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="slotIndex">1 基索引。</param>
+    /// <returns>奖励星星数；未命中配置时返回 0。</returns>
+    private int GetSlotRewardStars(ArchitectureCategory category, int slotIndex)
+    {
+        if (slotIndex <= 0)
+        {
+            return 0;
+        }
+
+        if (!_architectureSlotRowsByCategory.TryGetValue(category, out Dictionary<int, ArchitectureSlotDataRow> rowsBySlotIndex)
+            || rowsBySlotIndex == null
+            || !rowsBySlotIndex.TryGetValue(slotIndex, out ArchitectureSlotDataRow row)
+            || row == null)
+        {
+            return 0;
+        }
+
+        return row.RewardStars;
+    }
+
+    /// <summary>
+    /// 获取指定类别指定槽位从 currentLevel 升级到 currentLevel+1 需要的星星阈值。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="slotIndex">1 基索引。</param>
+    /// <param name="currentLevel">升级前的当前等级。</param>
+    /// <returns>需求星星数；未命中配置时返回 0（等价于无阈值）。</returns>
+    private int GetUpgradeRequiredStars(ArchitectureCategory category, int slotIndex, int currentLevel)
+    {
+        if (currentLevel < InitialArchitectureLevel || slotIndex <= 0)
+        {
+            return 0;
+        }
+
+        if (!_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow> rowsBySlotAndLevel)
+            || rowsBySlotAndLevel == null
+            || !rowsBySlotAndLevel.TryGetValue((slotIndex, currentLevel), out ArchitectureUpgradeDataRow row)
+            || row == null)
+        {
+            return 0;
+        }
+
+        return row.RequiredStars;
+    }
+
+    /// <summary>
+    /// 获取指定类别指定槽位从 currentLevel 升级到 currentLevel+1 成功后获得的星星。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="slotIndex">1 基索引。</param>
+    /// <param name="currentLevel">升级前的当前等级。</param>
+    /// <returns>奖励星星数；未命中配置时返回 0。</returns>
+    private int GetUpgradeRewardStars(ArchitectureCategory category, int slotIndex, int currentLevel)
+    {
+        if (currentLevel < InitialArchitectureLevel || slotIndex <= 0)
+        {
+            return 0;
+        }
+
+        if (!_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow> rowsBySlotAndLevel)
+            || rowsBySlotAndLevel == null
+            || !rowsBySlotAndLevel.TryGetValue((slotIndex, currentLevel), out ArchitectureUpgradeDataRow row)
+            || row == null)
+        {
+            return 0;
+        }
+
+        return row.RewardStars;
+    }
+
     private int GetArchitectureEffectParam(ArchitectureCategory category, int slotIndex)
     {
         if (!EnsureInitialized())
@@ -812,9 +996,9 @@ public sealed partial class PlayerRuntimeModule
         }
 
         int effectLevel = slotState.Level - 1;
-        if (!_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<int, ArchitectureUpgradeDataRow> rowsByCurrentLevel)
-            || rowsByCurrentLevel == null
-            || !rowsByCurrentLevel.TryGetValue(effectLevel, out ArchitectureUpgradeDataRow row)
+        if (!_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow> rowsBySlotAndLevel)
+            || rowsBySlotAndLevel == null
+            || !rowsBySlotAndLevel.TryGetValue((slotIndex, effectLevel), out ArchitectureUpgradeDataRow row)
             || row == null)
         {
             return 0;

@@ -16,7 +16,7 @@ public sealed class ArchitectureSlotDataRow : DataRowBase, ICodeDataRow
     /// <summary>
     /// 数据表固定列数。
     /// </summary>
-    private const int ColumnCount = 7;
+    private const int ColumnCount = 9;
 
     /// <summary>
     /// 合法槽位 Code 的前缀。
@@ -57,6 +57,19 @@ public sealed class ArchitectureSlotDataRow : DataRowBase, ICodeDataRow
     /// 购买该槽位所需金币。
     /// </summary>
     public int UnlockGold { get; private set; }
+
+    /// <summary>
+    /// 购买前置需要的星星阈值。
+    /// PlayerRuntimeModule 购买时仅校验不消耗，0 表示无阈值。
+    /// 初始解锁位（IsInitiallyUnlocked=true）必须为 0。
+    /// </summary>
+    public int RequiredStars { get; private set; }
+
+    /// <summary>
+    /// 购买成功后累计获得的星星。
+    /// 初始解锁位（IsInitiallyUnlocked=true）必须为 0，避免未走购买流程还送星星。
+    /// </summary>
+    public int RewardStars { get; private set; }
 
     /// <summary>
     /// 备注描述。
@@ -134,13 +147,35 @@ public sealed class ArchitectureSlotDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
+        if (!int.TryParse(columns[6], out int requiredStars) || requiredStars < 0)
+        {
+            Log.Warning("ArchitectureSlotDataRow parse failed because RequiredStars '{0}' is invalid, code '{1}'.", columns[6], code);
+            return false;
+        }
+
+        if (!int.TryParse(columns[7], out int rewardStars) || rewardStars < 0)
+        {
+            Log.Warning("ArchitectureSlotDataRow parse failed because RewardStars '{0}' is invalid, code '{1}'.", columns[7], code);
+            return false;
+        }
+
+        if (isInitiallyUnlocked && (requiredStars != 0 || rewardStars != 0))
+        {
+            Log.Warning(
+                "ArchitectureSlotDataRow parse failed because initially unlocked slot '{0}' must have RequiredStars=0 and RewardStars=0.",
+                code);
+            return false;
+        }
+
         _id = id;
         Code = code;
         Category = category;
         SlotIndex = slotIndex;
         IsInitiallyUnlocked = isInitiallyUnlocked;
         UnlockGold = unlockGold;
-        Description = columns[6].Trim();
+        RequiredStars = requiredStars;
+        RewardStars = rewardStars;
+        Description = columns[8].Trim();
         return true;
     }
 

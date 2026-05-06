@@ -119,6 +119,7 @@ public static class AddressablesAssetRouterImpl
     {
         if (!s_IsAddressablesReady)
         {
+            AddressablesFallbackDiagnostic.SetReason(assetName, "Addressables catalog 尚未初始化完成，自动路由无法判定该资源，已回退到 Resources 后端。");
             return false;
         }
 
@@ -128,21 +129,30 @@ public static class AddressablesAssetRouterImpl
         }
 
         // 同步判定 key 是否在 catalog 中：遍历每个 Locator 调 Locate（同步、零 IO、零分配）。
-        if (!TryLocate(assetName, assetType, out _))
+        if (!TryLocate(assetName, assetType, out _, out int locatorCount))
         {
+            string assetTypeName = assetType != null ? assetType.FullName : "null";
+            AddressablesFallbackDiagnostic.SetReason(
+                assetName,
+                Utility.Text.Format(
+                    "Addressables catalog 已就绪，但没有任何 ResourceLocator 命中该 key。asset='{0}', assetType='{1}', locatorCount={2}。请检查 Addressables Address 是否与 GF 路径完全一致，以及资源是否已加入 Addressables Group。",
+                    assetName,
+                    assetTypeName,
+                    locatorCount));
             return false;
         }
 
         DateTime startTime = DateTime.UtcNow;
 
-        // 用 UnityEngine.Object 泛型加载，业务侧可在 LoadAssetSuccessCallback 里 as 到具体类型。
-        // GF UI/Entity/DataTable/Sound 的 LoadAssetCallbacks 内部 as 处理已经存在，行为兼容。
+        // 必须按 GF 传入的 assetType 发起 Addressables 泛型加载。
+        // 不能统一用 UnityEngine.Object：Addressables 的 Built In Resources locator 会按类型过滤，
+        // Sprite 请求如果被 Object 泛型重查，可能命中失败或返回非预期对象，导致业务侧 asset as Sprite 为 null。
         // ⚠️ 防御性 try-catch：理论上 Addressables.LoadAssetAsync 在 key 不存在时返回 Failed handle 而非报错，
         //     但 catalog 损坏 / 极端情况下可能同步抛异常；捕获后走 LoadAssetFailureCallback 避免 GF 调用栈中断。
-        AsyncOperationHandle<UnityEngine.Object> handle;
+        AsyncOperationHandle handle;
         try
         {
-            handle = Addressables.LoadAssetAsync<UnityEngine.Object>(assetName);
+            handle = LoadAddressablesAsset(assetName, assetType);
         }
         catch (Exception ex)
         {
@@ -159,8 +169,10 @@ public static class AddressablesAssetRouterImpl
             float elapseSeconds = (float)(DateTime.UtcNow - startTime).TotalSeconds;
             if (op.Status == AsyncOperationStatus.Succeeded && op.Result != null)
             {
+                UnityEngine.Object unityAsset = op.Result as UnityEngine.Object;
+                AddressablesShaderRepair.Repair(unityAsset);
                 // ⚠️ 必须先登记反查表再派发回调：业务侧拿到 asset 后立即 UnloadAsset 时，HybridResourceHelper 才能命中。
-                ResourceComponentExtensions.RegisterAddressablesHandle(op.Result, op);
+                ResourceComponentExtensions.RegisterAddressablesHandle(unityAsset, op);
                 if (loadAssetCallbacks.LoadAssetSuccessCallback != null)
                 {
                     loadAssetCallbacks.LoadAssetSuccessCallback(assetName, op.Result, elapseSeconds, userData);
@@ -184,6 +196,52 @@ public static class AddressablesAssetRouterImpl
         };
 
         return true;
+    }
+
+    /// <summary>
+    /// 按运行时 Type 发起 Addressables 泛型加载。
+    /// </summary>
+    /// <param name="assetName">Addressables key / GF 资源名。</param>
+    /// <param name="assetType">GF 调用方期望的资源类型；为空时回退到 UnityEngine.Object。</param>
+    /// <returns>非泛型句柄，便于统一注册 Completed 回调和释放。</returns>
+    private static AsyncOperationHandle LoadAddressablesAsset(string assetName, Type assetType)
+    {
+        if (assetType == typeof(UnityEngine.Sprite))
+        {
+            return Addressables.LoadAssetAsync<UnityEngine.Sprite>(assetName);
+        }
+
+        if (assetType == typeof(UnityEngine.GameObject))
+        {
+            return Addressables.LoadAssetAsync<UnityEngine.GameObject>(assetName);
+        }
+
+        if (assetType == typeof(UnityEngine.TextAsset))
+        {
+            return Addressables.LoadAssetAsync<UnityEngine.TextAsset>(assetName);
+        }
+
+        if (assetType == typeof(Spine.Unity.SkeletonDataAsset))
+        {
+            return Addressables.LoadAssetAsync<Spine.Unity.SkeletonDataAsset>(assetName);
+        }
+
+        if (assetType == typeof(UnityEngine.AudioClip))
+        {
+            return Addressables.LoadAssetAsync<UnityEngine.AudioClip>(assetName);
+        }
+
+        if (assetType == typeof(UnityEngine.Material))
+        {
+            return Addressables.LoadAssetAsync<UnityEngine.Material>(assetName);
+        }
+
+        if (assetType == typeof(UnityEngine.Texture2D))
+        {
+            return Addressables.LoadAssetAsync<UnityEngine.Texture2D>(assetName);
+        }
+
+        return Addressables.LoadAssetAsync<UnityEngine.Object>(assetName);
     }
 
     /// <summary>
@@ -211,11 +269,22 @@ public static class AddressablesAssetRouterImpl
     /// </summary>
     private static bool TryLocate(string assetName, Type assetType, out IList<IResourceLocation> locations)
     {
+        return TryLocate(assetName, assetType, out locations, out _);
+    }
+
+    /// <summary>
+    /// 同步判定 Addressables key 是否注册，并输出参与判定的 Locator 数量。
+    /// locatorCount 专门用于兜底错误诊断：当 Resources 也加载失败时，最终日志能看出是 catalog 空、Address 不匹配，还是类型过滤不匹配。
+    /// </summary>
+    private static bool TryLocate(string assetName, Type assetType, out IList<IResourceLocation> locations, out int locatorCount)
+    {
         locations = null;
+        locatorCount = 0;
         // ⚠️ Addressables.ResourceLocators 是 IEnumerable<IResourceLocator>，遍历会产生迭代器对象（少量 GC）；
         //     如果未来需要严格零 GC，可缓存 ResourceLocators 列表的 ToArray 副本，但项目当前频次较低不必优化。
         foreach (IResourceLocator locator in Addressables.ResourceLocators)
         {
+            locatorCount++;
             if (locator.Locate(assetName, assetType, out locations))
             {
                 return true;

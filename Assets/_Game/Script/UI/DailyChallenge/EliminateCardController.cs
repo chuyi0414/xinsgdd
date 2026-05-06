@@ -680,7 +680,7 @@ public sealed class EliminateCardController
     /// 根据 CSV 类型配置，为每一张逻辑卡片分配一个显示类型。
     /// 策略：
     /// 1. 先尊重 CSV 里写死数量的固定类型；
-    /// 2. 剩余卡片若遇到 '-1' 占位，则从已解锁水果卡池轮换分配不同卡图；
+    /// 2. 剩余卡片若遇到 '-1' 占位，则从已解锁水果卡池随机抽取本局不重复的卡图；
     /// 3. 若水果表不可用，回退到默认卡图。
     /// </summary>
     private List<EliminateCardAssignedTypeVisual> BuildAssignedTypeVisuals(
@@ -726,7 +726,10 @@ public sealed class EliminateCardController
 
                 for (int countIndex = 0; countIndex < config.FixedCount && visuals.Count < cardCount; countIndex++)
                 {
-                    visuals.Add(CreateAssignedTypeVisual(typeId, config.SpriteName));
+                    if (!TryAddAssignedTypeVisual(visuals, typeId, config.SpriteName))
+                    {
+                        return visuals;
+                    }
                 }
             }
         }
@@ -753,21 +756,23 @@ public sealed class EliminateCardController
 
         if (placeholderConfigs != null && placeholderConfigs.Count > 0)
         {
-            // ---- 从已解锁水果卡池轮换分配卡图 ----
+            // ---- 从已解锁水果卡池随机不重复分配卡图 ----
             // 只有 IsUnlocked == true 的水果才会进入随机卡池。
             HashSet<string> excludedSpriteNames = new HashSet<string>(namedSpriteOrder, StringComparer.OrdinalIgnoreCase);
             string[] unlockedSpriteNames = GetUnlockedFruitSpriteNames(excludedSpriteNames);
             int slotCount = unlockedSpriteNames != null ? Mathf.Min(placeholderConfigs.Count, unlockedSpriteNames.Length) : 0;
             if (slotCount > 0)
             {
-                if (placeholderConfigs.Count != unlockedSpriteNames.Length)
+                if (placeholderConfigs.Count > unlockedSpriteNames.Length)
                 {
                     Log.Warning(
-                        "EliminateCardController placeholder config count '{0}' does not match unlocked random pool count '{1}'. Using '{2}' entries.",
+                        "EliminateCardController placeholder config count '{0}' exceeds unlocked random pool count '{1}'. Using '{2}' entries.",
                         placeholderConfigs.Count,
                         unlockedSpriteNames.Length,
                         slotCount);
                 }
+
+                ShuffleUnlockedSpriteNamesForRandomSlots(unlockedSpriteNames, slotCount);
 
                 int[] allocatedCounts = AllocatePlaceholderCounts(remainingCount, placeholderConfigs, slotCount);
                 for (int slotIndex = 0; slotIndex < slotCount; slotIndex++)
@@ -782,16 +787,29 @@ public sealed class EliminateCardController
 
                     for (int countIndex = 0; countIndex < allocatedCounts[slotIndex] && visuals.Count < cardCount; countIndex++)
                     {
-                        visuals.Add(CreateAssignedTypeVisual(typeId, spriteName));
+                        if (!TryAddAssignedTypeVisual(visuals, typeId, spriteName))
+                        {
+                            return visuals;
+                        }
                     }
                 }
 
                 return visuals;
             }
 
+            if (!namedTypeIdBySpriteName.TryGetValue(DefaultCardSpriteName, out int defaultTypeId))
+            {
+                defaultTypeId = nextTypeId++;
+                namedTypeIdBySpriteName.Add(DefaultCardSpriteName, defaultTypeId);
+                namedSpriteOrder.Add(DefaultCardSpriteName);
+            }
+
             for (int i = 0; i < remainingCount; i++)
             {
-                visuals.Add(CreateAssignedTypeVisual(nextTypeId + i, DefaultCardSpriteName));
+                if (!TryAddAssignedTypeVisual(visuals, defaultTypeId, DefaultCardSpriteName))
+                {
+                    return visuals;
+                }
             }
 
             return visuals;
@@ -802,15 +820,28 @@ public sealed class EliminateCardController
             for (int i = 0; i < remainingCount; i++)
             {
                 string spriteName = namedSpriteOrder[i % namedSpriteOrder.Count];
-                visuals.Add(CreateAssignedTypeVisual(namedTypeIdBySpriteName[spriteName], spriteName));
+                if (!TryAddAssignedTypeVisual(visuals, namedTypeIdBySpriteName[spriteName], spriteName))
+                {
+                    return visuals;
+                }
             }
 
             return visuals;
         }
 
+        if (!namedTypeIdBySpriteName.TryGetValue(DefaultCardSpriteName, out int onlyDefaultTypeId))
+        {
+            onlyDefaultTypeId = nextTypeId++;
+            namedTypeIdBySpriteName.Add(DefaultCardSpriteName, onlyDefaultTypeId);
+            namedSpriteOrder.Add(DefaultCardSpriteName);
+        }
+
         for (int i = 0; i < remainingCount; i++)
         {
-            visuals.Add(CreateAssignedTypeVisual(1 + i, DefaultCardSpriteName));
+            if (!TryAddAssignedTypeVisual(visuals, onlyDefaultTypeId, DefaultCardSpriteName))
+            {
+                return visuals;
+            }
         }
 
         return visuals;
@@ -882,6 +913,12 @@ public sealed class EliminateCardController
                 continue;
             }
 
+            if (!IsCardSpriteLoaded(spriteName))
+            {
+                Log.Warning("EliminateCardController skip unlocked fruit random card because daily challenge sprite is not loaded, FruitCode='{0}', SpriteName='{1}', Path='{2}'.", fruit.Code, spriteName, fruit.EffectiveDailyChallengePath);
+                continue;
+            }
+
             if (uniqueSpriteNames.Add(spriteName))
             {
                 unlocked.Add(spriteName);
@@ -889,6 +926,36 @@ public sealed class EliminateCardController
         }
 
         return unlocked.Count > 0 ? unlocked.ToArray() : null;
+    }
+
+    /// <summary>
+    /// 将已解锁水果卡图数组的前 slotCount 个位置洗成“本局随机不重复槽位”。
+    /// 这是局部 Fisher-Yates：第 i 个槽从 [i, Length) 中随机换入一个元素，天然保证前 slotCount 个互不重复。
+    /// </summary>
+    /// <param name="spriteNames">已解锁水果卡图名数组；该数组由 GetUnlockedFruitSpriteNames 每次新建，允许原地修改。</param>
+    /// <param name="slotCount">本局 '-1' 随机占位实际需要的不同水果数量。</param>
+    private static void ShuffleUnlockedSpriteNamesForRandomSlots(string[] spriteNames, int slotCount)
+    {
+        if (spriteNames == null || spriteNames.Length <= 1 || slotCount <= 0)
+        {
+            return;
+        }
+
+        int shuffleCount = Mathf.Min(slotCount, spriteNames.Length);
+        for (int slotIndex = 0; slotIndex < shuffleCount; slotIndex++)
+        {
+            // 从当前槽位到数组尾部随机抽一个候选换到当前位置。
+            // 这样前 shuffleCount 个位置就是无放回采样结果，不需要额外 HashSet，也不会重复。
+            int randomIndex = UnityEngine.Random.Range(slotIndex, spriteNames.Length);
+            if (randomIndex == slotIndex)
+            {
+                continue;
+            }
+
+            string cachedSpriteName = spriteNames[slotIndex];
+            spriteNames[slotIndex] = spriteNames[randomIndex];
+            spriteNames[randomIndex] = cachedSpriteName;
+        }
     }
 
     private static int[] AllocatePlaceholderCounts(
@@ -975,20 +1042,40 @@ public sealed class EliminateCardController
     }
 
     /// <summary>
-    /// 创建单个"卡片显示类型"。
-    /// 所有卡片统一使用原始贴图颜色（Color.white），不再染色。
+    /// 尝试追加一条卡片类型视觉数据。
+    /// 这里必须保证 TypeId 与 Sprite 来自同一个 spriteName，禁止把缺失资源伪装成默认图，避免出现“看起来一样但逻辑类型不同”的错配。
     /// </summary>
-    private EliminateCardAssignedTypeVisual CreateAssignedTypeVisual(int typeId, string spriteName)
+    /// <param name="visuals">目标视觉数据列表；追加成功后会多一条 EliminateCardAssignedTypeVisual。</param>
+    /// <param name="typeId">当前 spriteName 对应的逻辑类型 Id，用于等待区归组和消除结算。</param>
+    /// <param name="spriteName">每日关卡卡图精灵名，例如 WP_80001。</param>
+    /// <returns>成功追加返回 true；资源未加载或不存在返回 false。</returns>
+    private bool TryAddAssignedTypeVisual(List<EliminateCardAssignedTypeVisual> visuals, int typeId, string spriteName)
     {
         Sprite sprite = TryLoadCardSprite(spriteName);
-
         if (sprite == null)
         {
-            // 保险：如果真实卡图没迁进来，也必须保证实体还能显示。
-            sprite = TryLoadCardSprite(DefaultCardSpriteName);
+            Log.Error("EliminateCardController failed to load card sprite, SpriteName='{0}'.", spriteName);
+            return false;
         }
 
-        return new EliminateCardAssignedTypeVisual(typeId, sprite, UniformCardColor);
+        visuals.Add(new EliminateCardAssignedTypeVisual(typeId, sprite, UniformCardColor));
+        return true;
+    }
+
+    /// <summary>
+    /// 判断指定每日关卡卡图是否已经进入 GameAssetModule 的同步缓存。
+    /// 随机水果池只允许使用已命中的 Sprite，防止错误路径在运行时被默认图掩盖。
+    /// </summary>
+    /// <param name="spriteName">每日关卡卡图精灵名，例如 WP_80001。</param>
+    /// <returns>缓存中存在有效 Sprite 返回 true；否则返回 false。</returns>
+    private static bool IsCardSpriteLoaded(string spriteName)
+    {
+        if (string.IsNullOrWhiteSpace(spriteName) || GameEntry.GameAssets == null)
+        {
+            return false;
+        }
+
+        return GameEntry.GameAssets.TryGetEliminateCardSprite(spriteName.Trim(), out Sprite sprite) && sprite != null;
     }
 
     /// <summary>
@@ -1253,14 +1340,6 @@ public sealed class EliminateCardController
             && cachedSprite != null)
         {
             return cachedSprite;
-        }
-
-        if (GameEntry.GameAssets != null
-            && !string.Equals(normalizedName, DefaultCardSpriteName, StringComparison.OrdinalIgnoreCase)
-            && GameEntry.GameAssets.TryGetEliminateCardSprite(DefaultCardSpriteName, out Sprite fallbackSprite)
-            && fallbackSprite != null)
-        {
-            return fallbackSprite;
         }
 
         return null;

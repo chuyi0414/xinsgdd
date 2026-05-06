@@ -66,6 +66,20 @@ public sealed class PersonalSettingUIForm : UIFormLogic
     private GameObject _goSettings;
 
     /// <summary>
+    /// 当前星星总额文本（对应个人设置界面 TxtGrade）。
+    /// 用户在 Inspector 中手动拖入 TxtGrade 上的 TextMeshProUGUI 组件。
+    /// 该字段缺失时刷新被跳过，不阐断其余逻辑。
+    /// </summary>
+    [SerializeField]
+    private TextMeshProUGUI _txtGrade;
+
+    /// <summary>
+    /// 当前是否已订阅 PlayerRuntimeModule.StarsChanged 事件。
+    /// 防止 OnInit 后再次手动调用造成重复 += 导致多次刷新。
+    /// </summary>
+    private bool _isStarsEventSubscribed;
+
+    /// <summary>
     /// 背景音乐开关 Toggle。
     /// 位于 Settings 页签下，用户在 Inspector 中手动拖入。
     /// </summary>
@@ -345,6 +359,8 @@ public sealed class PersonalSettingUIForm : UIFormLogic
 
         BindTabButtonListeners();
         BindSoundToggleListeners();
+        EnsureStarsEventSubscription();
+        RefreshStarsText();
     }
 
     /// <summary>
@@ -360,6 +376,7 @@ public sealed class PersonalSettingUIForm : UIFormLogic
         BuildHeadPortraitList();
         RefreshHeadPortraitList();
         RefreshCurrentAvatar();
+        RefreshStarsText();
     }
 
     /// <summary>
@@ -376,6 +393,7 @@ public sealed class PersonalSettingUIForm : UIFormLogic
         UnbindSoundToggleListeners();
         UnbindHeadPortraitItemListeners();
         UnbindHeadPortraitFrameItemListeners();
+        ReleaseStarsEventSubscription();
     }
 
     /// <summary>
@@ -527,6 +545,69 @@ public sealed class PersonalSettingUIForm : UIFormLogic
         Color color = image.color;
         color.a = isSelected ? 1f : UnselectedTabAlpha;
         image.color = color;
+    }
+
+    /// <summary>
+    /// 确保已订阅 PlayerRuntimeModule.StarsChanged 事件。
+    /// 重复订阅会被 _isStarsEventSubscribed 拦截。
+    /// </summary>
+    private void EnsureStarsEventSubscription()
+    {
+        if (_isStarsEventSubscribed)
+        {
+            return;
+        }
+
+        if (GameEntry.Fruits != null)
+        {
+            GameEntry.Fruits.StarsChanged += OnStarsChanged;
+        }
+
+        _isStarsEventSubscribed = true;
+    }
+
+    /// <summary>
+    /// 释放 StarsChanged 事件订阅。
+    /// </summary>
+    private void ReleaseStarsEventSubscription()
+    {
+        if (!_isStarsEventSubscribed)
+        {
+            return;
+        }
+
+        if (GameEntry.Fruits != null)
+        {
+            GameEntry.Fruits.StarsChanged -= OnStarsChanged;
+        }
+
+        _isStarsEventSubscribed = false;
+    }
+
+    /// <summary>
+    /// 星星总额变化回调：直接刷新 TxtGrade。
+    /// </summary>
+    /// <param name="newStars">最新星星总额。</param>
+    private void OnStarsChanged(int newStars)
+    {
+        RefreshStarsText();
+    }
+
+    /// <summary>
+    /// 把当前星星总额写入 TxtGrade。
+    /// 1. _txtGrade 未拖入时直接返回。
+    /// 2. PlayerRuntimeModule 未就绪时退化显示 0。
+    /// 3. 使用 TMP 的 SetText(int) 重载，避免 ToString() 触发 GC。
+    /// </summary>
+    private void RefreshStarsText()
+    {
+        if (_txtGrade == null)
+        {
+            return;
+        }
+
+        int currentStars = GameEntry.Fruits != null ? GameEntry.Fruits.CurrentStars : 0;
+        _txtGrade.SetText("{0}", currentStars);
     }
 
     /// <summary>

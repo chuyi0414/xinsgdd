@@ -84,4 +84,11 @@ public sealed class PetRuntimeState
     /// 解决：购买新餐桌时排队宠物直接 AttachEntity 瞬移的 Bug。
     /// </summary>
     public bool PendingPromoteToDining { get; internal set; }
+
+    /// <summary>
+    /// 当前剩余的吃水果次数。
+    /// Spawn 时由 PetDataRow.EatFruitCount 初始化；每次完整走完一轮“上桌→生产→吃→奖励动画”流程后 -1。
+    /// 0 表示已经吃完所有次数，后续只走 PlayArea/Leaving 分流，不再回排队等吃。
+    /// </summary>
+    public int RemainingEatFruitCount { get; internal set; }
 }

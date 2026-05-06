@@ -1,0 +1,7 @@
+#Id	Code	IsInitiallyUnlocked	CurrentLevel	RequiredStars	RewardStars	UpgradeGold	EffectParam	Description
+#唯一编号	机器码	是否初始解锁	当前等级	星星条件	获得星星	升级金币	效果参数	备注描述
+1	savingpot_1	true	1	0	0	0	8000	初始解锁的存钱罐
+2	savingpot_2	false	2	60	10	10000	15000	2级的存钱罐
+3	savingpot_3	false	3	200	20	20000	28000	3级的存钱罐
+4	savingpot_4	false	4	600	40	40000	50000	4级的存钱罐
+5	savingpot_5	false	5	1380	75	75000	88000	5级的存钱罐

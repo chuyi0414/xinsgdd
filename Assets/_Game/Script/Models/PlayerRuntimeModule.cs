@@ -58,30 +58,48 @@ public sealed partial class PlayerRuntimeModule
     }
 
     /// <summary>
+    /// 建筑执行购买/升级动作失败的原因。
+    /// 由 TryExecuteArchitectureAction 通过 out 参数返回，UI 据此分流 Toast。
+    /// </summary>
+    public enum ArchitectureActionFailureReason
+    {
+        /// <summary>
+        /// 没有失败。仅在 TryExecuteArchitectureAction 返回 true 时使用。
+        /// </summary>
+        None = 0,
+
+        /// <summary>
+        /// 当前不可购买/升级（顺序未达成、已满级、位置非法或未初始化）。
+        /// </summary>
+        NotPurchasable = 1,
+
+        /// <summary>
+        /// 星星不足以满足前置阈值。
+        /// </summary>
+        NotEnoughStars = 2,
+
+        /// <summary>
+        /// 金币不足以支付当前花费。
+        /// </summary>
+        NotEnoughGold = 3,
+    }
+
+    /// <summary>
     /// 概率计算统一使用 100 作为满值。
     /// </summary>
     private const int FullProbability = 100;
 
     /// <summary>
-    /// 单只宠物的三档产出缓存。
-    /// 运行时抽产出时只命中这一层缓存，避免重复扫描数据表。
+    /// 单只宠物的产出物随机池。
+    /// 三档（Primary / Intermediate / Advanced）已废弃；产出物由 Pet.ProduceProbability 决定是否触发，
+    /// 触发后从同 PetId 的池子里等概率随机挑 1 条。Warmup 阶段一次性建池，运行时零 GC。
     /// </summary>
-    private sealed class PetProduceBucket
+    private sealed class PetProducePool
     {
         /// <summary>
-        /// 该宠物的初级产出配置。
+        /// 该宠物名下的全部产出物配置（顺序按 PetProduce.txt 出现顺序）。
         /// </summary>
-        public PetProduceDataRow Primary;
-
-        /// <summary>
-        /// 该宠物的中级产出配置。
-        /// </summary>
-        public PetProduceDataRow Intermediate;
-
-        /// <summary>
-        /// 该宠物的高级产出配置。
-        /// </summary>
-        public PetProduceDataRow Advanced;
+        public readonly List<PetProduceDataRow> Items = new List<PetProduceDataRow>(4);
     }
 
     /// <summary>
@@ -265,6 +283,10 @@ public sealed partial class PlayerRuntimeModule
         // 2. 玩法规则
         _gameplayRuleDataRow = gameplayRuleDataRow;
 
+        // 2.1 运行时星星计数器：从 GameplayRule.InitialStars 注入，并以事件广播一次，保证订阅方收到初值。
+        _currentStars = gameplayRuleDataRow.InitialStars;
+        StarsChanged?.Invoke(_currentStars);
+
         // 3. 水果目录
         InitializeFruitCatalog(fruitRows);
 
@@ -304,6 +326,9 @@ public sealed partial class PlayerRuntimeModule
 
             if (fruitRow.IsUnlocked)
             {
+                // 默认解锁路径“只入集合不发星”：当前项目未接入存档，每次启动都会清空 _unlockedFruitCodes 重新注入，
+                // 若在这里调 AddStars 会导致每次重启都重复派发默认解锁星，造成星星通胀。
+                // FruitDataRow.RewardStars 字段对默认解锁水果继续保留——为日后“账号首登一次性奖励”等持久化路径预留语义。
                 _unlockedFruitCodes.Add(fruitRow.Code);
             }
         }

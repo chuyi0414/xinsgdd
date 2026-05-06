@@ -18,15 +18,29 @@ public sealed partial class PlayerRuntimeModule
     private readonly Dictionary<string, int> _petIdsByCode = new Dictionary<string, int>(StringComparer.Ordinal);
 
     /// <summary>
-    /// 宠物 Id 到三档产出配置的缓存。
+    /// 宠物 Id 到产出随机池的缓存。
+    /// 三档抽取已废弃，现为在同 PetId 的池子里等概率随机挑 1 条。
     /// </summary>
-    private readonly Dictionary<int, PetProduceBucket> _produceBucketsByPetId = new Dictionary<int, PetProduceBucket>();
+    private readonly Dictionary<int, PetProducePool> _producePoolsByPetId = new Dictionary<int, PetProducePool>();
 
     /// <summary>
     /// 当前会话内的产出物库存。
     /// Key 为产出物 Code，Value 为当前持有数量。
     /// </summary>
     private readonly Dictionary<string, int> _produceCountsByCode = new Dictionary<string, int>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// produceCode → PetProduceDataRow 反查缓存。
+    /// 仅在 WarmupProduceCatalog 一次性填入，运行时 AddProduce 走这里取 RewardStars，避免重复调 GetDataRowByCode 走哈表。
+    /// </summary>
+    private readonly Dictionary<string, PetProduceDataRow> _produceRowsByCode = new Dictionary<string, PetProduceDataRow>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 当前会话内已经首次拾取过（已解锁）的产出物 Code 集合。
+    /// 该集合只为“首次拾取发星”语义服务：首次拾取时拿星并加入集合；后续拾取同 code 仅入库不发星。
+    /// 与 _currentGold / _currentStars 同口径仅存运行时；重启后会重置，未来接入存档时需同步落盘。
+    /// </summary>
+    private readonly HashSet<string> _unlockedProduceCodes = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// 产出物缓存是否已经完成预热。
@@ -73,8 +87,10 @@ public sealed partial class PlayerRuntimeModule
         }
 
         _petIdsByCode.Clear();
-        _produceBucketsByPetId.Clear();
+        _producePoolsByPetId.Clear();
         _produceCountsByCode.Clear();
+        _produceRowsByCode.Clear();
+        _unlockedProduceCodes.Clear();
 
         for (int i = 0; i < petRows.Length; i++)
         {
@@ -95,28 +111,18 @@ public sealed partial class PlayerRuntimeModule
                 continue;
             }
 
-            if (!_produceBucketsByPetId.TryGetValue(produceRow.PetId, out PetProduceBucket produceBucket))
+            // 同 PetId 的产出物全部丢进同一个随机池，Grade 运行时不再读取。
+            // 字段仅作策划备注保留在 PetProduceDataRow.Grade。
+            if (!_producePoolsByPetId.TryGetValue(produceRow.PetId, out PetProducePool producePool))
             {
-                produceBucket = new PetProduceBucket();
-                _produceBucketsByPetId.Add(produceRow.PetId, produceBucket);
+                producePool = new PetProducePool();
+                _producePoolsByPetId.Add(produceRow.PetId, producePool);
             }
 
-            switch (produceRow.Grade)
-            {
-                case ProduceGradeType.Primary:
-                    produceBucket.Primary = produceRow;
-                    break;
-
-                case ProduceGradeType.Intermediate:
-                    produceBucket.Intermediate = produceRow;
-                    break;
-
-                case ProduceGradeType.Advanced:
-                    produceBucket.Advanced = produceRow;
-                    break;
-            }
-
+            producePool.Items.Add(produceRow);
             _produceCountsByCode[produceRow.Code] = 0;
+            // 同时写入反查表，让 AddProduce 发星星走 O(1) 字典路径，满足 Zero GC。
+            _produceRowsByCode[produceRow.Code] = produceRow;
         }
 
         _isProduceCatalogInitialized = true;
@@ -144,7 +150,38 @@ public sealed partial class PlayerRuntimeModule
         currentCount++;
         _produceCountsByCode[produceCode] = currentCount;
         ProduceChanged?.Invoke(produceCode, currentCount);
+
+        // 首解发星：HashSet<T>.Add 返回 true 代表“之前不在集合里”，即本次为首次拾取。
+        // 原子“查+写”合并为一句，避免先 Contains 后 Add 的两次哈表查询。
+        // 后续同 code 拾取 Add 返回 false 直接跳过发星逻辑，仅走库存与 ProduceChanged 广播。
+        if (_unlockedProduceCodes.Add(produceCode))
+        {
+            // 表中 RewardStars > 0 才调 AddStars（同为 partial 内部可见，无须改可见性）。
+            // produceRow 缺失只跳过发星但仍保留解锁状态，避免何遇表错乱时反复为同一 code 发星。
+            if (_produceRowsByCode.TryGetValue(produceCode, out PetProduceDataRow produceRow)
+                && produceRow != null
+                && produceRow.RewardStars > 0)
+            {
+                AddStars(produceRow.RewardStars);
+            }
+        }
         return true;
+    }
+
+    /// <summary>
+    /// 查询指定产出物在当前会话内是否已经首次拾取过（已解锁）。
+    /// 供后续图鉴 / 首解提示类 UI 查询使用；运行时全部返回 O(1) 哈表查询。
+    /// </summary>
+    /// <param name="produceCode">产出物 Code。</param>
+    /// <returns>已解锁返回 true；未拾取过或者 code 非法返回 false。</returns>
+    public bool IsProduceUnlocked(string produceCode)
+    {
+        if (string.IsNullOrWhiteSpace(produceCode))
+        {
+            return false;
+        }
+
+        return _unlockedProduceCodes.Contains(produceCode);
     }
 
     /// <summary>
@@ -182,16 +219,21 @@ public sealed partial class PlayerRuntimeModule
             return false;
         }
 
-        if (!_produceBucketsByPetId.TryGetValue(petId, out PetProduceBucket produceBucket) || produceBucket == null)
+        if (!_producePoolsByPetId.TryGetValue(petId, out PetProducePool producePool)
+            || producePool == null
+            || producePool.Items.Count == 0)
         {
-            Log.Warning("PlayerRuntimeModule 无法抽取产出物，宠物 Id '{0}' 无产出桶。", petId);
+            Log.Warning("PlayerRuntimeModule 无法抽取产出物，宠物 Id '{0}' 无产出池。", petId);
             return false;
         }
 
-        produceDataRow = RollProduceByGrade(produceBucket);
+        // 同 PetId 产出池中等概率随机抽 1 条。
+        // List 索引读取不产生任何堆分配，满足高频成就结算的零 GC 要求。
+        int randomIndex = UnityEngine.Random.Range(0, producePool.Items.Count);
+        produceDataRow = producePool.Items[randomIndex];
         if (produceDataRow == null)
         {
-            Log.Warning("PlayerRuntimeModule 无法抽取产出物，宠物 Id '{0}' 的产出桶不完整。", petId);
+            Log.Warning("PlayerRuntimeModule 无法抽取产出物，宠物 Id '{0}' 产出池内出现空项。", petId);
             return false;
         }
 
@@ -207,31 +249,5 @@ public sealed partial class PlayerRuntimeModule
     private bool EnsureProduceCatalogInitialized()
     {
         return _isProduceCatalogInitialized || WarmupProduceCatalog();
-    }
-
-    /// <summary>
-    /// 按三档固定概率从缓存桶中抽取一个产出物。
-    /// </summary>
-    /// <param name="produceBucket">当前宠物的产出桶。</param>
-    /// <returns>命中的产出物配置；若桶不完整则返回 null。</returns>
-    private PetProduceDataRow RollProduceByGrade(PetProduceBucket produceBucket)
-    {
-        if (produceBucket == null || _gameplayRuleDataRow == null)
-        {
-            return null;
-        }
-
-        int roll = UnityEngine.Random.Range(0, FullProbability);
-        if (roll < _gameplayRuleDataRow.PrimaryProduceProbability)
-        {
-            return produceBucket.Primary;
-        }
-
-        if (roll < _gameplayRuleDataRow.PrimaryProduceProbability + _gameplayRuleDataRow.IntermediateProduceProbability)
-        {
-            return produceBucket.Intermediate;
-        }
-
-        return produceBucket.Advanced;
     }
 }

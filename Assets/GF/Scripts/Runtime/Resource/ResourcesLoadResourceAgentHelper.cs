@@ -241,7 +241,7 @@ namespace UnityGameFramework.Runtime
 
             if (string.IsNullOrEmpty(assetName))
             {
-                FireError(LoadResourceStatus.AssetError, "Resources 后端加载资源失败，资源名称无效。");
+                FireError(LoadResourceStatus.AssetError, AppendAddressablesFallbackReason(assetName, "Resources 后端加载资源失败，资源名称无效。"));
                 return;
             }
 
@@ -254,14 +254,14 @@ namespace UnityGameFramework.Runtime
                 string sceneName = SceneComponent.GetSceneName(assetName);
                 if (string.IsNullOrEmpty(sceneName))
                 {
-                    FireError(LoadResourceStatus.AssetError, Utility.Text.Format("Resources 后端加载场景失败，场景名无效：'{0}'.", assetName));
+                    FireError(LoadResourceStatus.AssetError, AppendAddressablesFallbackReason(assetName, Utility.Text.Format("Resources 后端加载场景失败，场景名无效：'{0}'.", assetName)));
                     return;
                 }
 
                 m_SceneAsyncOperation = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
                 if (m_SceneAsyncOperation == null)
                 {
-                    FireError(LoadResourceStatus.NotExist, Utility.Text.Format("Resources 后端加载场景失败：'{0}'.", assetName));
+                    FireError(LoadResourceStatus.NotExist, AppendAddressablesFallbackReason(assetName, Utility.Text.Format("Resources 后端加载场景失败：'{0}'.", assetName)));
                 }
 
                 return;
@@ -270,7 +270,7 @@ namespace UnityGameFramework.Runtime
             m_ResourceRequest = assetType != null ? Resources.LoadAsync(assetName, assetType) : Resources.LoadAsync(assetName);
             if (m_ResourceRequest == null)
             {
-                FireError(LoadResourceStatus.NotExist, Utility.Text.Format("Resources 后端加载资源失败：'{0}'.", assetName));
+                FireError(LoadResourceStatus.NotExist, AppendAddressablesFallbackReason(assetName, Utility.Text.Format("Resources 后端加载资源失败：'{0}'.", assetName)));
             }
         }
 
@@ -339,13 +339,14 @@ namespace UnityGameFramework.Runtime
             {
                 if (m_ResourceRequest.asset != null)
                 {
+                    AddressablesFallbackDiagnostic.ClearReason(m_AssetName);
                     LoadResourceAgentHelperLoadCompleteEventArgs loadResourceAgentHelperLoadCompleteEventArgs = LoadResourceAgentHelperLoadCompleteEventArgs.Create(m_ResourceRequest.asset);
                     m_LoadResourceAgentHelperLoadCompleteEventHandler(this, loadResourceAgentHelperLoadCompleteEventArgs);
                     ReferencePool.Release(loadResourceAgentHelperLoadCompleteEventArgs);
                 }
                 else
                 {
-                    FireError(LoadResourceStatus.AssetError, Utility.Text.Format("Resources 后端加载资源失败：'{0}'.", m_AssetName));
+                    FireError(LoadResourceStatus.AssetError, AppendAddressablesFallbackReason(m_AssetName, Utility.Text.Format("Resources 后端加载资源失败：'{0}'.", m_AssetName)));
                 }
 
                 m_ResourceRequest = null;
@@ -378,6 +379,7 @@ namespace UnityGameFramework.Runtime
             {
                 if (m_SceneAsyncOperation.allowSceneActivation)
                 {
+                    AddressablesFallbackDiagnostic.ClearReason(m_AssetName);
                     SceneAsset sceneAsset = new SceneAsset();
                     LoadResourceAgentHelperLoadCompleteEventArgs loadResourceAgentHelperLoadCompleteEventArgs = LoadResourceAgentHelperLoadCompleteEventArgs.Create(sceneAsset);
                     m_LoadResourceAgentHelperLoadCompleteEventHandler(this, loadResourceAgentHelperLoadCompleteEventArgs);
@@ -385,7 +387,7 @@ namespace UnityGameFramework.Runtime
                 }
                 else
                 {
-                    FireError(LoadResourceStatus.AssetError, Utility.Text.Format("Resources 后端加载场景失败：'{0}'.", m_AssetName));
+                    FireError(LoadResourceStatus.AssetError, AppendAddressablesFallbackReason(m_AssetName, Utility.Text.Format("Resources 后端加载场景失败：'{0}'.", m_AssetName)));
                 }
 
                 m_SceneAsyncOperation = null;
@@ -411,6 +413,24 @@ namespace UnityGameFramework.Runtime
         private void FireUnsupportedError(string errorMessage)
         {
             FireError(LoadResourceStatus.AssetError, errorMessage);
+        }
+
+        /// <summary>
+        /// 为 Resources 兜底失败错误追加 Addressables 自动路由的回退原因。
+        /// 只有在 Addressables 路由曾经记录过同名资源的 miss 原因时才会追加；
+        /// 追加后立即消费该原因，避免后续同名资源的新加载被旧诊断污染。
+        /// </summary>
+        /// <param name="assetName">当前 Resources 兜底加载的资源名。</param>
+        /// <param name="resourcesErrorMessage">Resources 后端自身产生的错误信息。</param>
+        /// <returns>包含 Addressables 回退原因的最终错误信息。</returns>
+        private string AppendAddressablesFallbackReason(string assetName, string resourcesErrorMessage)
+        {
+            if (!AddressablesFallbackDiagnostic.TryGetAndRemoveReason(assetName, out string addressablesReason))
+            {
+                return resourcesErrorMessage;
+            }
+
+            return Utility.Text.Format("{0} Addressables 自动路由未接管原因：{1}", resourcesErrorMessage, addressablesReason);
         }
 
         /// <summary>

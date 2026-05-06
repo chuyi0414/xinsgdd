@@ -14,7 +14,7 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 数据表固定列数。
-    /// 当前 Fruit.txt 结构为：Id、Code、Name、IsUnlocked、IconPath、DailyChallengePath、UnlockGold、CoinProbability、CoinAmount、ProduceSeconds、SaveGoldPerMinute、Description。
+    /// 当前 Fruit.txt 结构为：Id、Code、Name、IsUnlocked、IconPath、DailyChallengePath、UnlockGold、RewardStars、CoinProbability、CoinAmount、ProduceSeconds、Description。
     /// </summary>
     private const int ColumnCount = 12;
 
@@ -75,6 +75,12 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
     public int UnlockGold { get; private set; }
 
     /// <summary>
+    /// 首次解锁该水果时发放给玩家的星星。
+    /// 0 表示不发星；IsUnlocked=true的默认解锁水果必须为 0，与 ArchitectureSlotDataRow.RewardStars 同语义。
+    /// </summary>
+    public int RewardStars { get; private set; }
+
+    /// <summary>
     /// 产出金币的概率。
     /// </summary>
     public int CoinProbability { get; private set; }
@@ -88,12 +94,6 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
     /// 生产该水果所需秒数。
     /// </summary>
     public int ProduceSeconds { get; private set; }
-
-    /// <summary>
-    /// 每分钟存钱金币数量。
-    /// 该字段只负责图鉴详情展示，当前不参与任何金币结算逻辑。
-    /// </summary>
-    public int SaveGoldPerMinute { get; private set; }
 
     /// <summary>
     /// 水果图鉴详情描述。
@@ -175,33 +175,34 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        if (!isUnlocked && unlockGold <= 0)
+        // 未解锁水果允许 UnlockGold = 0：表示免费解锁（玩家点按钮即可拿到，仍按 RewardStars 发星）。
+        // > 0 走金币购买路径；< 0 已在前面 columns[6] 解析时被挡掉，这里无需再防御。
+
+        // [7] RewardStars — 允许 0（不发星）但禁止负数。
+        // 仅在 TryUnlockFruit（金币购买/未来看广告等运行时解锁）成功首解时才会调 AddStars 发放；
+        // 默认解锁(IsUnlocked=true)的水果走 InitializeFruitCatalog 的"只入集合不发星"路径，
+        // 此处即使填非 0 也不会被消费——字段保留是为日后"账号首登一次性奖励"等持久化路径预留。
+        if (!int.TryParse(columns[7], out int rewardStars) || rewardStars < 0)
         {
-            Log.Warning("FruitDataRow parse failed because locked fruit '{0}' must have UnlockGold > 0.", code);
+            Log.Warning("FruitDataRow parse failed because RewardStars '{0}' is invalid, code '{1}'.", columns[7], code);
             return false;
         }
 
-        if (!int.TryParse(columns[7], out int coinProbability) || coinProbability < 0 || coinProbability > 100)
+        if (!int.TryParse(columns[8], out int coinProbability) || coinProbability < 0 || coinProbability > 100)
         {
-            Log.Warning("FruitDataRow parse failed because CoinProbability '{0}' is invalid, code '{1}'.", columns[7], code);
+            Log.Warning("FruitDataRow parse failed because CoinProbability '{0}' is invalid, code '{1}'.", columns[8], code);
             return false;
         }
 
-        if (!int.TryParse(columns[8], out int coinAmount) || coinAmount <= 0)
+        if (!int.TryParse(columns[9], out int coinAmount) || coinAmount <= 0)
         {
-            Log.Warning("FruitDataRow parse failed because CoinAmount '{0}' is invalid, code '{1}'.", columns[8], code);
+            Log.Warning("FruitDataRow parse failed because CoinAmount '{0}' is invalid, code '{1}'.", columns[9], code);
             return false;
         }
 
-        if (!int.TryParse(columns[9], out int produceSeconds) || produceSeconds <= 0)
+        if (!int.TryParse(columns[10], out int produceSeconds) || produceSeconds <= 0)
         {
-            Log.Warning("FruitDataRow parse failed because ProduceSeconds '{0}' is invalid, code '{1}'.", columns[9], code);
-            return false;
-        }
-
-        if (!int.TryParse(columns[10], out int saveGoldPerMinute) || saveGoldPerMinute < 0)
-        {
-            Log.Warning("FruitDataRow parse failed because SaveGoldPerMinute '{0}' is invalid, code '{1}'.", columns[10], code);
+            Log.Warning("FruitDataRow parse failed because ProduceSeconds '{0}' is invalid, code '{1}'.", columns[10], code);
             return false;
         }
 
@@ -219,10 +220,10 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
         IconPath = iconPath;
         DailyChallengePath = dailyChallengePath;
         UnlockGold = unlockGold;
+        RewardStars = rewardStars;
         CoinProbability = coinProbability;
         CoinAmount = coinAmount;
         ProduceSeconds = produceSeconds;
-        SaveGoldPerMinute = saveGoldPerMinute;
         Description = description;
         return true;
     }

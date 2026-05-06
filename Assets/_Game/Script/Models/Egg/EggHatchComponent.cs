@@ -21,6 +21,10 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         NotPurchasable = 3,
         InsufficientGold = 4,
         InventoryFull = 5,
+        /// <summary>
+        /// 玩家星星总额不足 EggDataRow.RequiredStars。
+        /// </summary>
+        NotEnoughStars = 6,
     }
 
     /// <summary>
@@ -279,6 +283,13 @@ public sealed class EggHatchComponent : GameFrameworkComponent
             return null;
         }
 
+        // 防止外部按"前 N 个连续解锁"假设访问跳购未解锁的"洞"。
+        // 例如玩家跳购 3 号位后 _hatchSlotCount=3，但 2 号位 IsUnlocked=false，GetSlotState(1) 必须返回 null。
+        if (GameEntry.Fruits != null && !GameEntry.Fruits.IsArchitectureSlotUnlocked(PlayerRuntimeModule.ArchitectureCategory.Hatch, index + 1))
+        {
+            return null;
+        }
+
         return _slotStates[index];
     }
 
@@ -310,6 +321,14 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         if ((eggDataRow.AcquireWays & EggDataRow.EggAcquireWay.Shop) == 0 || eggDataRow.PurchaseGold <= 0)
         {
             failure = EggPurchaseFailure.NotPurchasable;
+            return false;
+        }
+
+        // 星星条件校验：必须在 TryConsumeGold 之前拦截，避免金币已扣除但星星不够造成资源错错。
+        // RequiredStars=0 表示无限制，CurrentStars >= 0 总是成立，与旧逻辑完全兼容。
+        if (GameEntry.Fruits.CurrentStars < eggDataRow.RequiredStars)
+        {
+            failure = EggPurchaseFailure.NotEnoughStars;
             return false;
         }
 
@@ -422,6 +441,12 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         int unlockedSlotCount = UnlockedSlotCount;
         for (int i = 0; i < unlockedSlotCount; i++)
         {
+            // 跳过跳购导致的未解锁"洞"：例如 _hatchSlotCount=3 但 2 号槽仍锁着不该推进孵化计时。
+            if (GameEntry.Fruits != null && !GameEntry.Fruits.IsArchitectureSlotUnlocked(PlayerRuntimeModule.ArchitectureCategory.Hatch, i + 1))
+            {
+                continue;
+            }
+
             EggHatchSlotState slotState = _slotStates[i];
             if (!slotState.IsOccupied)
             {
@@ -513,6 +538,12 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         int unlockedSlotCount = UnlockedSlotCount;
         for (int i = 0; i < unlockedSlotCount; i++)
         {
+            // 跳过跳购导致的未解锁"洞"，避免把蛋分配到锁着的槽位。
+            if (GameEntry.Fruits != null && !GameEntry.Fruits.IsArchitectureSlotUnlocked(PlayerRuntimeModule.ArchitectureCategory.Hatch, i + 1))
+            {
+                continue;
+            }
+
             if (_slotStates[i].IsOccupied)
             {
                 continue;

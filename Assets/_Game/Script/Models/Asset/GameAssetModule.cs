@@ -1540,6 +1540,21 @@ public sealed class GameAssetModule
                 _pendingScoreDigitSpriteCount++;
                 break;
 
+            case PreloadAssetKind.ScoreDigitSmallSprite:
+                _loadingScoreDigitSmallSpritePaths.Add(assetPath);
+                _pendingScoreDigitSmallSpriteCount++;
+                break;
+
+            case PreloadAssetKind.HeadPortraitSprite:
+                _loadingHeadPortraitAssetPaths.Add(assetPath);
+                _pendingHeadPortraitAssetCount++;
+                break;
+
+            case PreloadAssetKind.HeadPortraitFrameSprite:
+                _loadingHeadPortraitFrameAssetPaths.Add(assetPath);
+                _pendingHeadPortraitFrameAssetCount++;
+                break;
+
             case PreloadAssetKind.ArchitectureSprite:
                 _loadingArchitectureSpritePaths.Add(assetPath);
                 _pendingArchitectureSpriteCount++;
@@ -1891,9 +1906,10 @@ public sealed class GameAssetModule
             return;
         }
 
-        _loadingHeadPortraitFrameAssetPaths.Add(row.IconPath);
-        _pendingHeadPortraitFrameAssetCount++;
-        TryLoadAsset(row.IconPath, typeof(Sprite), PreloadAssetKind.HeadPortraitFrameSprite, row.IconPath);
+        if (!TryLoadAsset(row.IconPath, typeof(Sprite), PreloadAssetKind.HeadPortraitFrameSprite, row.IconPath))
+        {
+            RegisterFailure(Utility.Text.Format("预加载头像框图标失败，无法开始加载资源，Path='{0}'。", row.IconPath));
+        }
     }
 
     /// <summary>
@@ -2360,7 +2376,7 @@ public sealed class GameAssetModule
     {
         _hasPreloadFailure = true;
         _lastErrorMessage = errorMessage;
-        //Log.Warning(errorMessage);
+        Log.Warning(errorMessage);
     }
 
     /// <summary>

@@ -201,6 +201,7 @@ public partial class MainUIForm : UIFormLogic
         InitializeHatchView();
         InitializePetPlacementView();
         InitializeGoldView();
+        InitializeStarsView();
         InitializeProduceView();
         InitializeArchitectureView();
         InitializeDailyChallengeView();
@@ -222,6 +223,7 @@ public partial class MainUIForm : UIFormLogic
         OpenHatchView();
         OpenPetPlacementView();
         OpenGoldView();
+        OpenStarsView();
         OpenProduceView();
         OpenArchitectureView();
         OpenDailyChallengeView();
@@ -308,6 +310,7 @@ public partial class MainUIForm : UIFormLogic
         DestroyHatchView();
         DestroyPetPlacementView();
         DestroyGoldView();
+        DestroyStarsView();
         DestroyProduceView();
         DestroyArchitectureView();
         DestroyDailyChallengeView();

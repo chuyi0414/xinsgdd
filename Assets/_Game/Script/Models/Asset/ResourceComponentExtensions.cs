@@ -16,14 +16,17 @@ using UnityGameFramework.Runtime;
 public static class ResourceComponentExtensions
 {
     /// <summary>
-    /// asset → AsyncOperationHandle 反查表（单资源加载结果）。
+    /// asset → AsyncOperationHandle 列表反查表（单资源加载结果，栈式语义）。
     /// 静态字典：所有 ResourceComponent 实例共享，便于跨场景释放。
     /// 容量 64：覆盖常见战斗 + 主界面常驻图标；超过会自动扩容，零功能影响。
-    /// ⚠️ 避坑：必须用 ReferenceEqualityComparer 默认行为（即引用相等），UnityEngine.Object 的 Equals 在销毁后会返回 true，可能误命中。
-    ///         实测 Dictionary 默认走对象的 GetHashCode/Equals，对 UnityEngine.Object 仍然按 native handle 比较，安全。
+    /// ⚠️ 一对多设计原因：Addressables 同 key 多次 LoadAssetAsync 会返回同一 UnityEngine.Object 实例，
+    ///         但每次产生独立句柄 + 引用计数 +1；N 次 Load 必须配对 N 次 Release 才能归零。
+    ///         一对一覆盖会丢失旧 handle 引用，导致最后一次 Unload 反查 miss 走 GF 主链路 → 报 "target not in pool"。
+    ///         列表语义：Register 追加 handle、Release 从末尾 Pop 一个出来 Release，与 Addressables 引用计数天然对齐。
+    /// ⚠️ 避坑：Dictionary 默认对 UnityEngine.Object 走 native handle 比较，销毁后会返回不一致结果但不会误命中。
     /// </summary>
-    private static readonly Dictionary<UnityEngine.Object, AsyncOperationHandle> s_HandlesByAsset
-        = new Dictionary<UnityEngine.Object, AsyncOperationHandle>(64);
+    private static readonly Dictionary<UnityEngine.Object, List<AsyncOperationHandle>> s_HandlesByAsset
+        = new Dictionary<UnityEngine.Object, List<AsyncOperationHandle>>(64);
 
     /// <summary>
     /// IList → AsyncOperationHandle 反查表（标签批量加载结果）。
@@ -72,8 +75,10 @@ public static class ResourceComponentExtensions
         {
             if (op.Status == AsyncOperationStatus.Succeeded && op.Result != null)
             {
+                AddressablesShaderRepair.Repair(op.Result);
                 // 登记反查表（必须在派发业务回调前完成，否则业务层立刻 Unload 会找不到 handle）。
-                // 走统一入口 RegisterAddressablesHandle 享受去重保护：若同一 asset 已被路由路径登记过，旧 handle 会被先 Release。
+                // 走统一入口 RegisterAddressablesHandle 把 handle 追加到该 asset 的 list 末尾；
+                // N 次 Load 与 N 次 Unload 通过 list 入栈 / 出栈精确配对，保证 Addressables 内部引用计数正确归零。
                 RegisterAddressablesHandle(op.Result, op);
                 onSuccess?.Invoke(address, op.Result, userData);
             }
@@ -127,6 +132,11 @@ public static class ResourceComponentExtensions
         {
             if (op.Status == AsyncOperationStatus.Succeeded && op.Result != null)
             {
+                for (int i = 0; i < op.Result.Count; i++)
+                {
+                    AddressablesShaderRepair.Repair(op.Result[i]);
+                }
+
                 // 整个 IList<T> 由这一个 handle 管理，按 IList 引用做 key 反查。
                 // 走统一入口 RegisterAddressablesAssetList 享受去重保护。
                 RegisterAddressablesAssetList(op.Result, op);
@@ -170,13 +180,13 @@ public static class ResourceComponentExtensions
     }
 
     /// <summary>
-    /// 登记 asset → AsyncOperationHandle 反查映射。
+    /// 登记 asset → AsyncOperationHandle 反查映射（追加到该 asset 的 handle 列表末尾）。
     /// 用于：
     /// 1. AddressablesAssetRouterImpl 在 GF 内核 LoadAsset 路由命中后登记句柄；
-    /// 2. LoadAddressableAssetAsync 自身在加载完成后登记句柄。
-    /// ⚠️ 去重保护：同一 asset 已存在登记时，先 Release 旧 handle 抵消其引用计数再覆盖。
-    /// 原因：双路径并发加载同一 Addressables key 时，Addressables 内部会返回不同 handle 但 +1 引用计数；
-    ///       字典覆盖会丢弃旧 handle 引用，必须立即 Release 旧 handle 否则该 +1 引用计数永远无法归零（句柄泄漏）。
+    /// 2. LoadAddressableAssetAsync 自身在加载完成后登记句柄.
+    /// ⚠️ 不再做去重释放：Addressables 对同 key 的多次 LoadAssetAsync 会返回同一 asset 但每次产生独立句柄 + 引用计数 +1.
+    ///       N 次 Load 必须 N 次 Release 才能归零；该函数只负责入叠，Release 负责弹出，与 Addressables 引用计数完全同步.
+    /// 典型场景：SoundManager.PlaySound 同一音效连续播放 N 次 → LoadAsset N 次 → Register N 次 → ReleaseSoundAsset N 次.
     /// </summary>
     /// <param name="asset">加载完成的资源对象。</param>
     /// <param name="handle">对应的 Addressables 句柄（隐式从 AsyncOperationHandle&lt;T&gt; 转入）。</param>
@@ -187,27 +197,27 @@ public static class ResourceComponentExtensions
             return;
         }
 
-        // 去重：覆盖前先释放旧 handle 抵消 Addressables 内部引用计数。
-        if (s_HandlesByAsset.TryGetValue(asset, out AsyncOperationHandle oldHandle))
+        // 该 asset 首次 Register 时延迟分配 List；初始容量 2，应付绝大多数资源的生命周期内 ≤2 次并发 Load，几乎不会扩容.
+        if (!s_HandlesByAsset.TryGetValue(asset, out List<AsyncOperationHandle> handles))
         {
-            if (oldHandle.IsValid())
-            {
-                Addressables.Release(oldHandle);
-            }
+            handles = new List<AsyncOperationHandle>(2);
+            s_HandlesByAsset[asset] = handles;
         }
 
-        s_HandlesByAsset[asset] = handle;
+        handles.Add(handle);
     }
 
     /// <summary>
-    /// 反查并释放单资源的 Addressables 句柄。
-    /// 命中时移除字典 + 调 Addressables.Release，返回 true；未命中返回 false。
+    /// 反查并释放单资源的一个 Addressables 句柄（从 list 末尾 Pop）。
+    /// 命中时 Pop 一个 handle 并调 Addressables.Release；list 为空后移除字典 key，返回 true；未命中返回 false.
     /// 用于：
     /// 1. HybridResourceHelper.Release 在 GF 引用归零回调时精确释放句柄；
-    /// 2. UnloadAddressableAsset 扩展方法的实际实现。
+    /// 2. UnloadAddressableAsset 扩展方法的实际实现；
+    /// 3. AddressablesAssetRouterImpl.TryReleaseRoute 被 GF 内核 UnloadAsset 路由调用.
+    /// ⚠️ 超额 Release（Release 次数 &gt; Load 次数）会返回 false 使 GF 主链路 m_AssetPool.Unspawn 报错，作为 fail-fast 探针.
     /// </summary>
     /// <param name="asset">要释放的资源对象。</param>
-    /// <returns>true 表示反查命中并已释放；false 表示反查未命中（asset 可能不是经由 Addressables 加载）。</returns>
+    /// <returns>true 表示反查命中并已释放一个 handle；false 表示反查未命中（asset 可能不是经由 Addressables 加载或已被 Release 完毕）。</returns>
     internal static bool TryReleaseAddressablesHandle(UnityEngine.Object asset)
     {
         if (asset == null)
@@ -215,24 +225,35 @@ public static class ResourceComponentExtensions
             return false;
         }
 
-        if (!s_HandlesByAsset.TryGetValue(asset, out AsyncOperationHandle handle))
+        if (!s_HandlesByAsset.TryGetValue(asset, out List<AsyncOperationHandle> handles)
+            || handles == null
+            || handles.Count == 0)
         {
             return false;
         }
 
-        // ⚠️ 先移除字典再 Release：防止 Release 内部异步回调期间字典处于不一致状态，
-        //     也保证重入时（理论上不存在）字典状态干净。
-        s_HandlesByAsset.Remove(asset);
+        // 从末尾 Pop 一个 handle（List.RemoveAt(last) 是 O(1)，不会触发 元素 复制）。
+        int lastIndex = handles.Count - 1;
+        AsyncOperationHandle handle = handles[lastIndex];
+        handles.RemoveAt(lastIndex);
+
+        // 字典只保留非空 list：避免长期存在的空 list 占用字典槽影响后续查询性能.
+        if (handles.Count == 0)
+        {
+            s_HandlesByAsset.Remove(asset);
+        }
+
         if (handle.IsValid())
         {
             Addressables.Release(handle);
         }
+
         return true;
     }
 
     /// <summary>
     /// 登记 IList → AsyncOperationHandle 反查映射（标签批量加载）。
-    /// 与 RegisterAddressablesHandle 同样具备去重保护：覆盖前先 Release 旧 handle。
+    /// 与 RegisterAddressablesHandle 同样具备去重保护：覆盖前先 Release 旧 handle.
     /// </summary>
     /// <param name="assetList">加载完成的资源列表（必须是原始 IList 引用）。</param>
     /// <param name="handle">对应的 Addressables 句柄。</param>
@@ -255,7 +276,7 @@ public static class ResourceComponentExtensions
     }
 
     /// <summary>
-    /// 反查并释放标签批量加载的 Addressables 句柄。
+    /// 反查并释放标签批量加载的 Addressables 句柄.
     /// </summary>
     /// <param name="assetList">要释放的资源列表（必须是 onSuccess 回调里收到的原始引用）。</param>
     /// <returns>true 表示反查命中并已释放；false 表示反查未命中。</returns>
@@ -280,26 +301,37 @@ public static class ResourceComponentExtensions
     }
 
     /// <summary>
-    /// 强制释放当前扩展方法所有持有的 Addressables 句柄。
-    /// 仅供 GameAddressableAssetModule.ReleaseAll / GameEntry.OnDestroy 等"大清扫"路径使用，业务层不应直接调用。
+    /// 强制释放当前扩展方法所有持有的 Addressables 句柄.
+    /// 仅供 GameAddressableAssetModule.ReleaseAll / GameEntry.OnDestroy 等"大清扫"路径使用，业务层不应直接调用.
     /// </summary>
     /// <param name="self">扩展目标 ResourceComponent。</param>
     public static void ReleaseAllAddressableAssets(this ResourceComponent self)
     {
-        // 单资源句柄逐一 Release。
-        foreach (KeyValuePair<UnityEngine.Object, AsyncOperationHandle> pair in s_HandlesByAsset)
+        // 单资源句柄清扫：每个 asset 对应的 list 内所有 handle 都需 Release，返还 Addressables 内部全部引用计数.
+        foreach (KeyValuePair<UnityEngine.Object, List<AsyncOperationHandle>> pair in s_HandlesByAsset)
         {
-            if (pair.Value.IsValid())
+            List<AsyncOperationHandle> handles = pair.Value;
+            if (handles == null)
             {
-                Addressables.Release(pair.Value);
+                continue;
+            }
+
+            for (int i = 0; i < handles.Count; i++)
+            {
+                AsyncOperationHandle handle = handles[i];
+                if (handle.IsValid())
+                {
+                    Addressables.Release(handle);
+                }
             }
         }
         s_HandlesByAsset.Clear();
 
-        // Label 批量句柄逐一 Release。
+        // Label 批量句柄逐一 Release.
         foreach (KeyValuePair<object, AsyncOperationHandle> pair in s_HandlesByAssetList)
         {
-            if (pair.Value.IsValid())
+            AsyncOperationHandle handle = pair.Value;
+            if (handle.IsValid())
             {
                 Addressables.Release(pair.Value);
             }

@@ -15,8 +15,9 @@ public sealed class ArchitectureUpgradeDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 数据表固定列数。
+    /// 新增 SlotIndex 后为 10（Id Code Category SlotIndex CurrentLevel UpgradeGold EffectParam RequiredStars RewardStars Description）。
     /// </summary>
-    private const int ColumnCount = 7;
+    private const int ColumnCount = 10;
 
     /// <summary>
     /// 合法升级 Code 的前缀。
@@ -44,6 +45,12 @@ public sealed class ArchitectureUpgradeDataRow : DataRowBase, ICodeDataRow
     public PlayerRuntimeModule.ArchitectureCategory Category { get; private set; }
 
     /// <summary>
+    /// 槽位索引（1 基）。
+    /// 与 Category + CurrentLevel 共同构成唯一键，让同类别不同位置拥有独立的升级金币/效果/星星配置。
+    /// </summary>
+    public int SlotIndex { get; private set; }
+
+    /// <summary>
     /// 当前等级。
     /// 该行表示从 CurrentLevel 升到 CurrentLevel + 1 的价格。
     /// </summary>
@@ -55,6 +62,17 @@ public sealed class ArchitectureUpgradeDataRow : DataRowBase, ICodeDataRow
     public int UpgradeGold { get; private set; }
 
     public int EffectParam { get; private set; }
+
+    /// <summary>
+    /// 升级前置需要的星星阈值。
+    /// PlayerRuntimeModule 升级时仅校验不消耗，0 表示无阈值。
+    /// </summary>
+    public int RequiredStars { get; private set; }
+
+    /// <summary>
+    /// 升级成功后累计获得的星星。
+    /// </summary>
+    public int RewardStars { get; private set; }
 
     /// <summary>
     /// 备注描述。
@@ -102,31 +120,52 @@ public sealed class ArchitectureUpgradeDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        if (!int.TryParse(columns[3], out int currentLevel) || currentLevel <= 0)
+        if (!int.TryParse(columns[3], out int slotIndex) || slotIndex <= 0)
         {
-            Log.Warning("ArchitectureUpgradeDataRow parse failed because CurrentLevel '{0}' is invalid, code '{1}'.", columns[3], code);
+            Log.Warning("ArchitectureUpgradeDataRow parse failed because SlotIndex '{0}' is invalid, code '{1}'.", columns[3], code);
             return false;
         }
 
-        if (!int.TryParse(columns[4], out int upgradeGold) || upgradeGold <= 0)
+        if (!int.TryParse(columns[4], out int currentLevel) || currentLevel <= 0)
         {
-            Log.Warning("ArchitectureUpgradeDataRow parse failed because UpgradeGold '{0}' is invalid, code '{1}'.", columns[4], code);
+            Log.Warning("ArchitectureUpgradeDataRow parse failed because CurrentLevel '{0}' is invalid, code '{1}'.", columns[4], code);
             return false;
         }
 
-        if (!int.TryParse(columns[5], out int effectParam) || effectParam < 0)
+        if (!int.TryParse(columns[5], out int upgradeGold) || upgradeGold <= 0)
         {
-            Log.Warning("ArchitectureUpgradeDataRow parse failed because EffectParam '{0}' is invalid, code '{1}'.", columns[5], code);
+            Log.Warning("ArchitectureUpgradeDataRow parse failed because UpgradeGold '{0}' is invalid, code '{1}'.", columns[5], code);
+            return false;
+        }
+
+        if (!int.TryParse(columns[6], out int effectParam) || effectParam < 0)
+        {
+            Log.Warning("ArchitectureUpgradeDataRow parse failed because EffectParam '{0}' is invalid, code '{1}'.", columns[6], code);
+            return false;
+        }
+
+        if (!int.TryParse(columns[7], out int requiredStars) || requiredStars < 0)
+        {
+            Log.Warning("ArchitectureUpgradeDataRow parse failed because RequiredStars '{0}' is invalid, code '{1}'.", columns[7], code);
+            return false;
+        }
+
+        if (!int.TryParse(columns[8], out int rewardStars) || rewardStars < 0)
+        {
+            Log.Warning("ArchitectureUpgradeDataRow parse failed because RewardStars '{0}' is invalid, code '{1}'.", columns[8], code);
             return false;
         }
 
         _id = id;
         Code = code;
         Category = category;
+        SlotIndex = slotIndex;
         CurrentLevel = currentLevel;
         UpgradeGold = upgradeGold;
         EffectParam = effectParam;
-        Description = columns[6].Trim();
+        RequiredStars = requiredStars;
+        RewardStars = rewardStars;
+        Description = columns[9].Trim();
         return true;
     }
 

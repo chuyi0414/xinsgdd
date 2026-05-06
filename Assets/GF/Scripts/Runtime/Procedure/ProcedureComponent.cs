@@ -102,6 +102,11 @@ namespace UnityGameFramework.Runtime
 
             yield return new WaitForEndOfFrame();
 
+            while (!ProcedureStartupGate.CanStartProcedure)
+            {
+                yield return null;
+            }
+
             m_ProcedureManager.StartProcedure(m_EntranceProcedure.GetType());
         }
 

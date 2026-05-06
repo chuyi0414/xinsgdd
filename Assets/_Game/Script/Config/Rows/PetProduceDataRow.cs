@@ -14,9 +14,9 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
     private static readonly string[] ColumnSplitSeparator = { "\t" };
 
     /// <summary>
-    /// 数据表固定列数（Id / PetId / Code / Name / Grade / CoinValue / Description）。
+    /// 数据表固定列数（Id / PetId / Code / Name / Grade / CoinValue / RewardStars / Description）。
     /// </summary>
-    private const int ColumnCount = 7;
+    private const int ColumnCount = 8;
 
     /// <summary>
     /// 合法产出 Code 的前缀。
@@ -57,6 +57,12 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
     /// 产出物品的金币价值。
     /// </summary>
     public int CoinValue { get; private set; }
+
+    /// <summary>
+    /// 玩家拾取该产出物时累计获得的星星。
+    /// 0 表示拾取不发星星；与 ArchitectureSlotDataRow.RewardStars / ArchitectureUpgradeDataRow.RewardStars 同语义。
+    /// </summary>
+    public int RewardStars { get; private set; }
 
     /// <summary>
     /// 备注描述。
@@ -134,6 +140,14 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
+        // [6] RewardStars — 允许为 0（不发星星），但禁止负数；负数会导致 PlayerRuntimeModule 反向扣星
+        if (!int.TryParse(columns[6], out int rewardStars) || rewardStars < 0)
+        {
+            Log.Warning("PetProduceDataRow parse failed because RewardStars '{0}' is invalid, code '{1}'.",
+                columns[6], code);
+            return false;
+        }
+
         // 所有校验通过，写入字段
         _id = id;
         PetId = petId;
@@ -141,7 +155,8 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
         Name = name;
         Grade = grade;
         CoinValue = coinValue;
-        Description = columns[6].Trim();
+        RewardStars = rewardStars;
+        Description = columns[7].Trim();
         return true;
     }
 

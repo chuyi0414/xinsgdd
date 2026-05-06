@@ -305,6 +305,9 @@ public sealed class PetPlacementModule
 
     /// <summary>
     /// 按品质随机挑选一只宠物。
+    /// 运行时会用玩家当前星星总额过滤候选池：仅当 PetDataRow.RequiredStars &lt;= currentStars 时该宠物才可能被抽到。
+    /// 同品质若没有任何宠物达到星星条件，则回退为该品质内 RequiredStars 最低的那一只，避免破坏蛋的孵化体验。
+    /// 整个过程使用两遍数组扫描，无任何 List/字符串分配，满足 Zero GC 要求。
     /// </summary>
     private bool TryPickPetCodeByQuality(QualityType petQuality, out string petCode)
     {
@@ -323,9 +326,71 @@ public sealed class PetPlacementModule
             return false;
         }
 
-        PetDataRow selectedPet = candidates[UnityEngine.Random.Range(0, candidates.Length)];
-        petCode = selectedPet.Code;
-        return true;
+        // 读取玩家当前累计星星，作为本次抽取的过滤阈值；GameEntry.Fruits 缺失时按 0 处理（仅命中 RequiredStars=0 的宠物）。
+        int currentStars = GameEntry.Fruits != null ? GameEntry.Fruits.CurrentStars : 0;
+
+        // 第一遍扫描：统计达标个数 eligibleCount，并顺手记录 RequiredStars 最低的下标 fallbackIndex 作为保底。
+        // fallbackIndex 始终指向同品质里"最容易解锁"的那只，等价于策划在表里把它排在前列即可控制兜底优先级。
+        int eligibleCount = 0;
+        int fallbackIndex = 0;
+        int fallbackThreshold = int.MaxValue;
+        for (int i = 0; i < candidates.Length; i++)
+        {
+            PetDataRow candidate = candidates[i];
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            if (candidate.RequiredStars <= currentStars)
+            {
+                eligibleCount++;
+            }
+
+            if (candidate.RequiredStars < fallbackThreshold)
+            {
+                fallbackThreshold = candidate.RequiredStars;
+                fallbackIndex = i;
+            }
+        }
+
+        // 没人达标：用保底兜底，确保孵化流程不中断。正常配置（至少 1 只 RequiredStars=0）永不触发此分支。
+        if (eligibleCount == 0)
+        {
+            PetDataRow fallbackPet = candidates[fallbackIndex];
+            if (fallbackPet == null)
+            {
+                Log.Error("PetPlacementModule 无法挑选宠物，品质 '{0}' 候选数据非法。", petQuality);
+                return false;
+            }
+
+            petCode = fallbackPet.Code;
+            return true;
+        }
+
+        // 第二遍扫描：在 [0, eligibleCount) 内均匀抽取，再线性命中第 pick 个达标项。
+        // 这里的"均匀概率"特指品质内的均匀分布，与 EggDataRow 的品质概率是两个独立维度，互不影响。
+        int pick = UnityEngine.Random.Range(0, eligibleCount);
+        for (int i = 0; i < candidates.Length; i++)
+        {
+            PetDataRow candidate = candidates[i];
+            if (candidate == null || candidate.RequiredStars > currentStars)
+            {
+                continue;
+            }
+
+            if (pick == 0)
+            {
+                petCode = candidate.Code;
+                return true;
+            }
+
+            pick--;
+        }
+
+        // 理论不可达：第一遍统计为 eligibleCount > 0，第二遍必然能命中。这里仅作为防御性兜底。
+        Log.Error("PetPlacementModule 抽取宠物时第二遍扫描失败，品质 '{0}'。", petQuality);
+        return false;
     }
 
     /// <summary>
@@ -416,13 +481,41 @@ public sealed class PetPlacementModule
             SlotIndex = slotIndex,
             DiningWishState = PetDiningWishState.None,
             PlayAreaIndex = -1,
-            PendingSpawnHatchSlotIndex = hatchSlotIndex
+            PendingSpawnHatchSlotIndex = hatchSlotIndex,
+            // 从 PetDataRow.EatFruitCount 读取本只宠物本会话总计可吃次数。
+            // 查表失败时退化为 1，避免取到 0 后宠物刚出生就被判定为“吃完”。
+            RemainingEatFruitCount = ResolveInitialEatFruitCount(petCode)
         };
 
         AssignDiningWishFruitIfNeeded(petState);
         _petStates.Add(instanceId, petState);
         NotifyPlacementChanged();
         return true;
+    }
+
+    /// <summary>
+    /// 查表读取宠物本会话可吃次数初值。
+    /// 运行期仅在 Spawn 调用一次，后续结算只读 PetRuntimeState.RemainingEatFruitCount。
+    /// 查表失败退化为 1，避免获得“可吃次数 0”的退化宠物。
+    /// </summary>
+    /// <param name="petCode">宠物机器码。</param>
+    /// <returns>初始可吃次数。</returns>
+    private static int ResolveInitialEatFruitCount(string petCode)
+    {
+        if (GameEntry.DataTables == null || string.IsNullOrWhiteSpace(petCode))
+        {
+            return 1;
+        }
+
+        PetDataRow petDataRow = GameEntry.DataTables.GetDataRowByCode<PetDataRow>(petCode);
+        if (petDataRow == null || petDataRow.EatFruitCount <= 0)
+        {
+            // PetDataRow 解析已保证 EatFruitCount > 0，这里走到表示完全拿不到配置，退化位避免除零逻辑。
+            Log.Warning("PetPlacementModule 未能从 PetDataRow 获取吃水果次数，退化为 1，宠物 '{0}'。", petCode);
+            return 1;
+        }
+
+        return petDataRow.EatFruitCount;
     }
 
     /// <summary>
@@ -468,7 +561,12 @@ public sealed class PetPlacementModule
 
     /// <summary>
     /// 处理宠物本次吃完后的去向。
-    /// 规则是 50% 去玩耍区停留 5 秒，50% 直接离场；若玩耍区不可用则直接离场。
+    /// 状态机：
+    /// 　1) 按 GoPlayAreaProbability 抽 50/50：命中上半 → 释放原占位 + Promote + 进 PlayArea。
+    /// 　2) 未命中下半且还有吃饭次数：
+    /// 　   - 在餐桌 且 Queue 无人 → 保留原坐位重新抽 wish（避免“释放→Promote→拼回”的无意义折腾）。
+    /// 　   - 其他情况（在 PlayArea / Queue 有人等）→ 释放 + Promote + TryEnqueueForRedining，进 Queue 后补位机制会自动补上餐桌。
+    /// 　3) 次数耗尽 或 Queue 满 → 释放 + Promote + BeginLeaving。
     /// </summary>
     /// <param name="petInstanceId">宠物实例 Id。</param>
     public void ResolvePostMealOutcome(int petInstanceId)
@@ -482,16 +580,13 @@ public sealed class PetPlacementModule
         if (!TryGetGameplayRuleDataRow(out GameplayRuleDataRow gameplayRuleDataRow))
         {
             Log.Warning("PetPlacementModule can not resolve post meal outcome because GameplayRuleDataRow is unavailable.");
+            ReleaseSeatAndPromoteIfNeeded(petState);
             BeginLeaving(petState);
             return;
         }
 
-        bool releasedDiningSeat = ReleasePlacementSlotIfNeeded(petState);
-        if (releasedDiningSeat)
-        {
-            PromoteQueuePetsIfPossible();
-        }
-
+        // 进出期间能预先清一些进餐阶段遗留。​
+        // ​这里不提前清 DesiredFruitCode，以便“留原桌”分支走 KeepDiningSeatAndReorder 手动重新抽 wish。
         petState.DiningWishState = PetDiningWishState.Completed;
         petState.RemainingDiningStageSeconds = 0f;
         petState.PendingSpawnHatchSlotIndex = -1;
@@ -501,18 +596,268 @@ public sealed class PetPlacementModule
             && UnityEngine.Random.Range(0, 100) < gameplayRuleDataRow.GoPlayAreaProbability;
         if (goPlayArea)
         {
-            petState.PlacementType = PetPlacementType.PlayArea;
-            petState.PlayAreaIndex = UnityEngine.Random.Range(0, playAreaCount);
-            petState.PlayAreaRandomPosition01 = new Vector2(UnityEngine.Random.value, UnityEngine.Random.value);
-            petState.SlotIndex = petState.PlayAreaIndex;
-            // 计时要等宠物真正走到 PlayArea 后才开始，
-            // 否则移动过程会吃掉停留时间，体感上就不是完整 5 秒。
-            petState.RemainingPostMealSeconds = 0f;
+            ReleaseSeatAndPromoteIfNeeded(petState);
+            BeginPlayAreaPlacement(petState, playAreaCount);
+            return;
+        }
+
+        // 下半分支（“老顾客优先”策略）：
+        // 　- 还有次数 + 当前在 DiningSeat → 不释放餐桌，直接重新抽 wish 继续吃。
+        // 　  这条路径绝不进 Queue 也绝不让位，即使 Queue 有人在排队，也由 Queue 自行等待下一次空桌。
+        // 　- 还有次数 + 当前在 PlayArea → 没有原桌可坐，进 Queue 等待补位（Queue 内部 Promote 会在有空桌时自动拼上）。
+        // 　- 次数耗尽 / Queue 满 → BeginLeaving。
+        bool wasOnDiningSeat = petState.PlacementType == PetPlacementType.DiningSeat;
+        bool stillHasMeal = petState.RemainingEatFruitCount > 0;
+        if (stillHasMeal && wasOnDiningSeat)
+        {
+            // 原桌不释放 + 重新抽 wish + 通知 UI 重建气泡。
+            KeepDiningSeatAndReorder(petState);
+            return;
+        }
+
+        // 走到这里只剩两种情况：在 PlayArea 且还有次数 → 优先占空 DiningSeat / 否则进 Queue；或次数耗尽 → 离场。
+        // 两种情况都需要先释放原占位（PlayArea 转出时 ReleasePlacementSlotIfNeeded 自然 no-op）。
+        ReleaseSeatAndPromoteIfNeeded(petState);
+
+        if (stillHasMeal && TrySeatOrEnqueueForRedining(petState))
+        {
+            return;
+        }
+
+        // 次数耗尽 或 Queue 满 → 离场。
+        BeginLeaving(petState);
+    }
+
+    /// <summary>
+    /// 强制让宠物走 PlayArea 分支，不走 50/50，不消耗吃饭次数。
+    /// 主要供“点击气泡但水果未解锁”等退化场景使用：这种场景不该重点付费一次次数，也不该出现“主动插队”。
+    /// PlayArea 不可用时退化为本次什么也不做，仅释放原桌 + Promote，避免宠物被迫离场丢掉未消耗的次数。
+    /// </summary>
+    /// <param name="petInstanceId">宠物实例 Id。</param>
+    public void ForceGoPlayArea(int petInstanceId)
+    {
+        PetRuntimeState petState = GetPetStateByInstanceId(petInstanceId);
+        if (petState == null)
+        {
+            return;
+        }
+
+        // 同样干净一下进餐阶段遗留，但不消耗次数。
+        petState.DiningWishState = PetDiningWishState.Completed;
+        petState.RemainingDiningStageSeconds = 0f;
+        petState.PendingSpawnHatchSlotIndex = -1;
+
+        int playAreaCount = GameEntry.PlayfieldEntities != null ? GameEntry.PlayfieldEntities.PlayAreaCount : 0;
+        if (playAreaCount <= 0)
+        {
+            // PlayArea 不可用的边界场景：留原桌 或 什么也不做均可。​
+            // 这里选择不动，仅补一次 NotifyPlacementChanged，让 UI 重新评估气泡状态。
+            // PetDiningOrderComponent 调用者已经重置 DiningWishState=Completed，不会重复弹气泡。
             NotifyPlacementChanged();
             return;
         }
 
-        BeginLeaving(petState);
+        ReleaseSeatAndPromoteIfNeeded(petState);
+        BeginPlayAreaPlacement(petState, playAreaCount);
+    }
+
+    /// <summary>
+    /// 释放宠物原占位，并在释放了 DiningSeat 时顺手跳一次 PromoteQueuePetsIfPossible。
+    /// 从 PlayArea 转出时该函数是 no-op，ReleasePlacementSlotIfNeeded 内部会返回 false。
+    /// </summary>
+    /// <param name="petState">待释放原位的宠物状态。</param>
+    private void ReleaseSeatAndPromoteIfNeeded(PetRuntimeState petState)
+    {
+        if (petState == null)
+        {
+            return;
+        }
+
+        bool releasedDiningSeat = ReleasePlacementSlotIfNeeded(petState);
+        if (releasedDiningSeat)
+        {
+            PromoteQueuePetsIfPossible();
+        }
+    }
+
+    /// <summary>
+    /// 把宠物状态切换到 PlayArea 分支。
+    /// 调用前调用者需保证 playAreaCount > 0。
+    /// </summary>
+    /// <param name="petState">待进入 PlayArea 的宠物状态。</param>
+    /// <param name="playAreaCount">PlayArea 可用总数。</param>
+    private void BeginPlayAreaPlacement(PetRuntimeState petState, int playAreaCount)
+    {
+        if (petState == null || playAreaCount <= 0)
+        {
+            return;
+        }
+
+        petState.PlacementType = PetPlacementType.PlayArea;
+        petState.PlayAreaIndex = UnityEngine.Random.Range(0, playAreaCount);
+        petState.PlayAreaRandomPosition01 = new Vector2(UnityEngine.Random.value, UnityEngine.Random.value);
+        petState.SlotIndex = petState.PlayAreaIndex;
+        // 计时要等宠物真正走到 PlayArea 后才开始，否则移动过程会吃掉停留时间。
+        petState.RemainingPostMealSeconds = 0f;
+        // 吃饭、生产、点餐状态都不再适用 PlayArea，顺手清一道避免脱离餐桌后还挂着旧气泡。
+        petState.DiningWishState = PetDiningWishState.None;
+        petState.DesiredFruitCode = null;
+        petState.OrchardSlotIndex = -1;
+        NotifyPlacementChanged();
+    }
+
+    /// <summary>
+    /// 检查当前是否还有实例在排队。
+    /// 仅扫描 _queueInstanceIds，不分配任何堆内存。
+    /// </summary>
+    /// <returns>当前排队区是否有任何宠物。</returns>
+    private bool HasAnyQueuedPet()
+    {
+        for (int i = 0; i < _queueInstanceIds.Length; i++)
+        {
+            if (_queueInstanceIds[i] != 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 从 PlayArea 转出 + 还有吃饭次数 时的入座决策。
+    /// 　- Queue 无人 且 餐桌有空位 → 直接占空餐桌，避免“先进 Queue 再 Promote”产生中间态闪烁。
+    /// 　- Queue 有人 或 餐桌全满 → 退回走 TryEnqueueForRedining（进 Queue 等补位）。
+    /// </summary>
+    /// <param name="petState">待入座的宠物状态。</param>
+    /// <returns>是否成功入座 / 进队。</returns>
+    private bool TrySeatOrEnqueueForRedining(PetRuntimeState petState)
+    {
+        if (petState == null)
+        {
+            return false;
+        }
+
+        // Queue 无人走快路线：优先占空餐桌。
+        if (!HasAnyQueuedPet() && TrySeatOnEmptyDiningSeat(petState))
+        {
+            return true;
+        }
+
+        return TryEnqueueForRedining(petState);
+    }
+
+    /// <summary>
+    /// 尝试把宠物直接占到一个空餐桌位。
+    /// 调用前需保证宠物原占位已释放（PlayArea 转出本身不占位，符合该要求）。
+    /// 成功后状态与 Queue 补位到 DiningSeat 等价：重新抽 wish + 触发入座动画。
+    /// </summary>
+    /// <param name="petState">待入座的宠物状态。</param>
+    /// <returns>是否成功占空餐桌。</returns>
+    private bool TrySeatOnEmptyDiningSeat(PetRuntimeState petState)
+    {
+        if (petState == null)
+        {
+            return false;
+        }
+
+        if (!TryGetEmptyDiningSeatIndex(out int diningSeatIndex))
+        {
+            return false;
+        }
+
+        if (!TryOccupySlot(PetPlacementType.DiningSeat, diningSeatIndex, petState.InstanceId))
+        {
+            return false;
+        }
+
+        // 与 PromoteQueuePetsIfPossible 里对 Queue 补位到 DiningSeat 的字段重置保持一致，
+        // 避免 PlayArea 遗留字段污染新一轮点餐。
+        petState.PlacementType = PetPlacementType.DiningSeat;
+        petState.SlotIndex = diningSeatIndex;
+        petState.PlayAreaIndex = -1;
+        petState.PlayAreaRandomPosition01 = Vector2.zero;
+        petState.RemainingPostMealSeconds = 0f;
+        petState.RemainingDiningStageSeconds = 0f;
+        petState.DiningWishState = PetDiningWishState.None;
+        petState.DesiredFruitCode = null;
+        petState.OrchardSlotIndex = -1;
+        // PendingPromoteToDining = true 以触发“入座移动动画”，避免实体从 PlayArea 瓬移到餐桌。
+        petState.PendingPromoteToDining = true;
+
+        // 重新抽取期望水果 + 通知 UI：一个原子动作，UI 只会看到“占餐桌 + 出气泡”这一个最终状态。
+        AssignDiningWishFruitIfNeeded(petState);
+        NotifyPlacementChanged();
+        return true;
+    }
+
+    /// <summary>
+    /// 让当前仍坐在餐桌位的宠物不释放餐桌，直接重新抽一份 wish 并重建气泡。
+    /// “老顾客优先”：只要还有吃饭次数 + 当前在 DiningSeat，就走这条路径，不让位给排队宠物。
+    /// </summary>
+    /// <param name="petState">待“原桌重新点餐”的宠物状态。</param>
+    private void KeepDiningSeatAndReorder(PetRuntimeState petState)
+    {
+        if (petState == null)
+        {
+            return;
+        }
+
+        // 清掉上一轮进餐流程遗留的临时字段，让 AssignDiningWishFruitIfNeeded 能重新抽。
+        // PlacementType、SlotIndex 保持不动 — 宠物付仍占原餐桌位。
+        petState.DesiredFruitCode = null;
+        petState.DiningWishState = PetDiningWishState.None;
+        petState.OrchardSlotIndex = -1;
+        petState.RemainingDiningStageSeconds = 0f;
+        petState.RemainingPostMealSeconds = 0f;
+        petState.PendingPromoteToDining = false;
+
+        // 重新抽取期望水果；AssignDiningWishFruitIfNeeded 会在 PlacementType=DiningSeat 且 DesiredFruitCode 为空时生效。
+        AssignDiningWishFruitIfNeeded(petState);
+        NotifyPlacementChanged();
+    }
+
+    /// <summary>
+    /// 尝试把“还有吃饭次数”的宠物重新推进排队区，等待下一轮补位进 DiningSeat。
+    /// 调用前需保证宠物已释放原占位（DiningSeat 转出时 ReleasePlacementSlotIfNeeded 已释放；
+    /// PlayArea 转出时本身未占任何餐桌/排队槽）。
+    /// </summary>
+    /// <param name="petState">待推进排队的宠物状态。</param>
+    /// <returns>是否成功进入排队（包括随后立刻被 Promote 补位的情况）。</returns>
+    private bool TryEnqueueForRedining(PetRuntimeState petState)
+    {
+        if (petState == null)
+        {
+            return false;
+        }
+
+        // 只要还有空 Queue 槽就能出发，否则返回 false 让调用方走 Leaving。
+        if (!TryGetEmptyQueueSlotIndex(out int queueSlotIndex))
+        {
+            return false;
+        }
+
+        if (!TryOccupySlot(PetPlacementType.Queue, queueSlotIndex, petState.InstanceId))
+        {
+            return false;
+        }
+
+        // 切换到 Queue 状态同时统一清理 PlayArea / Producing / Pending 遗留字段。
+        // （PromoteQueuePetsIfPossible 内部也会再清一道，这里提前清是为“进 Queue 但未被立即补位”的侧支打补丁。
+        petState.PlacementType = PetPlacementType.Queue;
+        petState.SlotIndex = queueSlotIndex;
+        petState.PlayAreaIndex = -1;
+        petState.PlayAreaRandomPosition01 = Vector2.zero;
+        petState.RemainingPostMealSeconds = 0f;
+        petState.RemainingDiningStageSeconds = 0f;
+        petState.DiningWishState = PetDiningWishState.None;
+        petState.DesiredFruitCode = null;
+        petState.PendingPromoteToDining = false;
+        NotifyPlacementChanged();
+
+        // 进 Queue 后立刻走一次补位：若此时餐桌有空位，宠物将被拼接到 DiningSeat 并重新 AssignDiningWishFruitIfNeeded。
+        PromoteQueuePetsIfPossible();
+        return true;
     }
 
     /// <summary>
@@ -766,6 +1111,13 @@ public sealed class PetPlacementModule
         for (int i = 0; i < _diningSeatInstanceIds.Length; i++)
         {
             if (_diningSeatInstanceIds[i] != 0)
+            {
+                continue;
+            }
+
+            // 跳过跳购导致的未解锁"洞"：例如 1/3 号位解锁但 2 号位仍锁着，2 号位不可放宠物。
+            // _diningSeatInstanceIds 长度由 SetDiningSeatCount 扩张到已购买的最大索引，但中间可能存在未解锁槽位。
+            if (GameEntry.Fruits != null && !GameEntry.Fruits.IsArchitectureSlotUnlocked(PlayerRuntimeModule.ArchitectureCategory.Diet, i + 1))
             {
                 continue;
             }

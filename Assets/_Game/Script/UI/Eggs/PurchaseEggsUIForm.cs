@@ -527,6 +527,9 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
                 case EggHatchComponent.EggPurchaseFailure.InventoryFull:
                     ToastUtility.Show("蛋槽已满");
                     break;
+                case EggHatchComponent.EggPurchaseFailure.NotEnoughStars:
+                    ToastUtility.Show("星星不足");
+                    break;
                 default:
                     ToastUtility.Show("购买失败");
                     break;

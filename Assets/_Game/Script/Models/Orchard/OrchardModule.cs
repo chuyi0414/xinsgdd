@@ -102,11 +102,20 @@ public sealed class OrchardModule
     {
         for (int i = 0; i < _slotStates.Length; i++)
         {
-            if (_slotStates[i].IsIdle)
+            if (!_slotStates[i].IsIdle)
             {
-                _slotStates[i].Occupy(fruitCode, produceSeconds);
-                return i;
+                continue;
             }
+
+            // 跳过跳购导致的未解锁"洞"：例如 1/3 号位解锁但 2 号位仍锁着，2 号位不能分配水果生产。
+            // _slotStates 长度由 EnsureSlotCapacity 扩张到已购买的最大索引，中间可能存在未解锁槽位。
+            if (GameEntry.Fruits != null && !GameEntry.Fruits.IsArchitectureSlotUnlocked(PlayerRuntimeModule.ArchitectureCategory.Fruiter, i + 1))
+            {
+                continue;
+            }
+
+            _slotStates[i].Occupy(fruitCode, produceSeconds);
+            return i;
         }
 
         return -1;
@@ -116,11 +125,19 @@ public sealed class OrchardModule
     {
         for (int i = 0; i < _slotStates.Length; i++)
         {
-            if (_slotStates[i].IsIdle)
+            if (!_slotStates[i].IsIdle)
             {
-                index = i;
-                return true;
+                continue;
             }
+
+            // 跳过跳购导致的未解锁"洞"：未解锁槽位不参与生产分配。
+            if (GameEntry.Fruits != null && !GameEntry.Fruits.IsArchitectureSlotUnlocked(PlayerRuntimeModule.ArchitectureCategory.Fruiter, i + 1))
+            {
+                continue;
+            }
+
+            index = i;
+            return true;
         }
 
         index = -1;

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityGameFramework.Runtime;
 
 /// <summary>
 /// 游戏入口组件。
@@ -6,6 +7,17 @@ using UnityEngine;
 /// </summary>
 public partial class GameEntry : MonoBehaviour
 {
+    /// <summary>
+    /// 场景唤醒阶段先阻塞 GF 入口流程。
+    /// 原因：ProcedureComponent.Start 会在第一帧末尾启动 LoadProcedure，
+    /// 但 Addressables.InitializeAsync 在包体或 WebGL 环境下可能超过一帧；
+    /// 如果不阻塞，LoadProcedure 会提前 OpenUIForm，导致 Addressables 路由还没 ready 就回退到 Resources 后端。
+    /// </summary>
+    private void Awake()
+    {
+        ProcedureStartupGate.BlockStartup();
+    }
+
     /// <summary>
     /// 场景启动后初始化 GameEntry 的全部组件入口。
     /// 流程：
@@ -31,6 +43,9 @@ public partial class GameEntry : MonoBehaviour
     private void OnAddressablesReady()
     {
         InitCustomComponents();
+
+        // Addressables catalog 与业务模块都已经完成初始化，此时再允许入口流程打开加载界面和预加载资源。
+        ProcedureStartupGate.AllowStartup();
 
         // 推迟到下一帧执行：确保 SoundComponent.Start() 已经先完成 SoundHelper 的初始化，
         // 避免 SoundManager.AddSoundAgentHelper() 检测到 m_SoundHelper == null 而抛异常。

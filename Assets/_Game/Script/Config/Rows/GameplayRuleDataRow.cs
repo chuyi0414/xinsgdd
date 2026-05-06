@@ -16,8 +16,9 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 数据表固定列数。
+    /// 三档产出概率已迁移到 PetDataRow.ProduceProbability + PetProduce 随机抽取，这里删除三列后为 17。
     /// </summary>
-    private const int ColumnCount = 19;
+    private const int ColumnCount = 17;
 
     /// <summary>
     /// 合法规则 Code 的前缀。
@@ -111,19 +112,10 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
     public int DiningLockedFruitProbability { get; private set; }
 
     /// <summary>
-    /// 宠物产出初级物的概率。
+    /// 开局初始星星数。
+    /// 玩家在开局时拥有的星星总量，该值会在 PlayerRuntimeModule 初始化时写入运行时星星计数器。
     /// </summary>
-    public int PrimaryProduceProbability { get; private set; }
-
-    /// <summary>
-    /// 宠物产出中级物的概率。
-    /// </summary>
-    public int IntermediateProduceProbability { get; private set; }
-
-    /// <summary>
-    /// 宠物产出高级物的概率。
-    /// </summary>
-    public int AdvancedProduceProbability { get; private set; }
+    public int InitialStars { get; private set; }
 
     /// <summary>
     /// 备注描述。
@@ -253,30 +245,11 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        if (!TryParseProbability(columns[15], out int primaryProduceProbability))
+        // 产出概率三档已下沉到 PetDataRow.ProduceProbability，本表这里不再读三列。
+        // 下面列号从原 18 前移到 15，以适配去除三列后的 GameplayRule.txt。
+        if (!int.TryParse(columns[15], out int initialStars) || initialStars < 0)
         {
-            Log.Warning("GameplayRuleDataRow parse failed because PrimaryProduceProbability '{0}' is invalid, code '{1}'.", columns[15], code);
-            return false;
-        }
-
-        if (!TryParseProbability(columns[16], out int intermediateProduceProbability))
-        {
-            Log.Warning("GameplayRuleDataRow parse failed because IntermediateProduceProbability '{0}' is invalid, code '{1}'.", columns[16], code);
-            return false;
-        }
-
-        if (!TryParseProbability(columns[17], out int advancedProduceProbability))
-        {
-            Log.Warning("GameplayRuleDataRow parse failed because AdvancedProduceProbability '{0}' is invalid, code '{1}'.", columns[17], code);
-            return false;
-        }
-
-        if (primaryProduceProbability + intermediateProduceProbability + advancedProduceProbability != 100)
-        {
-            Log.Warning(
-                "GameplayRuleDataRow parse failed because produce probabilities total is '{0}', code '{1}'.",
-                primaryProduceProbability + intermediateProduceProbability + advancedProduceProbability,
-                code);
+            Log.Warning("GameplayRuleDataRow parse failed because InitialStars '{0}' is invalid, code '{1}'.", columns[15], code);
             return false;
         }
 
@@ -295,10 +268,8 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
         DiningHighestUnlockedFruitProbability = diningHighestUnlockedFruitProbability;
         DiningOtherUnlockedFruitProbability = diningOtherUnlockedFruitProbability;
         DiningLockedFruitProbability = diningLockedFruitProbability;
-        PrimaryProduceProbability = primaryProduceProbability;
-        IntermediateProduceProbability = intermediateProduceProbability;
-        AdvancedProduceProbability = advancedProduceProbability;
-        Description = columns[18].Trim();
+        InitialStars = initialStars;
+        Description = columns[16].Trim();
         return true;
     }
 

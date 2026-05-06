@@ -1184,10 +1184,13 @@ public sealed class GameDataTableModule
             return false;
         }
 
-        Dictionary<PlayerRuntimeModule.ArchitectureCategory, HashSet<int>> levelsByCategory =
-            new Dictionary<PlayerRuntimeModule.ArchitectureCategory, HashSet<int>>();
-        Dictionary<PlayerRuntimeModule.ArchitectureCategory, int> maxLevelByCategory =
-            new Dictionary<PlayerRuntimeModule.ArchitectureCategory, int>();
+        // 三层结构：Category -> SlotIndex -> 已出现的等级集合。
+        // 升级配置主键由旧 (Category, CurrentLevel) 升级为 (Category, SlotIndex, CurrentLevel)，
+        // 因此同一 Category 下不同 SlotIndex 拥有相同 CurrentLevel 是合法的，必须按 SlotIndex 维度独立校验。
+        Dictionary<PlayerRuntimeModule.ArchitectureCategory, Dictionary<int, HashSet<int>>> levelsByCategorySlot =
+            new Dictionary<PlayerRuntimeModule.ArchitectureCategory, Dictionary<int, HashSet<int>>>();
+        Dictionary<PlayerRuntimeModule.ArchitectureCategory, Dictionary<int, int>> maxLevelByCategorySlot =
+            new Dictionary<PlayerRuntimeModule.ArchitectureCategory, Dictionary<int, int>>();
 
         for (int i = 0; i < rows.Length; i++)
         {
@@ -1198,28 +1201,48 @@ public sealed class GameDataTableModule
                 return false;
             }
 
-            if (row.EffectParam < 0)
+            if (row.SlotIndex <= 0)
             {
-                Log.Error("校验建筑升级配置表失败，类别 '{0}' 的 CurrentLevel '{1}' 存在非法 EffectParam '{2}'。", row.Category, row.CurrentLevel, row.EffectParam);
+                Log.Error("校验建筑升级配置表失败，类别 '{0}' 存在非法 SlotIndex '{1}'。", row.Category, row.SlotIndex);
                 return false;
             }
 
-            if (!levelsByCategory.TryGetValue(row.Category, out HashSet<int> levels))
+            if (row.CurrentLevel <= 0)
+            {
+                Log.Error("校验建筑升级配置表失败，类别 '{0}' 槽位 '{1}' 存在非法 CurrentLevel '{2}'。", row.Category, row.SlotIndex, row.CurrentLevel);
+                return false;
+            }
+
+            if (row.EffectParam < 0)
+            {
+                Log.Error("校验建筑升级配置表失败，类别 '{0}' 槽位 '{1}' 的 CurrentLevel '{2}' 存在非法 EffectParam '{3}'。", row.Category, row.SlotIndex, row.CurrentLevel, row.EffectParam);
+                return false;
+            }
+
+            if (!levelsByCategorySlot.TryGetValue(row.Category, out Dictionary<int, HashSet<int>> slotMap))
+            {
+                slotMap = new Dictionary<int, HashSet<int>>();
+                levelsByCategorySlot.Add(row.Category, slotMap);
+                maxLevelByCategorySlot[row.Category] = new Dictionary<int, int>();
+            }
+
+            Dictionary<int, int> maxLevelMap = maxLevelByCategorySlot[row.Category];
+            if (!slotMap.TryGetValue(row.SlotIndex, out HashSet<int> levels))
             {
                 levels = new HashSet<int>();
-                levelsByCategory.Add(row.Category, levels);
-                maxLevelByCategory[row.Category] = 0;
+                slotMap.Add(row.SlotIndex, levels);
+                maxLevelMap[row.SlotIndex] = 0;
             }
 
             if (!levels.Add(row.CurrentLevel))
             {
-                Log.Error("校验建筑升级配置表失败，类别 '{0}' 的 CurrentLevel '{1}' 重复。", row.Category, row.CurrentLevel);
+                Log.Error("校验建筑升级配置表失败，类别 '{0}' 槽位 '{1}' 的 CurrentLevel '{2}' 重复。", row.Category, row.SlotIndex, row.CurrentLevel);
                 return false;
             }
 
-            if (row.CurrentLevel > maxLevelByCategory[row.Category])
+            if (row.CurrentLevel > maxLevelMap[row.SlotIndex])
             {
-                maxLevelByCategory[row.Category] = row.CurrentLevel;
+                maxLevelMap[row.SlotIndex] = row.CurrentLevel;
             }
         }
 
@@ -1233,22 +1256,34 @@ public sealed class GameDataTableModule
         for (int i = 0; i < categories.Length; i++)
         {
             PlayerRuntimeModule.ArchitectureCategory category = categories[i];
-            if (!levelsByCategory.TryGetValue(category, out HashSet<int> levels)
-                || !maxLevelByCategory.TryGetValue(category, out int maxCurrentLevel)
-                || levels == null
-                || levels.Count == 0
-                || maxCurrentLevel <= 0)
+            if (!levelsByCategorySlot.TryGetValue(category, out Dictionary<int, HashSet<int>> slotMap)
+                || slotMap == null
+                || slotMap.Count == 0
+                || !maxLevelByCategorySlot.TryGetValue(category, out Dictionary<int, int> maxLevelMap)
+                || maxLevelMap == null)
             {
                 Log.Error("校验建筑升级配置表失败，类别 '{0}' 没有任何升级配置。", category);
                 return false;
             }
 
-            for (int level = 1; level <= maxCurrentLevel; level++)
+            // 对每个出现的 SlotIndex，等级必须从 1 到 maxLevel 连续，避免运行时升级链路出现"洞"。
+            foreach (KeyValuePair<int, HashSet<int>> slotPair in slotMap)
             {
-                if (!levels.Contains(level))
+                int slotIndex = slotPair.Key;
+                HashSet<int> levels = slotPair.Value;
+                if (levels == null || levels.Count == 0 || !maxLevelMap.TryGetValue(slotIndex, out int slotMaxLevel) || slotMaxLevel <= 0)
                 {
-                    Log.Error("校验建筑升级配置表失败，类别 '{0}' 缺少 CurrentLevel '{1}' 的升级配置。", category, level);
+                    Log.Error("校验建筑升级配置表失败，类别 '{0}' 槽位 '{1}' 没有任何升级配置。", category, slotIndex);
                     return false;
+                }
+
+                for (int level = 1; level <= slotMaxLevel; level++)
+                {
+                    if (!levels.Contains(level))
+                    {
+                        Log.Error("校验建筑升级配置表失败，类别 '{0}' 槽位 '{1}' 缺少 CurrentLevel '{2}' 的升级配置。", category, slotIndex, level);
+                        return false;
+                    }
                 }
             }
         }
@@ -1423,7 +1458,8 @@ public sealed class GameDataTableModule
     }
 
     /// <summary>
-    /// 校验宠物产出表是否满足“每个宠物正好有三档产出”的运行时约束。
+    /// 校验宠物产出表是否满足“每只宠物至少配 1 条产出物”的运行时约束。
+    /// 三档齐备的旧约束已废弃，运行时抽取改为同 PetId 随机挑 1 条（见 PlayerRuntimeModule.Produce.cs）。
     /// </summary>
     /// <param name="petDataTable">宠物表。</param>
     /// <param name="petProduceDataTable">宠物产出表。</param>
@@ -1446,8 +1482,10 @@ public sealed class GameDataTableModule
             return false;
         }
 
+        // validPetIds：宠物表中出现过的 PetId 全集，用于过滤野产出物。
+        // petIdsWithProduce：实际被产出表覆盖到的 PetId 集合，最后与宠物表比对。
         HashSet<int> validPetIds = new HashSet<int>();
-        Dictionary<int, int> gradeMaskByPetId = new Dictionary<int, int>(petRows.Length);
+        HashSet<int> petIdsWithProduce = new HashSet<int>();
         Dictionary<int, string> petCodeById = new Dictionary<int, string>(petRows.Length);
 
         for (int i = 0; i < petRows.Length; i++)
@@ -1460,7 +1498,6 @@ public sealed class GameDataTableModule
             }
 
             validPetIds.Add(petRow.Id);
-            gradeMaskByPetId[petRow.Id] = 0;
             petCodeById[petRow.Id] = petRow.Code;
         }
 
@@ -1479,25 +1516,8 @@ public sealed class GameDataTableModule
                 return false;
             }
 
-            int gradeMask = GetProduceGradeMask(produceRow.Grade);
-            if (gradeMask == 0)
-            {
-                Log.Error("校验宠物产出表失败，产出物 '{0}' 的等级 '{1}' 非法。", produceRow.Code, produceRow.Grade);
-                return false;
-            }
-
-            int currentMask = gradeMaskByPetId[produceRow.PetId];
-            if ((currentMask & gradeMask) != 0)
-            {
-                Log.Error(
-                    "校验宠物产出表失败，宠物 '{0}'（PetId={1}）存在重复的等级配置 '{2}'。",
-                    petCodeById[produceRow.PetId],
-                    produceRow.PetId,
-                    produceRow.Grade);
-                return false;
-            }
-
-            gradeMaskByPetId[produceRow.PetId] = currentMask | gradeMask;
+            // Grade 字段依然由 PetProduceDataRow 解析为合法枚举值，这里不再多余校验，允许重复等级。
+            petIdsWithProduce.Add(produceRow.PetId);
         }
 
         for (int i = 0; i < petRows.Length; i++)
@@ -1508,10 +1528,10 @@ public sealed class GameDataTableModule
                 continue;
             }
 
-            if (!gradeMaskByPetId.TryGetValue(petRow.Id, out int gradeMask) || gradeMask != 7)
+            if (!petIdsWithProduce.Contains(petRow.Id))
             {
                 Log.Error(
-                    "校验宠物产出表失败，宠物 '{0}'（PetId={1}）必须正好配置 Primary / Intermediate / Advanced 三档产出。",
+                    "校验宠物产出表失败，宠物 '{0}'（PetId={1}）至少需要配置 1 条产出物。",
                     petRow.Code,
                     petRow.Id);
                 return false;
@@ -1519,29 +1539,6 @@ public sealed class GameDataTableModule
         }
 
         return true;
-    }
-
-    /// <summary>
-    /// 将产出等级转换为校验用的位掩码。
-    /// </summary>
-    /// <param name="grade">产出等级。</param>
-    /// <returns>对应位掩码；未知等级返回 0。</returns>
-    private static int GetProduceGradeMask(ProduceGradeType grade)
-    {
-        switch (grade)
-        {
-            case ProduceGradeType.Primary:
-                return 1;
-
-            case ProduceGradeType.Intermediate:
-                return 2;
-
-            case ProduceGradeType.Advanced:
-                return 4;
-
-            default:
-                return 0;
-        }
     }
 
     /// <summary>
