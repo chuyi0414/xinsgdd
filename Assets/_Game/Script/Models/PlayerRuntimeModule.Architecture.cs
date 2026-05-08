@@ -58,10 +58,10 @@ public sealed partial class PlayerRuntimeModule
         new Dictionary<ArchitectureCategory, Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow>>();
 
     /// <summary>
-    /// 各建筑类别的最大等级缓存。
+    /// 各建筑槽位的最大等级缓存。
     /// </summary>
-    private readonly Dictionary<ArchitectureCategory, int> _maxArchitectureLevelsByCategory =
-        new Dictionary<ArchitectureCategory, int>();
+    private readonly Dictionary<ArchitectureCategory, Dictionary<int, int>> _maxArchitectureLevelsByCategorySlot =
+        new Dictionary<ArchitectureCategory, Dictionary<int, int>>();
 
     /// <summary>
     /// 建筑图片配置缓存。
@@ -197,7 +197,7 @@ public sealed partial class PlayerRuntimeModule
         }
 
         ArchitectureSlotState slotState = GetArchitectureSlotState(category, slotIndex);
-        int maxLevel = GetMaxArchitectureLevel(category);
+        int maxLevel = GetMaxArchitectureLevel(category, slotIndex);
         if (slotState == null)
         {
             return new ArchitectureEntryState(category, slotIndex, false, 0, maxLevel, ArchitectureActionType.None, 0);
@@ -212,6 +212,40 @@ public sealed partial class PlayerRuntimeModule
             maxLevel,
             actionType,
             cost);
+    }
+
+    /// <summary>
+    /// 获取指定建筑条目当前动作需要达到的星星阈值。
+    /// 购买动作读取建筑槽位表，升级动作读取建筑升级表或存钱罐表。
+    /// </summary>
+    /// <param name="category">建筑条目类型。</param>
+    /// <param name="slotIndex">1 基索引。</param>
+    /// <returns>当前动作需要的星星数量；配置缺失、已满级或未初始化时返回 0。</returns>
+    public int GetArchitectureActionRequiredStars(ArchitectureCategory category, int slotIndex)
+    {
+        if (!EnsureInitialized())
+        {
+            return 0;
+        }
+
+        ArchitectureSlotState slotState = GetArchitectureSlotState(category, slotIndex);
+        if (slotState == null)
+        {
+            return 0;
+        }
+
+        ArchitectureActionType actionType = EvaluateArchitectureActionType(category, slotIndex, slotState, out _);
+        switch (actionType)
+        {
+            case ArchitectureActionType.Buy:
+                return GetSlotRequiredStars(category, slotIndex);
+
+            case ArchitectureActionType.Upgrade:
+                return GetUpgradeRequiredStars(category, slotIndex, slotState.Level);
+
+            default:
+                return 0;
+        }
     }
 
     /// <summary>
@@ -296,7 +330,7 @@ public sealed partial class PlayerRuntimeModule
                     return false;
                 }
 
-                slotState.Level = Mathf.Clamp(slotState.Level + 1, InitialArchitectureLevel, GetMaxArchitectureLevel(category));
+                slotState.Level = Mathf.Clamp(slotState.Level + 1, InitialArchitectureLevel, GetMaxArchitectureLevel(category, slotIndex));
                 AddStars(rewardStars);
                 NotifyArchitectureStateChanged(category, slotIndex);
                 return true;
@@ -592,7 +626,7 @@ public sealed partial class PlayerRuntimeModule
 
         _architectureSlotRowsByCategory.Clear();
         _architectureUpgradeRowsByCategory.Clear();
-        _maxArchitectureLevelsByCategory.Clear();
+        _maxArchitectureLevelsByCategorySlot.Clear();
         _architectureRowsByCategory.Clear();
 
         for (int i = 0; i < slotRows.Length; i++)
@@ -629,10 +663,16 @@ public sealed partial class PlayerRuntimeModule
             // 复合键：同类别下 (槽位, 当前等级) 唯一定位一行配置。
             rowsBySlotAndLevel[(row.SlotIndex, row.CurrentLevel)] = row;
 
-            int maxLevel = row.CurrentLevel + 1;
-            if (!_maxArchitectureLevelsByCategory.TryGetValue(row.Category, out int currentMaxLevel) || maxLevel > currentMaxLevel)
+            if (!_maxArchitectureLevelsByCategorySlot.TryGetValue(row.Category, out Dictionary<int, int> maxLevelsBySlot))
             {
-                _maxArchitectureLevelsByCategory[row.Category] = maxLevel;
+                maxLevelsBySlot = new Dictionary<int, int>();
+                _maxArchitectureLevelsByCategorySlot.Add(row.Category, maxLevelsBySlot);
+            }
+
+            int maxLevel = row.CurrentLevel + 1;
+            if (!maxLevelsBySlot.TryGetValue(row.SlotIndex, out int currentMaxLevel) || maxLevel > currentMaxLevel)
+            {
+                maxLevelsBySlot[row.SlotIndex] = maxLevel;
             }
         }
 
@@ -749,7 +789,7 @@ public sealed partial class PlayerRuntimeModule
             return cost > 0 ? ArchitectureActionType.Buy : ArchitectureActionType.None;
         }
 
-        int maxLevel = GetMaxArchitectureLevel(category);
+        int maxLevel = GetMaxArchitectureLevel(category, slotIndex);
         if (slotState.Level >= maxLevel)
         {
             return ArchitectureActionType.Max;
@@ -1075,12 +1115,13 @@ public sealed partial class PlayerRuntimeModule
     }
 
     /// <summary>
-    /// 获取指定建筑类别的最大等级。
+    /// 获取指定建筑槽位的最大等级。
     /// 最大等级由升级表的最后一个 CurrentLevel + 1 推导得出。
     /// </summary>
     /// <param name="category">建筑类别。</param>
+    /// <param name="slotIndex">1 基槽位索引。</param>
     /// <returns>最大等级。</returns>
-    private int GetMaxArchitectureLevel(ArchitectureCategory category)
+    private int GetMaxArchitectureLevel(ArchitectureCategory category, int slotIndex)
     {
         // 存钱罐的最大等级直接取数据表中最高的 CurrentLevel（不 +1）。
         if (category == ArchitectureCategory.SavingPot)
@@ -1097,7 +1138,14 @@ public sealed partial class PlayerRuntimeModule
             return savingPotMaxLevel;
         }
 
-        return _maxArchitectureLevelsByCategory.TryGetValue(category, out int maxLevel)
+        if (slotIndex <= 0)
+        {
+            return InitialArchitectureLevel;
+        }
+
+        return _maxArchitectureLevelsByCategorySlot.TryGetValue(category, out Dictionary<int, int> maxLevelsBySlot)
+            && maxLevelsBySlot != null
+            && maxLevelsBySlot.TryGetValue(slotIndex, out int maxLevel)
             ? Mathf.Max(InitialArchitectureLevel, maxLevel)
             : InitialArchitectureLevel;
     }

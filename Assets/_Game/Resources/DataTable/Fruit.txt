@@ -1,20 +1,20 @@
-#Id	Code	Name	IsUnlocked	IconPath	DailyChallengePath	UnlockGold	RewardStars	CoinProbability	CoinAmount	ProduceSeconds	Description
-#唯一编号	机器码	显示名称	是否默认解锁	图标资源路径	每日关卡图资源路径	解锁所需金币	解锁获得星星	产出金币概率	单次产出金币数	生产时长(秒)	备注描述
-1	fruit_apple	苹果	true	Arts/Fruit/Fruit/SG_0001_S	Arts/Fruit/FruitCard/WP_80001	0	0	100	100	2	清甜多汁的苹果。
-2	fruit_banana	香蕉	true	Arts/Fruit/Fruit/SG_0002_S	Arts/Fruit/FruitCard/WP_80002	0	2	100	100	2	香甜软糯的香蕉。
-3	fruit_strawberry	草莓	true	Arts/Fruit/Fruit/SG_0003_S	Arts/Fruit/FruitCard/WP_80003	0	3	100	200	2	酸甜可口的草莓。
-4	fruit_corn	玉米	true	Arts/Fruit/Fruit/SG_0004_S	Arts/Fruit/FruitCard/WP_80009	0	4	100	300	2	饱满金黄的作物。
-5	fruit_berry	浆果	true	Arts/Fruit/Fruit/SG_0005_S	Arts/Fruit/FruitCard/WP_80013	0	5	100	400	2	颜色鲜亮的浆果。
-6	fruit_grape	葡萄	true	Arts/Fruit/Fruit/SG_0006_S	Arts/Fruit/FruitCard/WP_10001	0	6	100	500	2	成串成熟的葡萄，宠物非常喜欢。
-7	fruit_kiwi	猕猴桃	true	Arts/Fruit/Fruit/SG_0007_S	Arts/Fruit/FruitCard/WP_10002	0	7	100	600	2	口感清爽的猕猴桃。
-8	fruit_wax_apple	莲雾	true	Arts/Fruit/Fruit/SG_0008_S	Arts/Fruit/FruitCard/WP_10006	0	8	100	1000	2	外形精致的莲雾。
-9	fruit_lemon	柠檬	true	Arts/Fruit/Fruit/SG_0009_S	Arts/Fruit/FruitCard/WP_10007	0	9	100	900	2	酸香醒神的柠檬。
-10	fruit_avocado	牛油果	true	Arts/Fruit/Fruit/SG_0010_S	Arts/Fruit/FruitCard/WP_10008	0	10	100	1000	2	营养丰富的牛油果。
-11	fruit_dragon_fruit	火龙果	false	Arts/Fruit/Fruit/SG_0011_S	Arts/Fruit/FruitCard/WP_10009	20000	12	100	2000	2	稀有的火龙果。
-12	fruit_peach	仙桃	false	Arts/Fruit/Fruit/SG_0012_S	Arts/Fruit/FruitCard/WP_10011	30000	14	100	3000	2	香气浓郁的仙桃。
-13	fruit_cactus_pear	仙人掌果	false	Arts/Fruit/Fruit/SG_0013_S	Arts/Fruit/FruitCard/WP_10012	40000	16	100	4000	2	来自仙人掌的珍贵果子。
-14	fruit_cherry	樱桃	false	Arts/Fruit/Fruit/SG_0014_S	Arts/Fruit/FruitCard/WP_10013	50000	18	100	5000	2	小巧珍贵的樱桃。
-15	fruit_mango	芒果	false	Arts/Fruit/Fruit/SG_0015_S	Arts/Fruit/FruitCard/WP_10014	60000	20	100	6000	2	香甜浓郁的芒果。
-16	fruit_durian	榴莲	false	Arts/Fruit/Fruit/SG_0016_S	Arts/Fruit/FruitCard/WP_10015	70000	24	100	7000	2	气味独特的榴莲。
-17	fruit_fig	无花果	false	Arts/Fruit/Fruit/SG_0017_S	Arts/Fruit/FruitCard/WP_10016	100000	28	100	10000	2	稀有柔甜的无花果。
-18	fruit_lychee	荔枝	false	Arts/Fruit/Fruit/SG_0018_S	Arts/Fruit/FruitCard/WP_10019	90000	32	100	9000	2	晶莹清甜的荔枝。
+#Id	Code	Name	IsUnlocked	IconPath	DailyChallengePath	UnlockGold	RequiredStars	RewardStars	CoinProbability	CoinAmount	ProduceSeconds	Description
+#唯一编号	机器码	显示名称	是否默认解锁	图标资源路径	每日关卡图资源路径	解锁所需金币	星星条件	解锁获得星星	产出金币概率	单次产出金币数	生产时长(秒)	备注描述
+1	fruit_apple	苹果	true	Arts/Fruit/Fruit/SG_0001_S	Arts/Fruit/FruitCard/WP_80001	0	0	0	100	100	2	清甜多汁的苹果。
+2	fruit_banana	香蕉	true	Arts/Fruit/Fruit/SG_0002_S	Arts/Fruit/FruitCard/WP_80002	0	0	2	100	100	2	香甜软糯的香蕉。
+3	fruit_strawberry	草莓	true	Arts/Fruit/Fruit/SG_0003_S	Arts/Fruit/FruitCard/WP_80003	0	0	3	100	200	2	酸甜可口的草莓。
+4	fruit_corn	玉米	true	Arts/Fruit/Fruit/SG_0004_S	Arts/Fruit/FruitCard/WP_80009	0	0	4	100	300	2	饱满金黄的作物。
+5	fruit_berry	浆果	true	Arts/Fruit/Fruit/SG_0005_S	Arts/Fruit/FruitCard/WP_80013	0	0	5	100	400	2	颜色鲜亮的浆果。
+6	fruit_grape	葡萄	true	Arts/Fruit/Fruit/SG_0006_S	Arts/Fruit/FruitCard/WP_10001	0	0	6	100	500	2	成串成熟的葡萄，宠物非常喜欢。
+7	fruit_kiwi	猕猴桃	true	Arts/Fruit/Fruit/SG_0007_S	Arts/Fruit/FruitCard/WP_10002	0	60	7	100	600	2	口感清爽的猕猴桃。
+8	fruit_wax_apple	莲雾	true	Arts/Fruit/Fruit/SG_0008_S	Arts/Fruit/FruitCard/WP_10006	0	60	8	100	1000	2	外形精致的莲雾。
+9	fruit_lemon	柠檬	true	Arts/Fruit/Fruit/SG_0009_S	Arts/Fruit/FruitCard/WP_10007	0	60	9	100	900	2	酸香醒神的柠檬。
+10	fruit_avocado	牛油果	true	Arts/Fruit/Fruit/SG_0010_S	Arts/Fruit/FruitCard/WP_10008	0	60	10	100	1000	2	营养丰富的牛油果。
+11	fruit_dragon_fruit	火龙果	false	Arts/Fruit/Fruit/SG_0011_S	Arts/Fruit/FruitCard/WP_10009	20000	60	12	100	2000	2	稀有的火龙果。
+12	fruit_peach	仙桃	false	Arts/Fruit/Fruit/SG_0012_S	Arts/Fruit/FruitCard/WP_10011	30000	60	14	100	3000	2	香气浓郁的仙桃。
+13	fruit_cactus_pear	仙人掌果	false	Arts/Fruit/Fruit/SG_0013_S	Arts/Fruit/FruitCard/WP_10012	40000	240	16	100	4000	2	来自仙人掌的珍贵果子。
+14	fruit_cherry	樱桃	false	Arts/Fruit/Fruit/SG_0014_S	Arts/Fruit/FruitCard/WP_10013	50000	240	18	100	5000	2	小巧珍贵的樱桃。
+15	fruit_mango	芒果	false	Arts/Fruit/Fruit/SG_0015_S	Arts/Fruit/FruitCard/WP_10014	60000	240	20	100	6000	2	香甜浓郁的芒果。
+16	fruit_durian	榴莲	false	Arts/Fruit/Fruit/SG_0016_S	Arts/Fruit/FruitCard/WP_10015	70000	240	24	100	7000	2	气味独特的榴莲。
+17	fruit_fig	无花果	false	Arts/Fruit/Fruit/SG_0017_S	Arts/Fruit/FruitCard/WP_10016	100000	240	28	100	10000	2	稀有柔甜的无花果。
+18	fruit_lychee	荔枝	false	Arts/Fruit/Fruit/SG_0018_S	Arts/Fruit/FruitCard/WP_10019	90000	240	32	100	9000	2	晶莹清甜的荔枝。

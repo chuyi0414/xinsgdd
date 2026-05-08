@@ -129,6 +129,7 @@ public sealed partial class CombatUIForm : UIFormLogic
         // 退出拿取状态
         controller?.ExitTakeState();
 
+        ClearPendingResurgenceFailureSettlementState();
         CloseIsExitUIForm();
         CloseEliminateRulesUIForm();
         CloseVictoryFailUIForm();
@@ -140,10 +141,11 @@ public sealed partial class CombatUIForm : UIFormLogic
     }
 
     /// <summary>
-    /// 销毁时移除按钮监听并清理 Punch 动画。
+    /// 销毁时移除按钮监听，清理复活失败结算等待态与 Punch 动画。
     /// </summary>
     private void OnDestroy()
     {
+        ClearPendingResurgenceFailureSettlementState();
         KillEliminateRulesPunchTween();
         KillScoreAnimation();
         if (_btnExit != null)

@@ -42,11 +42,11 @@ MonoBehaviour:
     disableHighPerformanceFallback: 0
     IOSDevicePixelRatio: 0
   SDKOptions:
-    UseFriendRelation: 0
+    UseFriendRelation: 1
     UseCompressedTexture: 0
-    UseMiniGameChat: 0
+    UseMiniGameChat: 1
     PreloadWXFont: 0
-    disableMultiTouch: 0
+    disableMultiTouch: 1
   CompileOptions:
     DevelopBuild: 0
     AutoProfile: 0

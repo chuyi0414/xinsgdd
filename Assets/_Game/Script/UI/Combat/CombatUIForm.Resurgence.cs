@@ -1,3 +1,4 @@
+using GameFramework.Event;
 using UnityGameFramework.Runtime;
 
 /// <summary>
@@ -13,12 +14,38 @@ public sealed partial class CombatUIForm
     private int _resurgenceUIFormId;
 
     /// <summary>
+    /// 当前正在等待打开的失败结算窗数据。
+    /// 用途：作为本次 VictoryFailUIForm 打开请求的唯一匹配锚点，避免误处理其他模块打开的同名界面。
+    /// 初始状态：null，表示当前没有等待中的复活失败结算流程。
+    /// </summary>
+    private VictoryFailUIData _pendingResurgenceFailureSettlementData;
+
+    /// <summary>
+    /// 当前正在等待打开的 VictoryFailUIForm 序列号。
+    /// 用途：记录 OpenUIForm 返回的 SerialId，兼容同步打开和异步加载两种路径。
+    /// 初始状态：0，表示当前没有待跟踪的结果窗实例。
+    /// </summary>
+    private int _pendingResurgenceFailureSettlementFormId;
+
+    /// <summary>
+    /// 当前是否已经订阅 VictoryFailUIForm 打开成功/失败事件。
+    /// 用途：避免重复订阅导致同一次打开回调被处理多次。
+    /// 初始状态：false，表示未订阅。
+    /// </summary>
+    private bool _isListeningResurgenceFailureSettlementOpenEvent;
+
+    /// <summary>
     /// 尝试在失败后执行一次金币复活。
     /// 成功时关闭复活窗，清除失败态，并自动执行一次移出道具效果。
     /// </summary>
     /// <returns>true=复活成功；false=复活失败。</returns>
     internal bool TryReviveAfterFailure()
     {
+        if (_pendingResurgenceFailureSettlementData != null)
+        {
+            return false;
+        }
+
         if (_hasRevivedThisBattle)
         {
             return false;
@@ -65,6 +92,11 @@ public sealed partial class CombatUIForm
     /// <returns>true=复活成功；false=复活失败。</returns>
     internal bool TryReviveAfterFailureByAd()
     {
+        if (_pendingResurgenceFailureSettlementData != null)
+        {
+            return false;
+        }
+
         if (_hasRevivedThisBattle)
         {
             return false;
@@ -89,12 +121,128 @@ public sealed partial class CombatUIForm
     }
 
     /// <summary>
-    /// 复活取消、金币不足或复活执行失败时，收口到失败结算窗。
+    /// 复活取消、金币不足或复活执行失败时，安全收口到失败结算窗。
+    /// 核心原则：先确保 VictoryFailUIForm 真正打开，再关闭 ResurgenceUIForm，避免首次加载结果窗时底层 UI 闪现。
     /// </summary>
     internal void EnterFailureSettlementAfterResurgence()
     {
+        if (GameEntry.UI == null)
+        {
+            CloseResurgenceUIForm();
+            return;
+        }
+
+        if (_pendingResurgenceFailureSettlementData != null)
+        {
+            return;
+        }
+
+        int failScore = 0;
+        EliminateCardController controller = EliminateCardController.Instance;
+        if (controller != null)
+        {
+            failScore = controller.GetCurrentScore();
+        }
+
+        _pendingResurgenceFailureSettlementData = new VictoryFailUIData(false, failScore);
+        SubscribeResurgenceFailureSettlementOpenEvents();
+
+        _pendingResurgenceFailureSettlementFormId = OpenVictoryFailUIForm(false, _pendingResurgenceFailureSettlementData);
+        if (_pendingResurgenceFailureSettlementData == null)
+        {
+            return;
+        }
+
+        if (_pendingResurgenceFailureSettlementFormId <= 0)
+        {
+            ClearPendingResurgenceFailureSettlementState();
+            return;
+        }
+
+        if (GameEntry.UI.HasUIForm(_pendingResurgenceFailureSettlementFormId))
+        {
+            ClearPendingResurgenceFailureSettlementState();
+            CloseResurgenceUIForm();
+        }
+    }
+
+    /// <summary>
+    /// VictoryFailUIForm 打开成功事件回调。
+    /// 只处理当前复活取消流程发起的那一次打开请求。
+    /// </summary>
+    /// <param name="sender">事件发送者。</param>
+    /// <param name="e">GF 事件参数。</param>
+    private void OnOpenResurgenceFailureSettlementSuccess(object sender, GameEventArgs e)
+    {
+        OpenUIFormSuccessEventArgs ne = (OpenUIFormSuccessEventArgs)e;
+        if (_pendingResurgenceFailureSettlementData == null
+            || ne.UIForm == null
+            || !ReferenceEquals(ne.UserData, _pendingResurgenceFailureSettlementData))
+        {
+            return;
+        }
+
+        _pendingResurgenceFailureSettlementFormId = ne.UIForm.SerialId;
+        ClearPendingResurgenceFailureSettlementState();
         CloseResurgenceUIForm();
-        OpenVictoryFailUIForm(isVictory: false);
+    }
+
+    /// <summary>
+    /// VictoryFailUIForm 打开失败事件回调。
+    /// 打开失败时保留 ResurgenceUIForm，避免界面掉到底层战斗 UI。
+    /// </summary>
+    /// <param name="sender">事件发送者。</param>
+    /// <param name="e">GF 事件参数。</param>
+    private void OnOpenResurgenceFailureSettlementFailure(object sender, GameEventArgs e)
+    {
+        OpenUIFormFailureEventArgs ne = (OpenUIFormFailureEventArgs)e;
+        if (_pendingResurgenceFailureSettlementData == null
+            || !ReferenceEquals(ne.UserData, _pendingResurgenceFailureSettlementData))
+        {
+            return;
+        }
+
+        ClearPendingResurgenceFailureSettlementState();
+    }
+
+    /// <summary>
+    /// 订阅失败结算窗打开成功/失败事件。
+    /// </summary>
+    private void SubscribeResurgenceFailureSettlementOpenEvents()
+    {
+        if (_isListeningResurgenceFailureSettlementOpenEvent || GameEntry.Event == null)
+        {
+            return;
+        }
+
+        GameEntry.Event.Subscribe(OpenUIFormSuccessEventArgs.EventId, OnOpenResurgenceFailureSettlementSuccess);
+        GameEntry.Event.Subscribe(OpenUIFormFailureEventArgs.EventId, OnOpenResurgenceFailureSettlementFailure);
+        _isListeningResurgenceFailureSettlementOpenEvent = true;
+    }
+
+    /// <summary>
+    /// 取消订阅失败结算窗打开成功/失败事件。
+    /// </summary>
+    private void UnsubscribeResurgenceFailureSettlementOpenEvents()
+    {
+        if (!_isListeningResurgenceFailureSettlementOpenEvent || GameEntry.Event == null)
+        {
+            return;
+        }
+
+        GameEntry.Event.Unsubscribe(OpenUIFormSuccessEventArgs.EventId, OnOpenResurgenceFailureSettlementSuccess);
+        GameEntry.Event.Unsubscribe(OpenUIFormFailureEventArgs.EventId, OnOpenResurgenceFailureSettlementFailure);
+        _isListeningResurgenceFailureSettlementOpenEvent = false;
+    }
+
+    /// <summary>
+    /// 清理复活取消后等待失败结算窗打开的临时状态。
+    /// </summary>
+    private void ClearPendingResurgenceFailureSettlementState()
+    {
+        UnsubscribeResurgenceFailureSettlementOpenEvents();
+        _pendingResurgenceFailureSettlementData = null;
+        _pendingResurgenceFailureSettlementFormId = 0;
     }
 
     /// <summary>

@@ -576,6 +576,12 @@ public sealed class GameAssetModule
     public event Action PreloadStateChanged;
 
     /// <summary>
+    /// 宠物 SkeletonData 加载状态变化事件。
+    /// 参数为 SkeletonData 资源路径；成功写入缓存或加载失败都会触发，便于正在等待该路径的宠物实体及时刷新或停止等待。
+    /// </summary>
+    public event Action<string> PetSkeletonDataStateChanged;
+
+    /// <summary>
     /// 初始化资源模块并创建统一回调集。
     /// </summary>
     public GameAssetModule()
@@ -673,7 +679,7 @@ public sealed class GameAssetModule
 
         if (!_petPreloadRequested && GameEntry.DataTables.IsAvailable<PetDataRow>())
         {
-            BeginPreloadPetSkeletonDataAssets(GameEntry.DataTables.GetAllDataRows<PetDataRow>());
+            SkipStartupPetSkeletonDataPreload();
         }
 
         if (!_fruitPreloadRequested && GameEntry.DataTables.IsAvailable<FruitDataRow>())
@@ -775,6 +781,60 @@ public sealed class GameAssetModule
         }
 
         return _petSkeletonDataAssetsByPath.TryGetValue(skeletonDataPath, out skeletonDataAsset) && skeletonDataAsset != null;
+    }
+
+    /// <summary>
+    /// 按需请求单只宠物的实体 SkeletonData 资源。
+    /// 启动阶段已经跳过宠物全量预加载，因此蛋孵化出非默认宠物时，需要由实体显示链路按当前 PetDataRow 精准补齐该资源。
+    /// </summary>
+    /// <param name="row">当前宠物表行，初始状态由 PetPlacementModule 抽取结果决定。</param>
+    /// <returns>请求发起前该实体 SkeletonData 是否已经命中缓存。</returns>
+    public bool RequestPetEntitySkeletonDataAsset(PetDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.EntitySkeletonDataPath))
+        {
+            return false;
+        }
+
+        if (_petSkeletonDataAssetsByPath.TryGetValue(row.EntitySkeletonDataPath, out SkeletonDataAsset skeletonDataAsset) && skeletonDataAsset != null)
+        {
+            ValidatePetSkeletonData(row.EntitySkeletonDataPath, skeletonDataAsset);
+            return true;
+        }
+
+        if (!_loadingPetAssetPaths.Contains(row.EntitySkeletonDataPath))
+        {
+            StartLoadPetSkeletonDataPath(row, row.EntitySkeletonDataPath);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 按需请求单只宠物的 UI SkeletonData 资源。
+    /// 启动阶段已经跳过宠物全量预加载，因此宠物图鉴打开时，需要由 PetTJUIForm 按当前可见 PetDataRow 精准补齐该资源。
+    /// </summary>
+    /// <param name="row">当前宠物表行。</param>
+    /// <returns>请求发起前该 UI SkeletonData 是否已经命中缓存。</returns>
+    public bool RequestPetUiSkeletonDataAsset(PetDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.UiSkeletonDataPath))
+        {
+            return false;
+        }
+
+        if (_petSkeletonDataAssetsByPath.TryGetValue(row.UiSkeletonDataPath, out SkeletonDataAsset skeletonDataAsset) && skeletonDataAsset != null)
+        {
+            ValidatePetSkeletonData(row.UiSkeletonDataPath, skeletonDataAsset);
+            return true;
+        }
+
+        if (!_loadingPetAssetPaths.Contains(row.UiSkeletonDataPath))
+        {
+            StartLoadPetSkeletonDataPath(row, row.UiSkeletonDataPath);
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -969,6 +1029,17 @@ public sealed class GameAssetModule
         }
 
         UpdatePreloadCompletionState();
+        NotifyPreloadStateChanged();
+    }
+
+    /// <summary>
+    /// 启动阶段跳过宠物 SkeletonData 预加载。
+    /// LoadUIForm 自身引用到的宠物资源会由 Addressables 依赖链随界面预制体自动加载，这里只负责把宠物预加载门标记为完成，避免 IsReady 永远等待。
+    /// </summary>
+    private void SkipStartupPetSkeletonDataPreload()
+    {
+        _petPreloadRequested = true;
+        _petPreloadCompleted = true;
         NotifyPreloadStateChanged();
     }
 
@@ -1704,6 +1775,7 @@ public sealed class GameAssetModule
             _loadingPetAssetPaths.Remove(loadInfo.AssetPath);
             _pendingPetAssetCount = Mathf.Max(0, _pendingPetAssetCount - 1);
             RegisterFailure(Utility.Text.Format("宠物 SkeletonData 加载失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
+            NotifyPetSkeletonDataStateChanged(loadInfo.AssetPath);
         }
         else if (loadInfo.AssetKind == PreloadAssetKind.FruitSprite)
         {
@@ -1949,11 +2021,28 @@ public sealed class GameAssetModule
         if (skeletonDataAsset == null)
         {
             RegisterFailure(Utility.Text.Format("宠物 SkeletonData 加载失败，资源类型不是 SkeletonDataAsset，Path='{0}'。", skeletonDataPath));
+            NotifyPetSkeletonDataStateChanged(skeletonDataPath);
             return;
         }
 
         _petSkeletonDataAssetsByPath[skeletonDataPath] = skeletonDataAsset;
         ValidatePetSkeletonData(skeletonDataPath, skeletonDataAsset);
+        NotifyPetSkeletonDataStateChanged(skeletonDataPath);
+    }
+
+    /// <summary>
+    /// 通知指定宠物 SkeletonData 路径的加载状态发生变化。
+    /// 这里单独拆出来，避免实体层监听全局 PreloadStateChanged 后被水果、头像、建筑等无关资源完成事件误唤醒。
+    /// </summary>
+    /// <param name="skeletonDataPath">发生变化的 SkeletonData 资源路径。</param>
+    private void NotifyPetSkeletonDataStateChanged(string skeletonDataPath)
+    {
+        if (string.IsNullOrWhiteSpace(skeletonDataPath))
+        {
+            return;
+        }
+
+        PetSkeletonDataStateChanged?.Invoke(skeletonDataPath);
     }
 
     /// <summary>

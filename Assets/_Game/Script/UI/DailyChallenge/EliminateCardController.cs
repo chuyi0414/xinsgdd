@@ -53,7 +53,7 @@ public sealed class EliminateCardController
     private static readonly Vector2[] LegacyDirAnchors = new Vector2[]
     {
         new Vector2(0f, 8.5f),
-        new Vector2(7f, 8.5f),
+        new Vector2(6f, 8.5f),
     };
 
     /// <summary>
@@ -67,7 +67,7 @@ public sealed class EliminateCardController
     /// 口径与 LegacyDirAnchors 一致：col 为逻辑列，row 为逻辑行（正值向下）。
     /// 调整此值即可控制区域 prefab 在棋盘上的位置。
     /// </summary>
-    private static readonly Vector2 EliminateTheAreaAnchor = new Vector2(3.5f, 11.5f);
+    private static readonly Vector2 EliminateTheAreaAnchor = new Vector2(3f, 11.5f);
 
     /// <summary>
     /// 道具置出区锚点定义（col, row）。
@@ -75,7 +75,7 @@ public sealed class EliminateCardController
     /// 口径与 EliminateTheAreaAnchor 一致：col 为逻辑列，row 为逻辑行（正值向下）。
     /// 调整此值即可控制置出区在棋盘上的位置。
     /// </summary>
-    private static readonly Vector2 PropOutputZoneAnchor = new Vector2(2.5f, 8.5f);
+    private static readonly Vector2 PropOutputZoneAnchor = new Vector2(2f, 8.5f);
 
     /// <summary>
     /// 道具卡片飞向置出区的动画时长（秒）。
@@ -92,13 +92,13 @@ public sealed class EliminateCardController
     /// 固定视口的逻辑列跨度。
     /// 主盘 8 列 (0~7) + DIR 两侧各 1 列 (-1, 8) = 10。
     /// </summary>
-    private const float FixedViewportLogicalCols = 10f;
+    private const float FixedViewportLogicalCols = 9f;
 
     /// <summary>
     /// 固定视口的逻辑行跨度。
     /// 主盘 8 行 (0~7) + 间隔 + DIR 行 (9.5) + 半卡上下余量 = 10.5。
     /// </summary>
-    private const float FixedViewportLogicalRows = 12f;
+    private const float FixedViewportLogicalRows = 8f;
 
     /// <summary>
     /// 主区期望使用的基础行数。
@@ -204,8 +204,8 @@ public sealed class EliminateCardController
     private EliminateTheAreaEntityLogic _areaEntityLogic;
 
     /// <summary>
-    /// 当前是否处于失败状态（满格单牌过多）。
-    /// 用于 IsExitUIForm 判断是否应弹出 VictoryFailUIForm(Fail) 而非直接返回。
+    /// 当前是否处于失败状态。
+    /// 普通三消下，当等待区满槽且不存在任意三张同类型可消除组合时置 true。
     /// </summary>
     private bool _hasFailed;
 
@@ -216,15 +216,15 @@ public sealed class EliminateCardController
     public event Action OnVictory;
 
     /// <summary>
-    /// 失败事件：等待区满格且有 2 张以上单牌时触发。
-    /// 由 CombatUIForm 订阅，弹出 VictoryFailUIForm(Fail)。
+    /// 失败事件：等待区满槽且无三消组合时触发。
+    /// 由 CombatUIForm 订阅，优先进入复活分流；无法复活时再弹最终失败界面。
     /// </summary>
     public event Action OnFail;
 
     /// <summary>
-    /// 得分更新事件：每次满格清空结算得分后触发。
+    /// 得分更新事件。
     /// 事件参数为当前累计得分（int）。
-    /// 由 CombatUIForm 订阅，刷新界面上的分数文本。
+    /// 普通三消每次计分或胜利倍率结算后通知 CombatUIForm 刷新分数。
     /// </summary>
     public event Action<int> OnScoreUpdated;
 
@@ -283,28 +283,28 @@ public sealed class EliminateCardController
 
     /// <summary>
     /// 当前累计得分。
-    /// 每次满格清空时累加本轮得分，胜利时乘以翻倍倍率。
+    /// 普通三消模式下，每次三消按“当前基础分 × 被消除卡片数”累加。
     /// </summary>
     private int _currentScore;
 
     /// <summary>
+    /// 当前三消计分轮数。
+    /// 初始状态：1；每完成一次实际三消计分后 +1，用于计算下一轮基础分。
+    /// </summary>
+    private int _currentRound = 1;
+
+    /// <summary>
     /// 当前连击计数。
-    /// 在连击时间窗口内连续满格清空则 +1，失败或超时则重置为 0。
+    /// 当前用于复活奖励 Combo 显示；失败或超时会重置为 0。
     /// </summary>
     private int _comboCount;
 
     /// <summary>
-    /// 上一次满格清空时的实时时间（秒）。
-    /// 用于判断两次清空是否在连击时间窗口内。
-    /// -1f 表示尚未发生过清空。
+    /// 上一次 Combo 时间窗刷新的实时时间（秒）。
+    /// 复活奖励 Combo 会写入该时间，用于驱动 Combo UI 倒计时。
+    /// -1f 表示当前没有有效 Combo 时间窗。
     /// </summary>
     private float _lastSettlementRealTime = -1f;
-
-    /// <summary>
-    /// 当前轮次（从1开始）。
-    /// 每次满格清空结算后 +1，用于计算递增基础分。
-    /// </summary>
-    private int _currentRound = 1;
 
     /// <summary>
     /// 得分配置行缓存。
@@ -313,25 +313,15 @@ public sealed class EliminateCardController
     private DailyChallengeScoreDataRow _scoreConfig;
 
     /// <summary>
-    /// 得分配置默认值：每轮基础分。
-    /// 数据表不可用时回退到此值。
+    /// 得分配置默认值：每张被三消卡片的初始基础分。
+    /// 数据表不可用时回退到 1，保证第一轮三张卡总计 3 分。
     /// </summary>
     private const int DefaultBaseScorePerCard = 1;
-
-    /// <summary>
-    /// 得分配置默认值：同类型 2 张分量分。
-    /// </summary>
-    private const int DefaultSameTypeTwoScorePerCard = 2;
 
     /// <summary>
     /// 得分配置默认值：连击时间窗口（秒）。
     /// </summary>
     private const float DefaultComboWindowSeconds = 12f;
-
-    /// <summary>
-    /// 得分配置默认值：连击倍率。
-    /// </summary>
-    private const float DefaultComboMultiplier = 1f;
 
     /// <summary>
     /// 得分配置默认值：胜利分数翻倍倍率。
@@ -376,13 +366,13 @@ public sealed class EliminateCardController
     /// 预览期间主相机的额外 Y 轴偏移量。
     /// 负值表示“相机向下移动”，这样屏幕里看到的棋盘会整体往上抬
     /// </summary>
-    private float _previewCameraOffsetY = -50f;
+    private float _previewCameraOffsetY = -100f;
 
     /// <summary>
     /// 预览期间仅作用于相机本身的额外 XY 偏移量。
     /// 这个偏移不会参与棋盘世界坐标计算，只改变相机最终取景位置。
     /// </summary>
-    private Vector2 _previewCameraOnlyOffset = new Vector2(0f, -3f);
+    private Vector2 _previewCameraOnlyOffset = new Vector2(0f, -7f);
 
     /// <summary>
     /// 当前绑定的主相机。
@@ -475,9 +465,9 @@ public sealed class EliminateCardController
 
         // ── 重置新一局的运行时状态 ──
         _currentScore = 0;
+        _currentRound = 1;
         _comboCount = 0;
         _lastSettlementRealTime = -1f;
-        _currentRound = 1;
         _scoreConfig = null;
         _hasFailed = false;
         _isTakeState = false;
@@ -509,9 +499,9 @@ public sealed class EliminateCardController
 
         // ── 重置得分/连击状态 ──
         _currentScore = 0;
+        _currentRound = 1;
         _comboCount = 0;
         _lastSettlementRealTime = -1f;
-        _currentRound = 1;
         _scoreConfig = null;
 
         Instance = null;
@@ -1672,13 +1662,13 @@ public sealed class EliminateCardController
         _areaEntityLogic = areaLogic;
         _hasFailed = false;
 
-        // 注入满格结算回调（胜利/继续逻辑）
+        // 注入等待区结算回调（胜利/失败逻辑）
         if (areaLogic != null)
         {
-            areaLogic.OnSettlementScoreCalculation = OnSettlementScoreCalculationHandler;
+            areaLogic.OnCardsEliminated = OnCardsEliminatedHandler;
             areaLogic.OnSettlementCleared = OnSettlementClearedHandler;
             areaLogic.OnSettlementFailed = OnSettlementFailedHandler;
-            areaLogic.OnWaitingAreaLayoutChanged = RefreshWaitingAreaScoreDisplay;
+            RefreshRoundInfoDisplay();
             SyncComboDisplay();
         }
     }
@@ -1693,10 +1683,9 @@ public sealed class EliminateCardController
         if (_areaEntityLogic != null)
         {
             _areaEntityLogic.HideComboDisplay();
-            _areaEntityLogic.OnSettlementScoreCalculation = null;
+            _areaEntityLogic.OnCardsEliminated = null;
             _areaEntityLogic.OnSettlementCleared = null;
             _areaEntityLogic.OnSettlementFailed = null;
-            _areaEntityLogic.OnWaitingAreaLayoutChanged = null;
         }
 
         _areaEntityLogic = null;
@@ -1742,9 +1731,6 @@ public sealed class EliminateCardController
         MarkCardRemovedFromBoard(card, "NormalInsert");
         UpdateBlockingAfterRemoval();
 
-        // ⚠️ 避坑：分数显示刷新不在此时调用！
-        // TryRequestInsert 仅入队操作，快照尚未重建，_snapshotCards 仍为旧值。
-        // 分数刷新由 OnWaitingAreaLayoutChanged 回调在 ExecuteInsertOp 快照重建后触发。
     }
 
     // ───────────── 遮挡重算 ─────────────
@@ -1944,7 +1930,7 @@ public sealed class EliminateCardController
     }
 
     /// <summary>
-    /// 移出道具：优先移出单牌；若单牌不足 3 张，则继续移出数量最少的多牌补足。
+    /// 移出道具：普通三消规则下直接移出等待区显示顺序最前面的最多 3 张卡片。
     /// 卡片飞向置出区后继续存活显示（不回收），加入 _outputZoneCards。
     /// 全部飞完后执行前移补位动画。
     /// </summary>
@@ -1956,19 +1942,8 @@ public sealed class EliminateCardController
             return false;
         }
 
-        List<EliminateCardEntityLogic> displayedWaitingCards = _areaEntityLogic.GetDisplayedWaitingAreaCardsSnapshot();
-        if (displayedWaitingCards == null || displayedWaitingCards.Count <= 0)
-        {
-            return false;
-        }
-
-        List<EliminateCardEntityLogic> shiftOutTargets = SelectShiftOutTargets(displayedWaitingCards, 3);
-        if (shiftOutTargets == null || shiftOutTargets.Count <= 0)
-        {
-            return false;
-        }
-
-        List<EliminateCardEntityLogic> detachedCards = _areaEntityLogic.DetachSpecificCardsFromWaitingArea(shiftOutTargets);
+        // 普通三消没有“单牌优先/最少多牌组”策略，移出道具只按当前等待区顺序取前 3 张。
+        List<EliminateCardEntityLogic> detachedCards = _areaEntityLogic.DetachCardsFromWaitingArea(3);
         if (detachedCards == null || detachedCards.Count <= 0)
         {
             return false;
@@ -2022,115 +1997,6 @@ public sealed class EliminateCardController
         }
 
         return true;
-    }
-
-    /// <summary>
-    /// 根据移出道具规则，从当前等待区显示顺序中选出要移出的目标卡片。
-    /// 规则：
-    /// 1. 先取所有单牌；
-    /// 2. 若单牌不足上限，则继续取“数量最少”的多牌补足；
-    /// 3. 若候选总数超过上限，则按当前显示顺序截取前 maxSelectionCount 张。
-    /// </summary>
-    /// <param name="displayedWaitingCards">当前等待区按显示顺序排列的卡片列表。</param>
-    /// <param name="maxSelectionCount">最多选中的卡片数量。</param>
-    /// <returns>按最终移出顺序排列的目标卡片列表。</returns>
-    private static List<EliminateCardEntityLogic> SelectShiftOutTargets(
-        List<EliminateCardEntityLogic> displayedWaitingCards,
-        int maxSelectionCount)
-    {
-        int candidateCapacity = displayedWaitingCards != null
-            ? Mathf.Min(maxSelectionCount, displayedWaitingCards.Count)
-            : 0;
-        List<EliminateCardEntityLogic> result = new List<EliminateCardEntityLogic>(candidateCapacity);
-
-        if (displayedWaitingCards == null || displayedWaitingCards.Count <= 0 || maxSelectionCount <= 0)
-        {
-            return result;
-        }
-
-        // 先统计当前等待区里每个 TypeId 的数量。
-        // ⚠️ 这里的数量统计必须基于“当前显示快照”对应的同一批卡片，
-        // 否则会出现单牌/多牌判断与当前界面不一致的问题。
-        Dictionary<int, int> typeCounts = new Dictionary<int, int>(displayedWaitingCards.Count);
-        for (int i = 0; i < displayedWaitingCards.Count; i++)
-        {
-            EliminateCardEntityLogic card = displayedWaitingCards[i];
-            if (card == null)
-            {
-                continue;
-            }
-
-            int count = 0;
-            typeCounts.TryGetValue(card.TypeId, out count);
-            typeCounts[card.TypeId] = count + 1;
-        }
-
-        // 第一步：先找出“最少多牌”的数量阈值。
-        // 单牌会在下一步优先吃掉；如果单牌不足 3 张，再从这里补足。
-        int minMultiCount = int.MaxValue;
-        foreach (KeyValuePair<int, int> pair in typeCounts)
-        {
-            if (pair.Value >= 2 && pair.Value < minMultiCount)
-            {
-                minMultiCount = pair.Value;
-            }
-        }
-
-        // 第二步：严格按显示顺序优先收集所有单牌。
-        for (int i = 0; i < displayedWaitingCards.Count; i++)
-        {
-            EliminateCardEntityLogic card = displayedWaitingCards[i];
-            if (card == null)
-            {
-                continue;
-            }
-
-            int sameTypeCount = 0;
-            if (!typeCounts.TryGetValue(card.TypeId, out sameTypeCount) || sameTypeCount != 1)
-            {
-                continue;
-            }
-
-            result.Add(card);
-            if (result.Count >= maxSelectionCount)
-            {
-                return result;
-            }
-        }
-
-        // 第三步：若单牌不足上限，再从“数量最少”的多牌组中按显示顺序补足。
-        if (minMultiCount == int.MaxValue)
-        {
-            return result;
-        }
-
-        for (int i = 0; i < displayedWaitingCards.Count; i++)
-        {
-            EliminateCardEntityLogic card = displayedWaitingCards[i];
-            if (card == null)
-            {
-                continue;
-            }
-
-            int sameTypeCount = 0;
-            if (!typeCounts.TryGetValue(card.TypeId, out sameTypeCount))
-            {
-                continue;
-            }
-
-            if (sameTypeCount != minMultiCount)
-            {
-                continue;
-            }
-
-            result.Add(card);
-            if (result.Count >= maxSelectionCount)
-            {
-                break;
-            }
-        }
-
-        return result;
     }
 
     /// <summary>
@@ -2420,10 +2286,10 @@ public sealed class EliminateCardController
     }
 
     /// <summary>
-    /// 计算当前连击窗口的剩余秒数。
-    /// 基于上一次满格清空时刻与连击窗口总时长，算出还剩多少时间。
+    /// 计算当前 Combo 时间窗的剩余秒数。
+    /// 基于上一次 Combo 时间窗刷新时刻与窗口总时长，算出 UI 滑条还剩多少时间。
     /// </summary>
-    /// <param name="comboWindow">连击窗口总时长（秒）。</param>
+    /// <param name="comboWindow">Combo 时间窗总时长（秒）。</param>
     /// <returns>剩余秒数；若连击数不足或窗口非法则返回 0。</returns>
     private float GetComboRemainingSeconds(float comboWindow)
     {
@@ -2436,180 +2302,7 @@ public sealed class EliminateCardController
         return remaining > 0f ? remaining : 0f;
     }
 
-    // ───────────── 等待区分数显示 ─────────────
-
-    /// <summary>
-    /// 刷新等待区每个槽位的分数显示。
-    /// 计算当前单卡总分，然后通知 EliminateTheAreaEntityLogic 更新每个槽位的渲染器。
-    /// </summary>
-    private void RefreshWaitingAreaScoreDisplay()
-    {
-        if (_areaEntityLogic == null)
-        {
-            return;
-        }
-
-        int perCardScore = CalculateCurrentPerCardScore();
-        _areaEntityLogic.RefreshScoreDisplay(perCardScore);
-
-        // ── 同步刷新轮数/基础分信息文本 ──
-        DailyChallengeScoreDataRow config = GetScoreConfig();
-        int baseScore = config != null
-            ? config.GetBaseScorePerRound(_currentRound)
-            : DefaultBaseScorePerCard;
-        _areaEntityLogic.RefreshRoundInfoDisplay(_currentRound, baseScore);
-    }
-
-    /// <summary>
-    /// 计算当前等待区的单卡总分（不乘卡片总数）。
-    /// 与 CalculateSettlementScore 的前半段逻辑一致，但只返回 perCardScore。
-    /// 用于实时显示每个槽位卡牌的分数。
-    /// </summary>
-    /// <returns>单卡总分；无可计分组合时返回 0。</returns>
-    private int CalculateCurrentPerCardScore()
-    {
-        if (_areaEntityLogic == null)
-        {
-            return 0;
-        }
-
-        // 统计等待区中各 TypeId 出现次数
-        Dictionary<int, int> typeCounts = new Dictionary<int, int>(8);
-        foreach (var kvp in _cardLogics)
-        {
-            EliminateCardEntityLogic card = kvp.Value;
-            if (card == null || card.CurrentArea != CardArea.WaitingArea)
-            {
-                continue;
-            }
-
-            int typeId = card.TypeId;
-            if (!typeCounts.ContainsKey(typeId))
-            {
-                typeCounts[typeId] = 0;
-            }
-            typeCounts[typeId]++;
-        }
-
-        // 计算分量分叠加
-        DailyChallengeScoreDataRow config = GetScoreConfig();
-        int componentStack = 0;
-        bool hasScoringCombo = false;
-        foreach (var pair in typeCounts)
-        {
-            int sameTypeCount = pair.Value;
-            if (sameTypeCount <= 1)
-            {
-                continue;
-            }
-
-            hasScoringCombo = true;
-            int componentScore = config != null
-                ? config.GetComponentScore(sameTypeCount)
-                : GetDefaultComponentScore(sameTypeCount);
-            componentStack += Mathf.Max(0, componentScore);
-        }
-
-        // 无可计分组合时返回 0
-        if (!hasScoringCombo)
-        {
-            return 0;
-        }
-
-        // 每轮叠加一次基础分（随轮次递增）
-        int baseOnce = config != null
-            ? config.GetBaseScorePerRound(_currentRound)
-            : DefaultBaseScorePerCard;
-
-        // 单卡总分 = componentStack + baseOnce
-        return Mathf.Max(0, componentStack + baseOnce);
-    }
-
     // ───────────── 得分与连击：内部计算 ─────────────
-
-    /// <summary>
-    /// 计算本次满格清空的得分。
-    /// 对齐参考项目 xinpgdd 的计分模型：
-    /// 1. 统计等待区中各 TypeId 的出现次数；
-    /// 2. 同类型 ≥2 张时，计算该类型的分量分（GetComponentScore）；
-    /// 3. 单牌类型（=1 张）不参与叠加分；
-    /// 4. 所有同类型≥2 的分量分累加 = componentStack；
-    /// 5. 每轮叠加一次基础分 = baseOnce（随轮次递增）；
-    /// 6. 单卡总分 = componentStack + baseOnce；
-    /// 7. 本轮得分 = 单卡总分 × 等待区卡片总数。
-    /// </summary>
-    /// <returns>本轮清空得分。</returns>
-    private int CalculateSettlementScore()
-    {
-        if (_areaEntityLogic == null)
-        {
-            return 0;
-        }
-
-        // 统计等待区中各 TypeId 出现次数
-        // ⚠️ 避坑：此方法在 OnSettlementScoreCalculation 回调中调用，
-        // 此时卡片尚未被回收，CardArea=WaitingArea，TypeId 可读。
-        Dictionary<int, int> typeCounts = new Dictionary<int, int>(8);
-        int scoredCardCount = 0;
-        foreach (var kvp in _cardLogics)
-        {
-            EliminateCardEntityLogic card = kvp.Value;
-            if (card == null || card.CurrentArea != CardArea.WaitingArea)
-            {
-                continue;
-            }
-
-            scoredCardCount++;
-            int typeId = card.TypeId;
-            if (!typeCounts.ContainsKey(typeId))
-            {
-                typeCounts[typeId] = 0;
-            }
-            typeCounts[typeId]++;
-        }
-
-        if (scoredCardCount <= 0)
-        {
-            return 0;
-        }
-
-        // 计算分量分叠加
-        DailyChallengeScoreDataRow config = GetScoreConfig();
-        int componentStack = 0;
-        bool hasScoringCombo = false;
-        foreach (var pair in typeCounts)
-        {
-            int sameTypeCount = pair.Value;
-            if (sameTypeCount <= 1)
-            {
-                // 单牌类型不参与叠加分
-                continue;
-            }
-
-            hasScoringCombo = true;
-            int componentScore = config != null
-                ? config.GetComponentScore(sameTypeCount)
-                : GetDefaultComponentScore(sameTypeCount);
-            componentStack += Mathf.Max(0, componentScore);
-        }
-
-        // 无可计分组合时返回 0
-        if (!hasScoringCombo)
-        {
-            return 0;
-        }
-
-        // 每轮叠加一次基础分（随轮次递增）
-        int baseOnce = config != null
-            ? config.GetBaseScorePerRound(_currentRound)
-            : DefaultBaseScorePerCard;
-
-        // 单卡总分 = componentStack + baseOnce
-        int perCardScore = Mathf.Max(0, componentStack + baseOnce);
-
-        // 本轮得分 = 单卡总分 × 卡片总数
-        return Mathf.Max(0, perCardScore * scoredCardCount);
-    }
 
     /// <summary>
     /// 获取得分配置行。
@@ -2641,29 +2334,6 @@ public sealed class EliminateCardController
     }
 
     /// <summary>
-    /// 数据表不可用时，使用硬编码默认值计算分量分。
-    /// 对齐 xinpgdd：1张返回0，2张返回1，3+统一按1处理。
-    /// </summary>
-    /// <param name="sameTypeCount">同类型卡片数量。</param>
-    /// <returns>分量分默认值。</returns>
-    private static int GetDefaultComponentScore(int sameTypeCount)
-    {
-        if (sameTypeCount <= 1)
-        {
-            return 0;
-        }
-
-        if (sameTypeCount == 2)
-        {
-            return DefaultSameTypeTwoScorePerCard;
-        }
-
-        // ⚠️ 避坑：默认值不含 3~8 张的阶梯分量分，统一按 2 张分值处理。
-        // 若需完整阶梯分，必须配置数据表。
-        return DefaultSameTypeTwoScorePerCard;
-    }
-
-    /// <summary>
     /// 获取连击时间窗口（秒）。
     /// 优先从得分配置表读取，若配置缺失则使用默认值 DefaultComboWindowSeconds。
     /// </summary>
@@ -2672,16 +2342,6 @@ public sealed class EliminateCardController
     {
         DailyChallengeScoreDataRow config = GetScoreConfig();
         return config != null ? config.ComboWindowSeconds : DefaultComboWindowSeconds;
-    }
-
-    /// <summary>
-    /// 获取连击倍率。
-    /// </summary>
-    /// <returns>连击倍率。</returns>
-    private float GetComboMultiplier()
-    {
-        DailyChallengeScoreDataRow config = GetScoreConfig();
-        return config != null ? config.ComboMultiplier : DefaultComboMultiplier;
     }
 
     /// <summary>
@@ -2694,85 +2354,89 @@ public sealed class EliminateCardController
         return config != null ? config.VictoryScoreMultiplier : DefaultVictoryScoreMultiplier;
     }
 
-    // ───────────── 满格结算回调 ─────────────
-
     /// <summary>
-    /// 满格清空得分计算回调。
-    /// 由 EliminateTheAreaEntityLogic 的 OnSettlementScoreCalculation 触发，
-    /// 在清空动画开始前调用，此时等待区卡片仍完整存在（CardArea=WaitingArea）。
-    /// 流程：计算本轮得分 → 连击判定 → 累加分数 → 通知 UI。
+    /// 获取当前轮每张三消卡片的基础分。
     /// </summary>
-    public void OnSettlementScoreCalculationHandler()
+    /// <returns>当前基础分；配置缺失时返回默认基础分。</returns>
+    private int GetCurrentBaseScore()
     {
-        // ── 计算本轮得分并累加 ──
-        int roundScore = CalculateSettlementScore();
-
-        // ── 连击判定 ──
-        // 在连击时间窗口内连续清空，combo +1
-        float now = Time.unscaledTime;
-        float comboWindow = GetComboWindowSeconds();
-        if (_lastSettlementRealTime > 0f && (now - _lastSettlementRealTime) <= comboWindow)
-        {
-            _comboCount++;
-        }
-        else
-        {
-            // 超出窗口，连击重新从 1 开始
-            _comboCount = 1;
-        }
-
-        _lastSettlementRealTime = now;
-
-        // ── 连击倍率加成 ──
-        // 对齐 xinpgdd：连击数=1 时固定1倍；连击数≥2 时，倍率因子 = 连击数 × comboMultiplier
-        float comboMultiplier = GetComboMultiplier();
-        float factor = _comboCount <= 1
-            ? 1f
-            : _comboCount * comboMultiplier;
-        roundScore = Mathf.RoundToInt(roundScore * factor);
-        roundScore = Mathf.Max(0, roundScore);
-
-        // ── 累加分数 ──
-        _currentScore += roundScore;
-
-        // ── 通知 UI 刷新 ──
-        OnScoreUpdated?.Invoke(_currentScore);
-        SyncComboDisplay();
-
-        // ── 推进轮次 ──
-        // 对齐 xinpgdd：每次有效结算后推进轮次，供"当前轮数/动态基础分"计算读取。
-        _currentRound++;
+        DailyChallengeScoreDataRow config = GetScoreConfig();
+        return config != null ? config.GetBaseScorePerRound(_currentRound) : DefaultBaseScorePerCard;
     }
 
     /// <summary>
-    /// 满格结算清空后的回调处理。
+    /// 将当前轮数和基础分同步到等待区实体显示。
+    /// </summary>
+    private void RefreshRoundInfoDisplay()
+    {
+        if (_areaEntityLogic == null)
+        {
+            return;
+        }
+
+        _areaEntityLogic.RefreshRoundInfoDisplay(_currentRound, GetCurrentBaseScore());
+    }
+
+    /// <summary>
+    /// 三消计分回调。
+    /// 每组三张卡按“当前基础分 × 3”累加分数，然后轮数 +1、连击 +1 并刷新 UI。
+    /// </summary>
+    /// <param name="eliminatedCardCount">本次被三消移除的卡片数量。</param>
+    private void OnCardsEliminatedHandler(int eliminatedCardCount)
+    {
+        if (eliminatedCardCount <= 0)
+        {
+            return;
+        }
+
+        int remainingCount = eliminatedCardCount;
+        float now = Time.unscaledTime;
+        float comboWindow = GetComboWindowSeconds();
+        bool isWithinComboWindow = _comboCount > 0
+            && _lastSettlementRealTime >= 0f
+            && comboWindow > 0f
+            && now - _lastSettlementRealTime <= comboWindow;
+
+        if (!isWithinComboWindow)
+        {
+            _comboCount = 0;
+        }
+
+        while (remainingCount > 0)
+        {
+            int scoringCardCount = Mathf.Min(3, remainingCount);
+            int baseScore = GetCurrentBaseScore();
+            _currentScore += baseScore * scoringCardCount;
+            _currentRound++;
+            _comboCount++;
+            remainingCount -= scoringCardCount;
+        }
+
+        _lastSettlementRealTime = now;
+        OnScoreUpdated?.Invoke(_currentScore);
+
+        RefreshRoundInfoDisplay();
+        SyncComboDisplay();
+    }
+
+    /// <summary>
+    /// 三消清除后的回调处理。
     /// 由 EliminateTheAreaEntityLogic 的 OnSettlementCleared 触发，
-    /// 在清空动画结束后调用（卡片已被回收）。
-    /// 流程：遮挡重算 → 胜利判定 → 自动入槽。
+    /// 在等待区数据层完成移除后调用，不等待消除特效或补位动画播放结束。
+    /// 流程：遮挡重算 → 胜利判定。
     /// </summary>
     public void OnSettlementClearedHandler()
     {
-        // ── 结算清空后重置分数显示为 0，并同步刷新轮数/基础分信息 ──
-        if (_areaEntityLogic != null)
-        {
-            _areaEntityLogic.ClearScoreDisplay();
-
-            // 此时 _currentRound 已在 OnSettlementScoreCalculationHandler 中 +1
-            DailyChallengeScoreDataRow config = GetScoreConfig();
-            int baseScore = config != null
-                ? config.GetBaseScorePerRound(_currentRound)
-                : DefaultBaseScorePerCard;
-            _areaEntityLogic.RefreshRoundInfoDisplay(_currentRound, baseScore);
-        }
-
-        // 结算清空后重算遮挡
+        // 三消移除后棋盘可能露出下层卡，必须立刻重算遮挡，避免玩家看到卡已露出但仍不可点。
         UpdateBlockingAfterRemoval();
 
         // ── 每日一关胜利判定 ──
-        // 清空后若棋盘上已无剩余卡片，则判定为胜利
-        if (GetRemainingBoardCardCount() <= 0)
+        // 清空后若棋盘、等待区、置出区都没有剩余卡片，则判定为胜利
+        if (GetRemainingBoardCardCount() <= 0
+            && (_areaEntityLogic == null || _areaEntityLogic.CurrentCardCount <= 0)
+            && _outputZoneCards.Count <= 0)
         {
-            // 胜利时分数翻倍
+            // 胜利时仍保留数据表配置的结算倍率，直接作用于当前累计总分。
             int victoryMultiplier = GetVictoryScoreMultiplier();
             if (victoryMultiplier > 1)
             {
@@ -2783,15 +2447,12 @@ public sealed class EliminateCardController
             OnVictory?.Invoke();
             return;
         }
-
-        // 检查是否需要自动入槽：若剩余棋盘卡 <= 等待区容量，自动依次入槽
-        TryAutoInsertRemainingCards();
     }
 
     /// <summary>
-    /// 满格失败回调处理。
+    /// 满槽失败回调处理。
     /// 由 EliminateTheAreaEntityLogic 的 OnSettlementFailed 触发。
-    /// 标记失败状态、重置连击、通知 UI 弹出 VictoryFailUIForm(Fail)。
+    /// 标记失败状态、重置连击，并通知 UI 进入复活/失败分流。
     /// </summary>
     public void OnSettlementFailedHandler()
     {
@@ -2801,12 +2462,7 @@ public sealed class EliminateCardController
         _comboCount = 0;
         SyncComboDisplay();
 
-        // ── 失败时清空分数显示 ──
-        if (_areaEntityLogic != null)
-        {
-            _areaEntityLogic.ClearScoreDisplay();
-        }
-
+        // 失败事件由 CombatUIForm 接管，外层会优先进入复活分流，而不是这里直接弹最终失败。
         OnFail?.Invoke();
     }
 
@@ -2817,87 +2473,23 @@ public sealed class EliminateCardController
     /// <returns>true=恢复成功；false=恢复失败。</returns>
     public bool TryRecoverFromFailedStateByShiftOut()
     {
+        // 复活成功后复用移出道具的真实效果，确保恢复逻辑和玩家主动使用移出道具完全一致。
         if (!PropShiftOut())
         {
             return false;
         }
 
+        // 只有移出确实成功，才清掉失败态；否则复活分流会继续走失败 UI。
         _hasFailed = false;
         return true;
     }
 
     /// <summary>
     /// 当前是否处于失败状态。
-    /// 供 IsExitUIForm 判断：失败时弹出 VictoryFailUIForm(Fail) 而非直接返回 DailyChallengeUIForm。
+    /// 供外部 UI 判断当前是否已进入失败流程。
     /// </summary>
     /// <returns>true=已失败；false=未失败。</returns>
     public bool HasFailedState() => _hasFailed;
-
-    /// <summary>
-    /// 尝试自动入槽：当剩余棋盘卡数量 <= 等待区容量时，
-    /// 自动将所有未遮挡的卡片依次插入等待区。
-    /// </summary>
-    private void TryAutoInsertRemainingCards()
-    {
-        if (_areaEntityLogic == null || _areaEntityLogic.IsFull)
-        {
-            return;
-        }
-
-        int remainingCount = GetRemainingBoardCardCount();
-        if (remainingCount <= 0)
-        {
-            return;
-        }
-
-        // 剩余卡 <= 等待区剩余容量，自动入槽
-        int availableSlots = _areaEntityLogic.MaxCardCount - _areaEntityLogic.CurrentCardCount;
-        if (remainingCount > availableSlots)
-        {
-            return;
-        }
-
-        // 收集所有未移除且未遮挡的卡片，按层级从低到高排序
-        List<EliminateCardEntityLogic> autoInsertCards = new List<EliminateCardEntityLogic>();
-        foreach (var kvp in _cardLogics)
-        {
-            EliminateCardEntityLogic card = kvp.Value;
-            if (card == null || card.CurrentArea == CardArea.WaitingArea || card.IsBlocked)
-            {
-                continue;
-            }
-
-            autoInsertCards.Add(card);
-        }
-
-        // 按层级从低到高排序（低层先入槽，与手动点击顺序一致）
-        autoInsertCards.Sort((a, b) =>
-        {
-            // 通过布局索引在缓存中找到层级
-            int layerA = GetLayerIndexFromLayoutIndex(a.LayoutIndex);
-            int layerB = GetLayerIndexFromLayoutIndex(b.LayoutIndex);
-            if (layerA != layerB) return layerA - layerB;
-            return a.LayoutIndex - b.LayoutIndex;
-        });
-
-        // 依次自动入槽
-        for (int i = 0; i < autoInsertCards.Count; i++)
-        {
-            if (_areaEntityLogic.IsFull)
-            {
-                break;
-            }
-
-            EliminateCardEntityLogic card = autoInsertCards[i];
-            if (_areaEntityLogic.TryRequestInsert(card))
-            {
-                MarkCardRemovedFromBoard(card, "AutoInsert");
-            }
-        }
-
-        // 更新遮挡
-        UpdateBlockingAfterRemoval();
-    }
 
     /// <summary>
     /// 获取当前棋盘上剩余可点击的卡片数量。
@@ -2917,27 +2509,6 @@ public sealed class EliminateCardController
         }
 
         return count;
-    }
-
-    /// <summary>
-    /// 通过布局索引查找对应的层级索引。
-    /// </summary>
-    private int GetLayerIndexFromLayoutIndex(int layoutIndex)
-    {
-        if (_cachedLogicalCards == null)
-        {
-            return 0;
-        }
-
-        for (int i = 0; i < _cachedLogicalCards.Count; i++)
-        {
-            if (_cachedLogicalCards[i].LayoutIndex == layoutIndex)
-            {
-                return _cachedLogicalCards[i].LayerIndex;
-            }
-        }
-
-        return 0;
     }
 
     /// <summary>

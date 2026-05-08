@@ -89,6 +89,9 @@ public class ShuiGuoTJUIForm : UIFormLogic
         /// <summary>详情面板中的宠物回馈金币文本，用于显示“宠物会回馈 金币+xxx”。</summary>
         public TextMeshProUGUI TxtPetFeedbackGold;
 
+        /// <summary>详情面板中的解锁星星条件文本，用于显示“解锁条件 星星X个”。</summary>
+        public TextMeshProUGUI TxtRequiredStars;
+
         /// <summary>详情面板中的解锁金币文本，用于显示“需要xxxxxxxx金币解锁”。</summary>
         public TextMeshProUGUI TxtUnlockGold;
 
@@ -113,6 +116,12 @@ public class ShuiGuoTJUIForm : UIFormLogic
     /// 这里的金币数来自 FruitDataRow.CoinAmount，对应水果表 CoinAmount 列。
     /// </summary>
     private const string DetailPetFeedbackGoldFormat = "！宠物会回馈\t金币+{0}";
+
+    /// <summary>
+    /// 解锁星星条件文本格式。
+    /// RequiredStars 大于 0 时显示 FruitDataRow.RequiredStars。
+    /// </summary>
+    private const string DetailRequiredStarsFormat = "！解锁条件\t星星{0}个";
 
     /// <summary>
     /// 解锁金币文本格式。
@@ -202,6 +211,12 @@ public class ShuiGuoTJUIForm : UIFormLogic
     /// </summary>
     [SerializeField]
     private TextMeshProUGUI _txtParticularsPetFeedbackGold;
+
+    /// <summary>
+    /// 详情面板解锁星星条件文本，对应现有 TxtParticulars (3) 节点。
+    /// </summary>
+    [SerializeField]
+    private TextMeshProUGUI _txtParticularsRequiredStars;
 
     /// <summary>
     /// 详情面板解锁金币文本，对应现有 TxtParticulars (4) 节点。
@@ -376,6 +391,9 @@ public class ShuiGuoTJUIForm : UIFormLogic
         _detailView.TxtPetFeedbackGold = _txtParticularsPetFeedbackGold != null
             ? _txtParticularsPetFeedbackGold
             : GetChildComponent<TextMeshProUGUI>(rootTransform, "TxtParticulars (2)");
+        _detailView.TxtRequiredStars = _txtParticularsRequiredStars != null
+            ? _txtParticularsRequiredStars
+            : GetChildComponent<TextMeshProUGUI>(rootTransform, "TxtParticulars (3)");
         _detailView.TxtUnlockGold = _txtParticularsUnlockGold != null
             ? _txtParticularsUnlockGold
             : GetChildComponent<TextMeshProUGUI>(rootTransform, "TxtParticulars (4)");
@@ -617,8 +635,8 @@ public class ShuiGuoTJUIForm : UIFormLogic
             return;
         }
 
-        // 调用原子购买接口：校验数据行 → 校验未解锁 → 校验金币 → 扣金币 → 解锁
-        if (GameEntry.Fruits.TryPurchaseFruit(entry.DataRow.Code))
+        // 调用原子购买接口：校验数据行 → 校验未解锁 → 校验星星 → 校验金币 → 扣金币 → 解锁
+        if (GameEntry.Fruits.TryPurchaseFruit(entry.DataRow.Code, out PlayerRuntimeModule.FruitPurchaseFailureReason failureReason))
         {
             ToastUtility.Show("解锁成功");
             RefreshItem(entry);
@@ -629,7 +647,20 @@ public class ShuiGuoTJUIForm : UIFormLogic
         }
         else
         {
-            ToastUtility.Show("金币不足");
+            switch (failureReason)
+            {
+                case PlayerRuntimeModule.FruitPurchaseFailureReason.NotEnoughStars:
+                    ToastUtility.Show("星星不足");
+                    break;
+
+                case PlayerRuntimeModule.FruitPurchaseFailureReason.NotEnoughGold:
+                    ToastUtility.Show("金币不足");
+                    break;
+
+                default:
+                    ToastUtility.Show("解锁失败");
+                    break;
+            }
         }
     }
 
@@ -732,6 +763,20 @@ public class ShuiGuoTJUIForm : UIFormLogic
         if (_detailView.TxtPetFeedbackGold != null)
         {
             _detailView.TxtPetFeedbackGold.SetText(DetailPetFeedbackGoldFormat, row.CoinAmount);
+        }
+
+        if (_detailView.TxtRequiredStars != null)
+        {
+            bool shouldShowRequiredStars = row.RequiredStars > 0;
+            if (_detailView.TxtRequiredStars.gameObject.activeSelf != shouldShowRequiredStars)
+            {
+                _detailView.TxtRequiredStars.gameObject.SetActive(shouldShowRequiredStars);
+            }
+
+            if (shouldShowRequiredStars)
+            {
+                _detailView.TxtRequiredStars.SetText(DetailRequiredStarsFormat, row.RequiredStars);
+            }
         }
 
         if (_detailView.TxtUnlockGold != null)

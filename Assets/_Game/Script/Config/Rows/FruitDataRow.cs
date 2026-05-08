@@ -14,9 +14,9 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 数据表固定列数。
-    /// 当前 Fruit.txt 结构为：Id、Code、Name、IsUnlocked、IconPath、DailyChallengePath、UnlockGold、RewardStars、CoinProbability、CoinAmount、ProduceSeconds、Description。
+    /// 当前 Fruit.txt 结构为：Id、Code、Name、IsUnlocked、IconPath、DailyChallengePath、UnlockGold、RequiredStars、RewardStars、CoinProbability、CoinAmount、ProduceSeconds、Description。
     /// </summary>
-    private const int ColumnCount = 12;
+    private const int ColumnCount = 13;
 
     /// <summary>
     /// 合法水果 Code 的前缀。
@@ -73,6 +73,12 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
     /// 解锁所需金币。
     /// </summary>
     public int UnlockGold { get; private set; }
+
+    /// <summary>
+    /// 解锁所需星星。
+    /// 仅作为阈值校验，不会被消耗；0 表示无星星限制。
+    /// </summary>
+    public int RequiredStars { get; private set; }
 
     /// <summary>
     /// 首次解锁该水果时发放给玩家的星星。
@@ -178,35 +184,41 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
         // 未解锁水果允许 UnlockGold = 0：表示免费解锁（玩家点按钮即可拿到，仍按 RewardStars 发星）。
         // > 0 走金币购买路径；< 0 已在前面 columns[6] 解析时被挡掉，这里无需再防御。
 
-        // [7] RewardStars — 允许 0（不发星）但禁止负数。
+        if (!int.TryParse(columns[7], out int requiredStars) || requiredStars < 0)
+        {
+            Log.Warning("FruitDataRow parse failed because RequiredStars '{0}' is invalid, code '{1}'.", columns[7], code);
+            return false;
+        }
+
+        // [8] RewardStars — 允许 0（不发星）但禁止负数。
         // 仅在 TryUnlockFruit（金币购买/未来看广告等运行时解锁）成功首解时才会调 AddStars 发放；
         // 默认解锁(IsUnlocked=true)的水果走 InitializeFruitCatalog 的"只入集合不发星"路径，
         // 此处即使填非 0 也不会被消费——字段保留是为日后"账号首登一次性奖励"等持久化路径预留。
-        if (!int.TryParse(columns[7], out int rewardStars) || rewardStars < 0)
+        if (!int.TryParse(columns[8], out int rewardStars) || rewardStars < 0)
         {
-            Log.Warning("FruitDataRow parse failed because RewardStars '{0}' is invalid, code '{1}'.", columns[7], code);
+            Log.Warning("FruitDataRow parse failed because RewardStars '{0}' is invalid, code '{1}'.", columns[8], code);
             return false;
         }
 
-        if (!int.TryParse(columns[8], out int coinProbability) || coinProbability < 0 || coinProbability > 100)
+        if (!int.TryParse(columns[9], out int coinProbability) || coinProbability < 0 || coinProbability > 100)
         {
-            Log.Warning("FruitDataRow parse failed because CoinProbability '{0}' is invalid, code '{1}'.", columns[8], code);
+            Log.Warning("FruitDataRow parse failed because CoinProbability '{0}' is invalid, code '{1}'.", columns[9], code);
             return false;
         }
 
-        if (!int.TryParse(columns[9], out int coinAmount) || coinAmount <= 0)
+        if (!int.TryParse(columns[10], out int coinAmount) || coinAmount <= 0)
         {
-            Log.Warning("FruitDataRow parse failed because CoinAmount '{0}' is invalid, code '{1}'.", columns[9], code);
+            Log.Warning("FruitDataRow parse failed because CoinAmount '{0}' is invalid, code '{1}'.", columns[10], code);
             return false;
         }
 
-        if (!int.TryParse(columns[10], out int produceSeconds) || produceSeconds <= 0)
+        if (!int.TryParse(columns[11], out int produceSeconds) || produceSeconds <= 0)
         {
-            Log.Warning("FruitDataRow parse failed because ProduceSeconds '{0}' is invalid, code '{1}'.", columns[10], code);
+            Log.Warning("FruitDataRow parse failed because ProduceSeconds '{0}' is invalid, code '{1}'.", columns[11], code);
             return false;
         }
 
-        string description = columns[11].Trim();
+        string description = columns[12].Trim();
         if (string.IsNullOrWhiteSpace(description))
         {
             Log.Warning("FruitDataRow parse failed because Description is empty, code '{0}'.", code);
@@ -220,6 +232,7 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
         IconPath = iconPath;
         DailyChallengePath = dailyChallengePath;
         UnlockGold = unlockGold;
+        RequiredStars = requiredStars;
         RewardStars = rewardStars;
         CoinProbability = coinProbability;
         CoinAmount = coinAmount;

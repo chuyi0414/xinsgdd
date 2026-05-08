@@ -90,6 +90,33 @@ public sealed partial class PlayerRuntimeModule
     }
 
     /// <summary>
+    /// 水果购买失败原因。
+    /// 由 TryPurchaseFruit 通过 out 参数返回，UI 据此区分金币不足与星星不足。
+    /// </summary>
+    public enum FruitPurchaseFailureReason
+    {
+        /// <summary>
+        /// 没有失败。仅在 TryPurchaseFruit 返回 true 时使用。
+        /// </summary>
+        None = 0,
+
+        /// <summary>
+        /// 水果编码无效、已解锁或运行时模块未初始化。
+        /// </summary>
+        NotPurchasable = 1,
+
+        /// <summary>
+        /// 星星不足以满足解锁阈值。
+        /// </summary>
+        NotEnoughStars = 2,
+
+        /// <summary>
+        /// 金币不足以支付解锁花费。
+        /// </summary>
+        NotEnoughGold = 3,
+    }
+
+    /// <summary>
     /// 概率计算统一使用 100 作为满值。
     /// </summary>
     private const int FullProbability = 100;

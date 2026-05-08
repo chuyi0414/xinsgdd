@@ -120,15 +120,28 @@ public sealed partial class PlayerRuntimeModule
     }
 
     /// <summary>
-    /// 原子购买接口：校验数据行存在 → 校验未解锁 → 校验金币充足 → 扣金币 → 解锁水果。
+    /// 原子购买接口：校验数据行存在 → 校验未解锁 → 校验星星 → 校验金币 → 扣金币 → 解锁水果。
     /// UI 层只需调用此单一接口即可完成完整购买事务，无需自行拆分扣款与解锁。
     /// </summary>
     /// <param name="fruitCode">水果 Code。</param>
     /// <returns>是否购买成功。</returns>
     public bool TryPurchaseFruit(string fruitCode)
     {
+        return TryPurchaseFruit(fruitCode, out _);
+    }
+
+    /// <summary>
+    /// 原子购买接口：校验数据行存在 → 校验未解锁 → 校验星星 → 校验金币 → 扣金币 → 解锁水果。
+    /// UI 层可通过失败原因区分金币不足与星星不足。
+    /// </summary>
+    /// <param name="fruitCode">水果 Code。</param>
+    /// <param name="failureReason">失败原因；购买成功时为 None。</param>
+    /// <returns>是否购买成功。</returns>
+    public bool TryPurchaseFruit(string fruitCode, out FruitPurchaseFailureReason failureReason)
+    {
         if (!EnsureInitialized() || string.IsNullOrWhiteSpace(fruitCode))
         {
+            failureReason = FruitPurchaseFailureReason.NotPurchasable;
             return false;
         }
 
@@ -136,18 +149,28 @@ public sealed partial class PlayerRuntimeModule
         if (fruitRow == null)
         {
             Log.Warning("PlayerRuntimeModule 无法购买水果，编码 '{0}' 无效。", fruitCode);
+            failureReason = FruitPurchaseFailureReason.NotPurchasable;
             return false;
         }
 
         // 已默认解锁或已运行时解锁的水果不允许重复购买
         if (fruitRow.IsUnlocked || IsFruitUnlocked(fruitCode))
         {
+            failureReason = FruitPurchaseFailureReason.NotPurchasable;
             return false;
         }
 
         // 解锁金币防御：禁止负数（数据表已经挡住，这里二次保险）；允许 0（免费解锁）。
         if (fruitRow.UnlockGold < 0)
         {
+            failureReason = FruitPurchaseFailureReason.NotPurchasable;
+            return false;
+        }
+
+        // 星星条件只做阈值校验，不消耗星星；必须在扣金币前执行，避免星星不足时误扣金币。
+        if (!HasEnoughStars(fruitRow.RequiredStars))
+        {
+            failureReason = FruitPurchaseFailureReason.NotEnoughStars;
             return false;
         }
 
@@ -155,11 +178,14 @@ public sealed partial class PlayerRuntimeModule
         // UnlockGold == 0 直接跳过扣费，进入 TryUnlockFruit；保持发星与解锁集合写入语义统一。
         if (fruitRow.UnlockGold > 0 && !TryConsumeGold(fruitRow.UnlockGold))
         {
+            failureReason = FruitPurchaseFailureReason.NotEnoughGold;
             return false;
         }
 
         // 扣款成功（或免费），执行解锁；TryUnlockFruit 内部按 RewardStars 自动发星。
-        return TryUnlockFruit(fruitCode);
+        bool isUnlocked = TryUnlockFruit(fruitCode);
+        failureReason = isUnlocked ? FruitPurchaseFailureReason.None : FruitPurchaseFailureReason.NotPurchasable;
+        return isUnlocked;
     }
 
     /// <summary>

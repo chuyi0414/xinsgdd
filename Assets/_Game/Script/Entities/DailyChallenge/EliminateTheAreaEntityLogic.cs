@@ -8,11 +8,11 @@ using UnityGameFramework.Runtime;
 
 /// <summary>
 /// 消除区域实体逻辑。
-/// 主线纯消消乐模式下的等待区管理核心：
+/// 每日关普通三消模式下的等待区管理核心：
 /// 1. 接收世界坐标定位区域底图；
 /// 2. 从 prefab 的 Locations 子物体缓存 8 个槽位；
-/// 3. 管理等待区卡片的插入、布局刷新、满格结算清空；
-/// 4. 操作队列串行化，保证插入/移除/清空不并发。
+/// 3. 管理等待区卡片插入、三张同类型即时消除、满槽失败；
+/// 4. 插入操作串行化，三消特效与补位动画不阻塞玩家继续点击。
 /// </summary>
 public sealed class EliminateTheAreaEntityLogic : EntityLogic
 {
@@ -37,18 +37,6 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     private const float ShiftMoveDuration = 0.1f;
 
     /// <summary>
-    /// 满格结算清空缩小动画时长（秒）。
-    /// 所有卡片同时 DOScale(Vector3.zero) 的耗时。
-    /// </summary>
-    private const float ClearScaleDuration = 0.3f;
-
-    /// <summary>
-    /// 满格结算清空前延迟（秒）。
-    /// 给玩家一个"满格了"的视觉缓冲。
-    /// </summary>
-    private const float ClearDelaySeconds = 0.15f;
-
-    /// <summary>
     /// 前移补位动画时长（秒）。
     /// 清空后剩余卡片前移到空槽位的 DOMove 耗时。
     /// </summary>
@@ -62,21 +50,12 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     /// </summary>
     private Transform[] _waitingAreaSlots;
 
-    // ───────────── 分数槽位渲染器 ─────────────
-
-    /// <summary>
-    /// ScoreLocations 下每个槽位的分数字图片渲染器数组。
-    /// 与 _waitingAreaSlots 一一对应，用于显示每个槽位卡牌的分数。
-    /// </summary>
-    private WaitingAreaScoreSpriteRenderer[] _scoreSlotRenderers;
-
     // ───────────── 消除动画组件 ─────────────
 
     /// <summary>
     /// Eliminate 子物体下的消除动画组件数组。
     /// Prefab 层级：EliminateTheAreaEntity → Eliminate → EliminateAnimation[0~7]。
-    /// 每个 EliminateAnimation 挂载 Legacy Animation 组件，
-    /// clip 为帧动画换 Sprite（~0.85s）。满格结算卡片缩小完毕后从首帧播放。
+    /// 每个 EliminateAnimation 对应等待区同下标槽位，普通三消时只播放被消除卡片所在槽位。
     /// </summary>
     private Animator[] _eliminateAnimations;
 
@@ -88,12 +67,22 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     private SpriteRenderer[] _eliminateAnimationRenderers;
 
     /// <summary>
-    /// 消除动画播放中的 Sequence 引用，用于 OnHide 时终止。
+    /// 每个等待区槽位当前正在播放的消除特效延迟隐藏 Sequence。
+    /// 初始状态：null；首次播放特效时按 _eliminateAnimations 长度创建。
+    /// ⚠️ 避坑：必须按槽位独立管理，避免某个槽位再次三消时把其它槽位的特效一起 Kill 掉。
     /// </summary>
-    private Sequence _eliminateAnimSequence;
+    private Sequence[] _eliminateAnimSequences;
 
+    /// <summary>
+    /// 单个消除特效动画的播放时长（秒）。
+    /// 初始状态：0；解析 AnimatorController 中第一个有效 Clip 时写入，用于延迟隐藏对应槽位 SpriteRenderer。
+    /// </summary>
     private float _eliminateAnimationDuration;
 
+    /// <summary>
+    /// 消除特效 Animator 状态哈希。
+    /// 初始状态：类型加载时一次性计算；播放单槽位特效时避免字符串查找。
+    /// </summary>
     private static readonly int EliminateAnimationStateHash = Animator.StringToHash("Base Layer.EliminateAnimation");
 
     // ───────────── Combo UI 组件 ─────────────
@@ -167,10 +156,10 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     // ───────────── 轮数/基础分信息文本 ─────────────
 
     /// <summary>
-    /// Canvas 下的轮数/基础分信息文本（TMP）。
-    /// 在 Inspector 中拖拽赋值。
+    /// 等待区上用于显示“当前轮数 / 基础分”的 TMP 文本。
+    /// 初始状态：由预制体 Inspector 绑定；若未绑定则仅跳过显示，不影响三消和计分逻辑。
     /// </summary>
-    [SerializeField] private TMPro.TextMeshProUGUI _roundInfoTextTMP;
+    [SerializeField] private TextMeshProUGUI _roundInfoTextTMP;
 
     // ───────────── 等待区数据 ─────────────
 
@@ -181,9 +170,9 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     private readonly List<EliminateCardEntityLogic> _waitingOrder = new List<EliminateCardEntityLogic>(MaxSlotCount);
 
     /// <summary>
-    /// 双端快照视觉数组。
-    /// 长度 = _maxCardCount，由 BuildDualEndSnapshot 从 _waitingOrder 重建。
-    /// 组合（同类型≥2）从左端填入，单牌（同类型=1）从右端填入，中间允许空位。
+    /// 等待区视觉快照数组。
+    /// 长度 = _maxCardCount，由 BuildDualEndSnapshot 从 _waitingOrder 按当前显示顺序重建。
+    /// 普通三消下不再做双端分组排序，数组下标即等待区槽位下标。
     /// 所有动画目标位置必须基于此数组，而非 _waitingOrder 的顺序索引。
     /// </summary>
     private EliminateCardEntityLogic[] _snapshotCards;
@@ -199,30 +188,30 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     /// </summary>
     private int _maxCardCount;
 
-    // ───────────── 双端快照排序追踪 ─────────────
+    // ───────────── 入槽顺序追踪 ─────────────
 
     /// <summary>
     /// 卡片入槽序号种子。
-    /// 每次卡片首次进入等待区时递增并分配，用于双端布局稳定排序。
+    /// 每次卡片首次进入等待区时递增并分配，用于保留稳定入槽顺序。
     /// 同一张卡片在同一局内只分配一次序号。
     /// </summary>
     private int _insertSerialSeed;
 
     /// <summary>
     /// 卡片实体 Id → 入槽序号 的映射表。
-    /// 用于双端快照排序时保证组内卡片按入槽先后稳定排列。
+    /// 用于卡片离开等待区时清理追踪状态，避免同一局长时间运行导致字典膨胀。
     /// </summary>
     private readonly Dictionary<int, int> _cardInsertSerialByEntityId = new Dictionary<int, int>(MaxSlotCount);
 
     /// <summary>
     /// 组合成组序号种子。
-    /// 当某类型首次达到 2 张时，固化一个成组序号，保证"先成组先靠左"。
+    /// 历史双端布局追踪字段；普通三消顺序布局下不再参与视觉快照排序。
     /// </summary>
     private int _groupOrderSeed;
 
     /// <summary>
     /// 类型 Id → 成组序号 的映射表。
-    /// 成组序号本质是时间戳，排序时保证"谁先成双谁更靠左"。
+    /// 历史双端布局追踪缓存；当前仅随等待区生命周期清理，避免旧数据跨局残留。
     /// </summary>
     private readonly Dictionary<int, int> _groupOrderByTypeId = new Dictionary<int, int>(MaxSlotCount);
 
@@ -230,7 +219,8 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
 
     /// <summary>
     /// 等待区操作类型。
-    /// Insert=插入卡片；RemoveBatch=批量移除（满格结算清空后）；Compact=前移补位。
+    /// Insert=插入卡片；RemoveBatch=批量移除；Compact=前移补位。
+    /// 普通三消的自动消除使用非阻塞移除链路，不依赖 RemoveBatch 队列锁。
     /// </summary>
     private enum WaitingAreaOpType
     {
@@ -296,6 +286,24 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     private readonly Queue<WaitingAreaOp> _waitingAreaOpQueue = new Queue<WaitingAreaOp>();
 
     /// <summary>
+    /// 三消检测工作缓冲。
+    /// 初始状态：空列表；每次检测前从 _waitingOrder 复制当前等待区有效卡片，用于模拟多组三消连续移除。
+    /// </summary>
+    private readonly List<EliminateCardEntityLogic> _workingEliminationBuffer = new List<EliminateCardEntityLogic>(MaxSlotCount);
+
+    /// <summary>
+    /// 本次三消需要真正移除的卡片缓冲。
+    /// 初始状态：空列表；ResolveAllEliminationsInOnePass 成功时保存所有待移除卡片。
+    /// </summary>
+    private readonly List<EliminateCardEntityLogic> _eliminationRemoveBuffer = new List<EliminateCardEntityLogic>(MaxSlotCount);
+
+    /// <summary>
+    /// 本次三消待播放特效的等待区槽位下标缓冲。
+    /// 初始状态：空列表；与 _eliminationRemoveBuffer 同步写入，用于只播放对应 index 的 EliminateAnimation。
+    /// </summary>
+    private readonly List<int> _eliminationSlotIndexBuffer = new List<int>(MaxSlotCount);
+
+    /// <summary>
     /// 等待区操作执行中标记。
     /// 保证单次只处理一个操作。
     /// </summary>
@@ -309,39 +317,31 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     /// </summary>
     private int _pendingInsertCount;
 
-    // ───────────── 满格结算 ─────────────
+    // ───────────── 三消检测与满槽失败 ─────────────
 
     /// <summary>
-    /// 满格结算标记。
-    /// 当等待区满格时置 true，触发结算清空流程。
+    /// 结算检测脏标记。
+    /// 每次插入动画结束后置 true，用于在 OnUpdate 中检测三消或满槽失败。
     /// </summary>
     private bool _settlementDirty;
 
     /// <summary>
-    /// 满格结算完成后的回调。
-    /// 由 EliminateCardController 注入，用于通知控制器更新遮挡状态、
-    /// 检查是否需要自动入槽等。
+    /// 三消移除完成后的回调。
+    /// 由 EliminateCardController 注入，用于通知控制器更新遮挡状态与胜利条件。
     /// </summary>
     public System.Action OnSettlementCleared { get; set; }
 
     /// <summary>
-    /// 满格清空得分回调：在清空动画开始前触发，此时等待区卡片仍完整存在。
-    /// 由 EliminateCardController 注入，用于在卡片被回收前计算得分和连击。
+    /// 三消计分回调。
+    /// 参数为本次被三消移除的卡片数量，由控制器按当前轮基础分计算总分并推进轮数。
     /// </summary>
-    public System.Action OnSettlementScoreCalculation { get; set; }
+    public System.Action<int> OnCardsEliminated { get; set; }
 
     /// <summary>
-    /// 满格失败回调：等待区满格时有 2 张以上单牌（出现次数恰好为 1 的类型 >= 2）。
-    /// 由 EliminateCardController 注入，用于通知控制器弹出失败 UI。
+    /// 满槽失败回调。
+    /// 等待区已满且不存在任意三张同类型可消除组合时触发，由控制器进入失败/复活分流。
     /// </summary>
     public System.Action OnSettlementFailed { get; set; }
-
-    /// <summary>
-    /// 等待区布局变更回调：双端快照重建后触发。
-    /// 由 EliminateCardController 注入，用于在快照就绪后刷新每个槽位的分数显示。
-    /// ⚠️ 避坑：不可在 TryRequestInsert 时直接刷新，因为此时操作尚未出队执行，快照仍为旧值。
-    /// </summary>
-    public System.Action OnWaitingAreaLayoutChanged { get; set; }
 
     // ───────────── EntityLogic 生命周期 ─────────────
 
@@ -360,7 +360,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         _waitingAreaOpQueue.Clear();
         _pendingInsertCount = 0;
 
-        // 重置双端快照排序追踪状态，避免跨局残留
+        // 重置入槽顺序追踪状态，避免跨局残留
         ResetDualEndLayoutState();
 
         // 初始化快照数组
@@ -377,20 +377,11 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         // 自动注册区域实体逻辑引用与结算回调（OnSettlementCleared / OnSettlementFailed 均由 RegisterAreaEntityLogic 内部注入）
         EliminateCardController.Instance?.RegisterAreaEntityLogic(this);
 
-        // 解析 ScoreLocations 下的分数渲染器
-        ResolveScoreSlotRenderers();
-
         // 解析 Eliminate 下的消除动画组件
         ResolveEliminateAnimations();
 
-        // 重置分数显示，避免跨局残留旧值
-        ClearScoreDisplay();
-
         // ── 确保 Canvas 排序层级高于 SpriteRenderer（卡片基准 200+），否则文字被遮挡 ──
         SetupCanvasSortingOrder();
-
-        // 重置轮数/基础分信息显示
-        RefreshRoundInfoDisplay(1, 1);
     }
 
     /// <summary>
@@ -414,20 +405,18 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         _isWaitingAreaOpRunning = false;
         _settlementDirty = false;
         OnSettlementCleared = null;
-        OnSettlementScoreCalculation = null;
-        OnWaitingAreaLayoutChanged = null;
+        OnCardsEliminated = null;
+        OnSettlementFailed = null;
 
-        // 清理双端快照排序追踪状态
+        // 清理入槽顺序追踪状态
         ResetDualEndLayoutState();
         _snapshotCards = null;
-
-        // 清理分数槽位渲染器引用
-        _scoreSlotRenderers = null;
 
         // 停止并清理消除动画
         StopEliminateAnimations();
         _eliminateAnimations = null;
         _eliminateAnimationRenderers = null;
+        _eliminateAnimSequences = null;
         _eliminateAnimationDuration = 0f;
 
         // 只保留手动拖拽的 Combo 根节点引用。
@@ -494,7 +483,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         card.SetMoving(true);
         card.SetCardArea(CardArea.WaitingArea);
 
-        // 为卡片分配入槽序号（双端快照排序依据）
+        // 为卡片分配入槽序号，便于后续调试和清理追踪状态。
         RecordInsertSerialIfNeeded(card);
 
         // Zero-GC：使用单卡构造，不 new List
@@ -519,7 +508,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
 
     /// <summary>
     /// 获取当前等待区按显示顺序排列的卡片快照。
-    /// 这里会先重建一次双端快照，再过滤掉空槽位与无效引用，
+    /// 这里会先重建一次视觉快照，再过滤掉空槽位与无效引用，
     /// 确保返回顺序与玩家当前看到的等待区顺序一致。
     /// </summary>
     /// <returns>按显示顺序排列的等待区卡片列表；无卡时返回空列表。</returns>
@@ -640,7 +629,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
 
     /// <summary>
     /// 在 DetachCardsFromWaitingArea 之后调用，执行前移补位动画。
-    /// 重建双端快照 + 将剩余卡片动画移动到前方空槽位。
+    /// 重建等待区视觉快照 + 将剩余卡片动画移动到前方空槽位。
     /// ⚠️ 避坑：必须在 DetachCardsFromWaitingArea 之后、且所有飞出卡片动画完成后调用，
     /// 否则快照中仍包含已取出的卡片，导致补位动画错乱。
     /// </summary>
@@ -648,79 +637,6 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     public void CompactAfterDetach(float moveDuration)
     {
         RefreshWaitingAreaLayout(moveDuration);
-    }
-
-    // ───────────── 分数槽位公开接口 ─────────────
-
-    /// <summary>
-    /// 刷新所有分数槽位的显示。
-    /// 对齐 xinpgdd 的 RefreshWaitingAreaScoreTexts 逻辑：
-    /// 有卡槽位显示 perCardScore，空槽位显示 0。
-    /// </summary>
-    /// <param name="perCardScore">当前单卡总分（分量叠加分 + 基础分）。</param>
-    public void RefreshScoreDisplay(int perCardScore)
-    {
-        if (_scoreSlotRenderers == null || _scoreSlotRenderers.Length <= 0)
-        {
-            return;
-        }
-
-        for (int i = 0; i < _scoreSlotRenderers.Length; i++)
-        {
-            var renderer = _scoreSlotRenderers[i];
-            if (renderer == null)
-            {
-                continue;
-            }
-
-            // 基于快照数组判断槽位是否有卡
-            bool hasCard = _snapshotCards != null
-                && i < _snapshotCards.Length
-                && _snapshotCards[i] != null;
-
-            int displayScore = hasCard ? perCardScore : 0;
-            renderer.SetVisible(true);
-            renderer.SetNumber(displayScore);
-        }
-    }
-
-    /// <summary>
-    /// 清空所有分数槽位的显示，归零为 0 并保持可见。
-    /// </summary>
-    public void ClearScoreDisplay()
-    {
-        if (_scoreSlotRenderers == null || _scoreSlotRenderers.Length <= 0)
-        {
-            return;
-        }
-
-        for (int i = 0; i < _scoreSlotRenderers.Length; i++)
-        {
-            var renderer = _scoreSlotRenderers[i];
-            if (renderer == null)
-            {
-                continue;
-            }
-
-            renderer.SetVisible(true);
-            renderer.SetNumber(0);
-        }
-    }
-
-    // ───────────── 轮数/基础分信息文本公开接口 ─────────────
-
-    /// <summary>
-    /// 刷新轮数/基础分信息文本显示。
-    /// 格式："当前轮数:{currentRound} / 基础分:{baseScore}"
-    /// </summary>
-    /// <param name="currentRound">当前轮次（从 1 开始）。</param>
-    /// <param name="baseScore">当前轮次的基础分。</param>
-    public void RefreshRoundInfoDisplay(int currentRound, int baseScore)
-    {
-        if (_roundInfoTextTMP != null)
-        {
-            _roundInfoTextTMP.text = $"当前轮数:{currentRound} / 基础分:{baseScore}";
-        }
     }
 
     /// <summary>
@@ -739,7 +655,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
             return;
         }
 
-        // combo = 1 不显示连击 UI；窗口非法或已到期也直接隐藏。
+        // combo 小于 1 时不显示连击 UI；窗口非法或已到期也直接隐藏。
         if (combo < 1 || comboWindowSeconds <= 0f || remainingWindowSeconds <= 0f)
         {
             HideComboDisplay(true);
@@ -786,6 +702,21 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         _comboDisplaySequence.Append(_comboRootRect.DOScale(1.12f, 0.12f).SetEase(Ease.OutQuad));
         _comboDisplaySequence.Append(_comboRootRect.DOScale(Vector3.one, 0.12f).SetEase(Ease.OutQuad));
         _comboDisplaySequence.OnComplete(() => _comboDisplaySequence = null);
+    }
+
+    /// <summary>
+    /// 刷新等待区上的“当前轮数 / 基础分”文本。
+    /// </summary>
+    /// <param name="currentRound">当前轮数，从 1 开始；每完成一次三消后由控制器推进。</param>
+    /// <param name="baseScore">当前轮每张被消除卡牌获得的基础分。</param>
+    public void RefreshRoundInfoDisplay(int currentRound, int baseScore)
+    {
+        if (_roundInfoTextTMP == null)
+        {
+            return;
+        }
+
+        _roundInfoTextTMP.text = $"当前轮数:{currentRound} / 基础分:{baseScore}";
     }
 
     /// <summary>
@@ -927,102 +858,6 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
             _comboSlider.minValue = 0f;
             _comboSlider.maxValue = 1f;
             _comboSlider.SetValueWithoutNotify(0f);
-        }
-    }
-
-    /// <summary>
-    /// 从 prefab 层级中解析 ScoreLocations 子物体，缓存为分数槽位渲染器。
-    /// ScoreLocations 下预期有 MaxSlotCount(8) 个子物体，每个子物体挂载或运行时补挂 WaitingAreaScoreSpriteRenderer。
-    /// ⚠️ 避坑：不按 X 独立排序，而是按世界 X 坐标邻近度匹配到 _waitingAreaSlots，
-    /// 保证 _scoreSlotRenderers[i] 与 _waitingAreaSlots[i] 严格一一对应。
-    /// </summary>
-    private void ResolveScoreSlotRenderers()
-    {
-        Transform scoresRoot = CachedTransform.Find("ScoreLocations");
-        if (scoresRoot == null)
-        {
-            Log.Warning("EliminateTheAreaEntityLogic: 未找到 ScoreLocations 子物体，分数槽位为空。");
-            _scoreSlotRenderers = new WaitingAreaScoreSpriteRenderer[0];
-            return;
-        }
-
-        int childCount = scoresRoot.childCount;
-        if (childCount <= 0)
-        {
-            Log.Warning("EliminateTheAreaEntityLogic: ScoreLocations 下无子物体，分数槽位为空。");
-            _scoreSlotRenderers = new WaitingAreaScoreSpriteRenderer[0];
-            return;
-        }
-
-        // 采集每个子节点的 WaitingAreaScoreSpriteRenderer，缺失则运行时补挂
-        var buffer = new List<WaitingAreaScoreSpriteRenderer>(childCount);
-        for (int i = 0; i < childCount; i++)
-        {
-            Transform child = scoresRoot.GetChild(i);
-            if (child == null)
-            {
-                continue;
-            }
-
-            var renderer = child.GetComponent<WaitingAreaScoreSpriteRenderer>();
-            if (renderer == null)
-            {
-                // 兼容旧预制体：运行时自动补挂图片渲染组件
-                renderer = child.gameObject.AddComponent<WaitingAreaScoreSpriteRenderer>();
-            }
-
-            if (renderer != null)
-            {
-                buffer.Add(renderer);
-            }
-        }
-
-        // ⚠️ 避坑：按世界 X 坐标邻近度匹配到 _waitingAreaSlots，
-        // 而非独立排序。保证 _scoreSlotRenderers[i] 对应 _waitingAreaSlots[i]。
-        if (_waitingAreaSlots == null || _waitingAreaSlots.Length <= 0)
-        {
-            _scoreSlotRenderers = new WaitingAreaScoreSpriteRenderer[0];
-            return;
-        }
-
-        WaitingAreaScoreSpriteRenderer[] allRenderers = buffer.ToArray();
-        _scoreSlotRenderers = new WaitingAreaScoreSpriteRenderer[_waitingAreaSlots.Length];
-
-        // 已匹配标记，避免一个渲染器被多个槽位重复匹配
-        bool[] matched = new bool[allRenderers.Length];
-
-        for (int slotIdx = 0; slotIdx < _waitingAreaSlots.Length; slotIdx++)
-        {
-            Transform slot = _waitingAreaSlots[slotIdx];
-            if (slot == null)
-            {
-                continue;
-            }
-
-            float slotX = slot.position.x;
-            float minDist = float.MaxValue;
-            int bestIdx = -1;
-
-            for (int rIdx = 0; rIdx < allRenderers.Length; rIdx++)
-            {
-                if (matched[rIdx] || allRenderers[rIdx] == null)
-                {
-                    continue;
-                }
-
-                float dist = Mathf.Abs(allRenderers[rIdx].transform.position.x - slotX);
-                if (dist < minDist)
-                {
-                    minDist = dist;
-                    bestIdx = rIdx;
-                }
-            }
-
-            if (bestIdx >= 0)
-            {
-                _scoreSlotRenderers[slotIdx] = allRenderers[bestIdx];
-                matched[bestIdx] = true;
-            }
         }
     }
 
@@ -1242,7 +1077,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
 
     /// <summary>
     /// 执行插入操作。
-    /// 核心链路：计算逻辑插入索引 → 写入 _waitingOrder → 重建双端快照 → 基于快照执行并行动画 → 满格检测。
+    /// 核心链路：计算逻辑插入索引 → 写入 _waitingOrder → 重建视觉快照 → 基于快照执行并行动画 → 三消/满槽检测。
     /// 新卡飞入与已有卡移位并行执行，目标位置全部基于 _snapshotCards 而非 _waitingOrder 的顺序索引。
     /// </summary>
     /// <param name="card">待插入的卡片实体逻辑。</param>
@@ -1260,7 +1095,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
             return;
         }
 
-        // 计算逻辑插入索引：同类型归组，组合靠左，单牌靠右
+        // 计算逻辑插入索引：同类型卡片尽量贴在一起，方便玩家形成三消。
         int insertIndex = CalculateInsertIndex(card.TypeId);
 
         // 写入逻辑列表
@@ -1274,12 +1109,8 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         // 插入后检测同类型是否首次达到 2 张，若是则固化成组序号
         TryAssignGroupOrderWhenTypeBecomesPair(card);
 
-        // ── 重建双端快照，获取视觉槽位映射 ──
+        // ── 重建视觉快照，获取卡片对应的槽位映射 ──
         BuildDualEndSnapshot();
-
-        // ── 快照就绪后通知控制器刷新分数显示 ──
-        // ⚠️ 避坑：必须在 BuildDualEndSnapshot 之后调用，否则 _snapshotCards 仍为旧值。
-        OnWaitingAreaLayoutChanged?.Invoke();
 
         // ── 并行动画：基于 _snapshotCards 计算目标位置 ──
 
@@ -1344,11 +1175,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     /// </summary>
     private void OnAllInsertAnimationsComplete()
     {
-        // 满格检测
-        if (_currentCardCount >= _maxCardCount)
-        {
-            _settlementDirty = true;
-        }
+        _settlementDirty = true;
 
         FinishWaitingAreaOp();
     }
@@ -1358,7 +1185,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     /// 同类型归组策略：
     /// 1. 扫描 _waitingOrder，找到已有同类型卡片的区间；
     /// 2. 若找到同类型，插入到该区间的末尾；
-    /// 3. 若未找到同类型，插入到所有组合之后（单牌靠右）。
+    /// 3. 若未找到同类型，则插入到等待区末尾。
     /// </summary>
     /// <param name="typeId">待插入卡片的类型 Id。</param>
     /// <returns>插入索引。</returns>
@@ -1371,9 +1198,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
 
         // 找到同类型区间的末尾位置
         int lastSameTypeIndex = -1;
-        int firstSingleTypeIndex = _waitingOrder.Count; // 第一个"单牌"的索引
-
-        // 统计每种类型的数量
+        // 统计同类型卡片最后出现的位置。
         for (int i = 0; i < _waitingOrder.Count; i++)
         {
             if (_waitingOrder[i] != null && _waitingOrder[i].TypeId == typeId)
@@ -1388,8 +1213,7 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
             return lastSameTypeIndex + 1;
         }
 
-        // 未找到同类型：找到第一个"出现次数=1"的单牌位置，插入到它前面
-        // 简化策略：直接插入到列表末尾（单牌靠右）
+        // 未找到同类型：直接插入末尾，保持玩家点击顺序稳定。
         return _waitingOrder.Count;
     }
 
@@ -1397,19 +1221,18 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
 
     /// <summary>
     /// 刷新等待区布局。
-    /// 先重建双端快照，再基于快照执行动画。
+    /// 先重建视觉快照，再基于快照执行动画。
     /// </summary>
     /// <param name="moveDuration">移动动画时长（秒）。</param>
     internal void RefreshWaitingAreaLayout(float moveDuration)
     {
         BuildDualEndSnapshot();
-        OnWaitingAreaLayoutChanged?.Invoke();
         AnimateRemainingCardsToSlots(moveDuration);
     }
 
     /// <summary>
     /// 将所有等待区卡片动画移动到对应的槽位位置。
-    /// 基于 _snapshotCards 而非 _waitingOrder，保证组合靠左、单牌靠右的视觉布局。
+    /// 基于 _snapshotCards 而非 _waitingOrder，保证视觉槽位和动画目标一致。
     /// </summary>
     /// <param name="moveDuration">移动动画时长（秒）。</param>
     private void AnimateRemainingCardsToSlots(float moveDuration)
@@ -1464,155 +1287,143 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     // ───────────── 内部方法：满格结算 ─────────────
 
     /// <summary>
-    /// 满格结算处理。
-    /// 每日一关消除规则：
-    /// 1. 等待区满格时，统计各 TypeId 出现次数；
-    /// 2. 若单牌类型（出现次数恰好为 1）>= 2，判定失败，触发 OnSettlementFailed，不清空；
-    /// 3. 否则走原清空流程：延迟 → 全卡同时缩小动画 → 批量回收 → 清空等待区 → 通知控制器。
+    /// 处理等待区结算检测。
+    /// 普通三消规则：优先尝试三张同类型消除；如果没有可消除组合且等待区已满，则触发失败。
     /// </summary>
     private void HandleFullAreaSettlement()
     {
-        if (_currentCardCount < _maxCardCount)
+        // 三消优先级高于满槽失败：只要能消除，就立即消除并释放槽位。
+        if (ResolveAllEliminationsInOnePass())
         {
             return;
         }
 
-        // ── 每日一关单牌失败判定 ──
-        // 统计各 TypeId 在等待区的出现次数，单牌类型 >= 2 则判定失败
-        if (HasTooManySingleTypes())
+        // 等待区已满且没有任何三消组合时，才进入失败/复活分流。
+        if (_currentCardCount >= _maxCardCount)
         {
             OnSettlementFailed?.Invoke();
-            return;
         }
-
-        _isWaitingAreaOpRunning = true;
-
-        // ── 在动画开始前通知控制器计算得分 ──
-        // 此时等待区卡片仍完整存在（CardArea=WaitingArea），TypeId 可读。
-        // 动画结束后卡片会被 HideEntity 回收，届时 CardArea 会被重置为 Board。
-        OnSettlementScoreCalculation?.Invoke();
-
-        // 快照当前等待区卡片列表
-        List<EliminateCardEntityLogic> cardsToClear = new List<EliminateCardEntityLogic>(_waitingOrder.Count);
-        for (int i = 0; i < _waitingOrder.Count; i++)
-        {
-            if (_waitingOrder[i] != null)
-            {
-                cardsToClear.Add(_waitingOrder[i]);
-            }
-        }
-
-        if (cardsToClear.Count <= 0)
-        {
-            _waitingOrder.Clear();
-            _currentCardCount = 0;
-            FinishWaitingAreaOp();
-            return;
-        }
-
-        // 第一阶段：延迟 + 全卡同时缩小动画
-        Sequence settleSequence = DOTween.Sequence();
-        settleSequence.AppendInterval(ClearDelaySeconds);
-
-        // 所有卡片同时缩小到零
-        for (int i = 0; i < cardsToClear.Count; i++)
-        {
-            EliminateCardEntityLogic card = cardsToClear[i];
-            if (card != null)
-            {
-                card.CachedTransform.DOKill(false);
-                settleSequence.AppendCallback(() =>
-                {
-                    if (card != null && card.gameObject.activeInHierarchy)
-                    {
-                        card.CachedTransform.DOScale(Vector3.zero, ClearScaleDuration).SetEase(Ease.OutQuad);
-                    }
-                });
-            }
-        }
-
-        // 第二阶段：缩小动画完成后批量回收
-        settleSequence.AppendInterval(ClearScaleDuration);
-        settleSequence.AppendCallback(() =>
-        {
-            // 批量回收卡片实体
-            for (int i = 0; i < cardsToClear.Count; i++)
-            {
-                EliminateCardEntityLogic card = cardsToClear[i];
-                if (card != null && card.gameObject.activeInHierarchy)
-                {
-                    // 恢复缩放，防止对象池复用时残留零缩放
-                    card.CachedTransform.localScale = Vector3.one;
-                    GameEntry.Entity.HideEntity(card.Entity);
-                }
-            }
-
-            // 清空等待区数据
-            _waitingOrder.Clear();
-            _currentCardCount = 0;
-
-            // 清空快照数组与排序追踪状态，为下一轮入槽做准备
-            if (_snapshotCards != null)
-            {
-                for (int i = 0; i < _snapshotCards.Length; i++)
-                {
-                    _snapshotCards[i] = null;
-                }
-            }
-            ResetDualEndLayoutState();
-
-            // ── 播放 EliminateAnimation 消除特效动画 ──
-            // ⚠️ 关键时序：必须等特效播放完毕后，才允许继续结算回调与后续自动入槽，
-            // 否则新入槽卡片（sortingOrder 200+）会立刻盖住特效（sortingOrder 0）。
-            PlayEliminateAnimations(() =>
-            {
-                // 结算完成，通知控制器（更新遮挡、检查自动入槽等）
-                OnSettlementCleared?.Invoke();
-
-                FinishWaitingAreaOp();
-            });
-        });
     }
 
     /// <summary>
-    /// 判断当前等待区是否存在 2 张以上单牌。
-    /// 单牌定义：某个 TypeId 在等待区中恰好只出现 1 次。
-    /// 若单牌类型数量 >= 2，则判定为失败。
+    /// 一次性解析当前等待区内所有可成立的三消组合。
+    /// 规则：每轮寻找第一个达到 3 张的 TypeId，取其中前 3 张加入移除列表，并在工作缓冲中模拟删除。
     /// </summary>
-    /// <returns>true=单牌过多应判定失败；false=可继续清空。</returns>
-    private bool HasTooManySingleTypes()
+    /// <returns>true=本次至少消除一组三张；false=没有任何三消组合。</returns>
+    private bool ResolveAllEliminationsInOnePass()
     {
-        // 统计各 TypeId 出现次数
-        // ⚠️ 避坑：这里用简单遍历而非 Dictionary，因为等待区最大 8 卡，
-        // O(8^2) 远比 Dictionary 的 GC 开销更划算。
-        int singleTypeCount = 0;
+        // 少于 3 张不可能组成三消，直接跳过，避免无意义遍历。
+        if (_waitingOrder.Count < 3)
+        {
+            return false;
+        }
+
+        // 每次检测前清空三个缓冲，防止上一次三消残留污染本轮结果。
+        _workingEliminationBuffer.Clear();
+        _eliminationRemoveBuffer.Clear();
+        _eliminationSlotIndexBuffer.Clear();
+
+        // 拷贝当前等待区有效卡片到工作缓冲，后续只在工作缓冲上模拟多组三消连续删除。
         for (int i = 0; i < _waitingOrder.Count; i++)
         {
             EliminateCardEntityLogic card = _waitingOrder[i];
+            if (card != null)
+            {
+                _workingEliminationBuffer.Add(card);
+            }
+        }
+
+        while (TryFindFirstTripleType(_workingEliminationBuffer, out int tripleType))
+        {
+            int foundCount = 0;
+
+            // 按当前工作缓冲顺序拿该类型前 3 张，保持普通三消“先入槽先消”的稳定口径。
+            for (int i = 0; i < _workingEliminationBuffer.Count && foundCount < 3; i++)
+            {
+                EliminateCardEntityLogic card = _workingEliminationBuffer[i];
+                if (card != null && card.TypeId == tripleType)
+                {
+                    // 记录卡片当前所在等待槽位，后续只播放这个槽位 index 的 EliminateAnimation。
+                    _eliminationSlotIndexBuffer.Add(FindSlotIndexInCurrentSnapshot(card));
+                    _eliminationRemoveBuffer.Add(card);
+                    foundCount++;
+                }
+            }
+
+            if (foundCount < 3)
+            {
+                break;
+            }
+
+            for (int i = 0; i < _eliminationRemoveBuffer.Count; i++)
+            {
+                // 在工作缓冲中模拟删除，允许同一帧继续解析后续三消组合。
+                _workingEliminationBuffer.Remove(_eliminationRemoveBuffer[i]);
+            }
+        }
+
+        if (_eliminationRemoveBuffer.Count <= 0)
+        {
+            return false;
+        }
+
+        List<EliminateCardEntityLogic> cardsToEliminate = new List<EliminateCardEntityLogic>(_eliminationRemoveBuffer);
+
+        // 先把消除数量交给控制器计分：每 3 张作为一次三消，按当前轮基础分累计总分并推进轮数。
+        OnCardsEliminated?.Invoke(cardsToEliminate.Count);
+
+        // 特效仅播放被消除卡片对应槽位，不阻塞等待区数据移除和玩家后续点击。
+        PlayEliminateAnimationsAtSlots(_eliminationSlotIndexBuffer);
+
+        // 三消移除、回收、补位全部走非阻塞链路，避免动画期间卡手。
+        ExecuteEliminateRemoveBatchNonBlocking(cardsToEliminate, CompactMoveDuration);
+        return true;
+    }
+
+    /// <summary>
+    /// 在给定卡片集合中查找第一个数量达到 3 张的卡片类型。
+    /// </summary>
+    /// <param name="sourceCards">用于检测的卡片列表；调用方传入工作缓冲。</param>
+    /// <param name="typeId">输出找到的 TypeId；未找到时为 0。</param>
+    /// <returns>true=存在至少 3 张同类型卡；false=不存在三消组合。</returns>
+    private bool TryFindFirstTripleType(List<EliminateCardEntityLogic> sourceCards, out int typeId)
+    {
+        typeId = 0;
+        if (sourceCards == null || sourceCards.Count <= 0)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < sourceCards.Count; i++)
+        {
+            EliminateCardEntityLogic card = sourceCards[i];
             if (card == null)
             {
                 continue;
             }
 
-            int typeId = card.TypeId;
-            int count = 0;
-            for (int j = 0; j < _waitingOrder.Count; j++)
+            int currentTypeId = card.TypeId;
+            if (currentTypeId <= 0)
             {
-                if (_waitingOrder[j] != null && _waitingOrder[j].TypeId == typeId)
-                {
-                    count++;
-                }
+                continue;
             }
 
-            // 恰好出现 1 次 = 单牌
-            if (count == 1)
+            int count = 0;
+            for (int j = 0; j < sourceCards.Count; j++)
             {
-                singleTypeCount++;
+                if (sourceCards[j] != null && sourceCards[j].TypeId == currentTypeId)
+                {
+                    count++;
+                    if (count >= 3)
+                    {
+                        typeId = currentTypeId;
+                        return true;
+                    }
+                }
             }
         }
 
-        // 单牌类型 >= 2 → 失败
-        return singleTypeCount >= 2;
+        return false;
     }
 
     // ───────────── 内部方法：消除动画 ─────────────
@@ -1698,85 +1509,106 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     }
 
     /// <summary>
-    /// 播放所有 EliminateAnimation 子物体的 Legacy Animation 动画。
-    /// 满格结算卡片缩小完毕后调用，视觉上呈现消除特效。
-    /// 播放完毕后自动隐藏 SpriteRenderer，并在完成后触发回调。
-    /// ⚠️ 避坑：Animation.clip.length 获取 clip 实际时长，用于延迟隐藏回调。
-    /// ⚠️ 避坑：不再通过 SetActive(true) 触发播放，而是常驻 active + renderer.enabled，
-    /// 否则 Legacy Animation 在部分 Unity 版本/运行时组合下只显示首帧不推进。
+    /// 播放指定等待区槽位上的消除特效。
+    /// 普通三消只播放被消除卡片所在槽位，不能播放全部槽位，也不能等待动画完成后再继续逻辑。
     /// </summary>
-    /// <param name="onComplete">全部特效播放并隐藏后的回调。</param>
-    private void PlayEliminateAnimations(System.Action onComplete)
+    /// <param name="slotIndexes">需要播放特效的等待区槽位下标列表。</param>
+    private void PlayEliminateAnimationsAtSlots(List<int> slotIndexes)
     {
-        if (_eliminateAnimations == null || _eliminateAnimations.Length <= 0)
+        // 没有有效槽位或特效组件未解析时直接跳过，三消数据流程不能被视觉资源缺失阻断。
+        if (slotIndexes == null || slotIndexes.Count <= 0 || _eliminateAnimations == null || _eliminateAnimations.Length <= 0)
         {
-            onComplete?.Invoke();
             return;
         }
 
-        // 终止上一轮残留的延迟 Sequence，防止叠加
-        if (_eliminateAnimSequence != null && _eliminateAnimSequence.IsActive())
-        {
-            _eliminateAnimSequence.Kill(false);
-        }
-
-        // ── 播放消除音效 ──
-        // 资源路径：Assets/_Game/Resources/Musics/Eliminate/EliminateAudio.wav
-        // 通过 UIInteractionSound 统一入口播放，归入 "Effect" 声音组。
+        // 一次三消只播放一次音效，避免三张卡同时消除时叠三遍音效。
         UIInteractionSound.PlayEliminateSound();
 
-        float maxDuration = 0f;
-
-        for (int i = 0; i < _eliminateAnimations.Length; i++)
+        for (int i = 0; i < slotIndexes.Count; i++)
         {
-            Animator animator = _eliminateAnimations[i];
-            if (animator == null)
+            PlayEliminateAnimationAtSlot(slotIndexes[i]);
+        }
+    }
+
+    /// <summary>
+    /// 播放单个等待区槽位的消除特效。
+    /// </summary>
+    /// <param name="slotIndex">等待区槽位下标，同时对应 EliminateAnimation 子物体下标。</param>
+    private void PlayEliminateAnimationAtSlot(int slotIndex)
+    {
+        // 槽位越界时直接忽略，避免异常打断等待区三消流程。
+        if (_eliminateAnimations == null || slotIndex < 0 || slotIndex >= _eliminateAnimations.Length)
+        {
+            return;
+        }
+
+        Animator animator = _eliminateAnimations[slotIndex];
+        if (animator == null)
+        {
+            return;
+        }
+
+        // 如果同一槽位的上一次特效还没隐藏，先停止旧延迟，随后从第一帧重新播放。
+        if (_eliminateAnimSequences != null && slotIndex < _eliminateAnimSequences.Length)
+        {
+            Sequence oldSequence = _eliminateAnimSequences[slotIndex];
+            if (oldSequence != null && oldSequence.IsActive())
             {
-                continue;
+                oldSequence.Kill(false);
             }
+            _eliminateAnimSequences[slotIndex] = null;
+        }
 
-            // 先确保渲染器可见，再停止旧状态，随后从 0 时间重新播放。
-            // ⚠️ 避坑：必须直接操作 AnimationState.time，而不是依赖 Rewind()/SetActive 组合。
-            if (_eliminateAnimationRenderers != null && i < _eliminateAnimationRenderers.Length)
+        // 特效 GameObject 常驻 active，只通过 SpriteRenderer.enabled 控制显隐，避免 Animator 首帧卡住。
+        if (_eliminateAnimationRenderers != null && slotIndex < _eliminateAnimationRenderers.Length)
+        {
+            SpriteRenderer renderer = _eliminateAnimationRenderers[slotIndex];
+            if (renderer != null)
             {
-                SpriteRenderer renderer = _eliminateAnimationRenderers[i];
-                if (renderer != null)
-                {
-                    renderer.enabled = true;
-                }
-            }
-
-            animator.enabled = true;
-            animator.Rebind();
-            animator.Update(0f);
-            animator.speed = 1f;
-            animator.Play(EliminateAnimationStateHash, 0, 0f);
-            animator.Update(0f);
-
-            if (_eliminateAnimationDuration > maxDuration)
-            {
-                maxDuration = _eliminateAnimationDuration;
+                renderer.enabled = true;
             }
         }
 
-        // 延迟最长时长后自动隐藏所有动画 GameObject
-        if (maxDuration > 0f)
+        // 重新绑定 Animator 状态并从 0 进度播放，确保连续触发同槽位三消时不会继承上一轮进度。
+        animator.enabled = true;
+        animator.Rebind();
+        animator.Update(0f);
+        animator.speed = 1f;
+        animator.Play(EliminateAnimationStateHash, 0, 0f);
+        animator.Update(0f);
+
+        if (_eliminateAnimationDuration <= 0f)
         {
-            _eliminateAnimSequence = DOTween.Sequence();
-            _eliminateAnimSequence.AppendInterval(maxDuration);
-            _eliminateAnimSequence.OnComplete(() =>
+            // 没有有效 Clip 时立即隐藏特效，逻辑仍然继续走，不因为美术配置异常卡住。
+            HideEliminateAnimationRendererAtSlot(slotIndex);
+            animator.enabled = false;
+            return;
+        }
+
+        // 延迟隐藏数组按槽位创建，保证每个槽位的特效生命周期互不影响。
+        if (_eliminateAnimSequences == null || _eliminateAnimSequences.Length != _eliminateAnimations.Length)
+        {
+            _eliminateAnimSequences = new Sequence[_eliminateAnimations.Length];
+        }
+
+        // 捕获槽位下标，避免回调执行时读取到外部变量变化。
+        int capturedSlotIndex = slotIndex;
+        Sequence sequence = DOTween.Sequence();
+        _eliminateAnimSequences[capturedSlotIndex] = sequence;
+        sequence.AppendInterval(_eliminateAnimationDuration);
+        sequence.OnComplete(() =>
+        {
+            HideEliminateAnimationRendererAtSlot(capturedSlotIndex);
+            if (_eliminateAnimations != null && capturedSlotIndex >= 0 && capturedSlotIndex < _eliminateAnimations.Length && _eliminateAnimations[capturedSlotIndex] != null)
             {
-                HideAllEliminateAnimationRenderers();
-                _eliminateAnimSequence = null;
-                onComplete?.Invoke();
-            });
-        }
-        else
-        {
-            // 无 clip 或 length=0，立即隐藏并继续流程
-            HideAllEliminateAnimationRenderers();
-            onComplete?.Invoke();
-        }
+                _eliminateAnimations[capturedSlotIndex].enabled = false;
+            }
+
+            if (_eliminateAnimSequences != null && capturedSlotIndex >= 0 && capturedSlotIndex < _eliminateAnimSequences.Length)
+            {
+                _eliminateAnimSequences[capturedSlotIndex] = null;
+            }
+        });
     }
 
     /// <summary>
@@ -1785,12 +1617,20 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     /// </summary>
     private void StopEliminateAnimations()
     {
-        // 终止延迟 Sequence
-        if (_eliminateAnimSequence != null && _eliminateAnimSequence.IsActive())
+        // OnHide 时逐槽位终止未完成的隐藏延迟，避免对象池复用后旧回调误隐藏新特效。
+        if (_eliminateAnimSequences != null)
         {
-            _eliminateAnimSequence.Kill(false);
+            for (int i = 0; i < _eliminateAnimSequences.Length; i++)
+            {
+                Sequence sequence = _eliminateAnimSequences[i];
+                if (sequence != null && sequence.IsActive())
+                {
+                    sequence.Kill(false);
+                }
+
+                _eliminateAnimSequences[i] = null;
+            }
         }
-        _eliminateAnimSequence = null;
 
         // 停止动画 + 隐藏渲染器
         if (_eliminateAnimations != null)
@@ -1808,6 +1648,24 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         }
 
         HideAllEliminateAnimationRenderers();
+    }
+
+    /// <summary>
+    /// 隐藏指定槽位的消除特效 SpriteRenderer。
+    /// </summary>
+    /// <param name="slotIndex">等待区槽位下标。</param>
+    private void HideEliminateAnimationRendererAtSlot(int slotIndex)
+    {
+        if (_eliminateAnimationRenderers == null || slotIndex < 0 || slotIndex >= _eliminateAnimationRenderers.Length)
+        {
+            return;
+        }
+
+        SpriteRenderer renderer = _eliminateAnimationRenderers[slotIndex];
+        if (renderer != null)
+        {
+            renderer.enabled = false;
+        }
     }
 
     /// <summary>
@@ -1870,6 +1728,95 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
     }
 
     /// <summary>
+    /// 执行普通三消专用的非阻塞批量移除。
+    /// 该方法会立即修改等待区数据、回收被消除卡片并启动补位动画，但不会占用等待区操作锁。
+    /// </summary>
+    /// <param name="cards">本次三消要移除的卡片列表。</param>
+    /// <param name="moveDuration">剩余卡片补位动画时长（秒）。</param>
+    private void ExecuteEliminateRemoveBatchNonBlocking(List<EliminateCardEntityLogic> cards, float moveDuration)
+    {
+        if (cards == null || cards.Count <= 0)
+        {
+            // 即使没有有效卡片，也通知控制器走一次遮挡/胜利检查，保证状态闭环。
+            OnSettlementCleared?.Invoke();
+            return;
+        }
+
+        for (int i = 0; i < cards.Count; i++)
+        {
+            EliminateCardEntityLogic card = cards[i];
+            if (card == null)
+            {
+                continue;
+            }
+
+            // 立即从等待区真相源移除，后续点击容量判断会立刻看到空出来的槽位。
+            _waitingOrder.Remove(card);
+
+            // 被消除卡片即将回收，清理入槽序号缓存，避免长局字典膨胀。
+            RemoveInsertSerialByCard(card);
+            if (card.gameObject.activeInHierarchy)
+            {
+                // 回收前恢复缩放，防止对象池复用时继承异常缩放。
+                card.CachedTransform.localScale = Vector3.one;
+                GameEntry.Entity.HideEntity(card.Entity);
+            }
+        }
+
+        _currentCardCount = _waitingOrder.Count;
+
+        // 补位动画不再持有 _isWaitingAreaOpRunning，玩家可以在补位过程中继续点其它卡。
+        RefreshWaitingAreaLayoutNonBlocking(moveDuration);
+
+        // 数据层已经完成移除，立即通知控制器刷新遮挡和胜利判定，不等待消除特效/补位动画。
+        OnSettlementCleared?.Invoke();
+    }
+
+    /// <summary>
+    /// 非阻塞刷新等待区布局。
+    /// </summary>
+    /// <param name="moveDuration">剩余卡片补位动画时长（秒）。</param>
+    private void RefreshWaitingAreaLayoutNonBlocking(float moveDuration)
+    {
+        // 先用当前 _waitingOrder 重建快照，再让剩余卡片按新槽位滑动。
+        BuildDualEndSnapshot();
+        AnimateRemainingCardsToSlotsNonBlocking(moveDuration);
+    }
+
+    /// <summary>
+    /// 非阻塞执行剩余等待区卡片补位动画。
+    /// 只启动 Tween，不等待 OnComplete，因此不会阻塞后续点击入槽。
+    /// </summary>
+    /// <param name="moveDuration">移动动画时长（秒）。</param>
+    private void AnimateRemainingCardsToSlotsNonBlocking(float moveDuration)
+    {
+        if (_snapshotCards == null || _snapshotCards.Length <= 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _snapshotCards.Length; i++)
+        {
+            EliminateCardEntityLogic card = _snapshotCards[i];
+            if (card == null)
+            {
+                continue;
+            }
+
+            Vector3 targetPos = GetSlotPosition(i);
+            if (Vector3.SqrMagnitude(card.CachedTransform.position - targetPos) <= 0.0001f)
+            {
+                // 已在目标槽位的卡片不重新开 Tween，避免无意义动画和状态抖动。
+                continue;
+            }
+
+            // 先 Kill 旧补位 Tween，再启动新的目标槽位移动，避免快速三消/点击时 Tween 互相抢位置。
+            card.CachedTransform.DOKill(false);
+            card.CachedTransform.DOMove(targetPos, moveDuration).SetEase(Ease.OutQuad);
+        }
+    }
+
+    /// <summary>
     /// 执行前移补位操作。
     /// 将剩余卡片动画移动到前方的空槽位。
     /// </summary>
@@ -1888,14 +1835,12 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         _isWaitingAreaOpRunning = false;
     }
 
-    // ───────────── 双端快照构建 ─────────────
+    // ───────────── 等待区视觉快照构建 ─────────────
 
     /// <summary>
-    /// 重建双端快照视觉数组。
-    /// 算法与旧项目 xinpgdd 的 BuildMainlineDualEndSnapshot 完全对齐：
-    /// 1) 组合（同类型≥2）从左到右连续排列，且"先成组先靠左"；
-    /// 2) 单牌（同类型=1）从右向左排列，按入槽序号旧到新放置，保证"新单牌更靠左"；
-    /// 3) 中间允许空位，不做强制紧凑。
+    /// 重建等待区视觉快照数组。
+    /// 普通三消规则下，视觉顺序直接等于 _waitingOrder 顺序；
+    /// _snapshotCards[i] 就表示第 i 个等待区槽位当前显示的卡片。
     /// </summary>
     private void BuildDualEndSnapshot()
     {
@@ -1913,103 +1858,9 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
             }
         }
 
-        if (_waitingOrder.Count <= 0)
+        for (int i = 0; i < _waitingOrder.Count && i < _snapshotCards.Length; i++)
         {
-            return;
-        }
-
-        // ── 第一步：按类型分组 ──
-        // ⚠️ 避坑：这里用 Dictionary 是因为分组逻辑只在操作发生时执行（非每帧），
-        // 且 MaxSlotCount=8 时 GC 开销可忽略。若后续需要 Zero-GC 可改为固定数组遍历。
-        Dictionary<int, List<EliminateCardEntityLogic>> cardsByType = new Dictionary<int, List<EliminateCardEntityLogic>>(Mathf.Max(4, _waitingOrder.Count));
-        for (int i = 0; i < _waitingOrder.Count; i++)
-        {
-            EliminateCardEntityLogic card = _waitingOrder[i];
-            if (card == null)
-            {
-                continue;
-            }
-
-            List<EliminateCardEntityLogic> sameTypeCards;
-            if (!cardsByType.TryGetValue(card.TypeId, out sameTypeCards))
-            {
-                sameTypeCards = new List<EliminateCardEntityLogic>(4);
-                cardsByType.Add(card.TypeId, sameTypeCards);
-            }
-
-            sameTypeCards.Add(card);
-        }
-
-        // ── 第二步：分离组合类型与单牌类型 ──
-        List<int> groupedTypes = new List<int>(cardsByType.Count);
-        List<EliminateCardEntityLogic> singleCards = new List<EliminateCardEntityLogic>(cardsByType.Count);
-        foreach (var pair in cardsByType)
-        {
-            List<EliminateCardEntityLogic> sameTypeCards = pair.Value;
-            if (sameTypeCards == null || sameTypeCards.Count <= 0)
-            {
-                continue;
-            }
-
-            if (sameTypeCards.Count >= 2)
-            {
-                groupedTypes.Add(pair.Key);
-            }
-            else
-            {
-                singleCards.Add(sameTypeCards[0]);
-            }
-        }
-
-        // ── 第三步：组合按成组序升序排列（先成组先靠左） ──
-        groupedTypes.Sort(CompareGroupTypeOrder);
-
-        // ── 第四步：组合从左端填入 ──
-        int left = 0;
-        for (int i = 0; i < groupedTypes.Count; i++)
-        {
-            int typeId = groupedTypes[i];
-            List<EliminateCardEntityLogic> sameTypeCards = cardsByType[typeId];
-            // 组内按入槽序号升序（旧到新），保证稳定排列
-            sameTypeCards.Sort(CompareCardInsertSerial);
-
-            for (int j = 0; j < sameTypeCards.Count; j++)
-            {
-                if (left < 0 || left >= _snapshotCards.Length)
-                {
-                    break;
-                }
-
-                _snapshotCards[left] = sameTypeCards[j];
-                left++;
-            }
-
-            if (left >= _snapshotCards.Length)
-            {
-                break;
-            }
-        }
-
-        // ── 第五步：单牌从右端填入 ──
-        // 按入槽序号升序（旧到新），然后从右向左放置，保证"新单牌更靠左"
-        singleCards.Sort(CompareCardInsertSerial);
-
-        int right = _snapshotCards.Length - 1;
-        for (int i = 0; i < singleCards.Count && right >= 0; i++)
-        {
-            // 跳过已被组合占用的位置
-            while (right >= 0 && _snapshotCards[right] != null)
-            {
-                right--;
-            }
-
-            if (right < 0)
-            {
-                break;
-            }
-
-            _snapshotCards[right] = singleCards[i];
-            right--;
+            _snapshotCards[i] = _waitingOrder[i];
         }
     }
 
@@ -2029,6 +1880,38 @@ public sealed class EliminateTheAreaEntityLogic : EntityLogic
         {
             if (_snapshotCards[i] == card)
             {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// 查找卡片当前对应的等待区槽位下标。
+    /// 优先使用 _snapshotCards，兜底使用 _waitingOrder 逻辑顺序。
+    /// </summary>
+    /// <param name="card">待查找的卡片。</param>
+    /// <returns>槽位下标；未找到返回 -1。</returns>
+    private int FindSlotIndexInCurrentSnapshot(EliminateCardEntityLogic card)
+    {
+        // 快照是视觉槽位的权威来源，特效 index 必须优先跟随快照位置。
+        int snapshotIndex = FindSnapshotIndex(card);
+        if (snapshotIndex >= 0)
+        {
+            return snapshotIndex;
+        }
+
+        if (_waitingOrder == null || card == null)
+        {
+            return -1;
+        }
+
+        for (int i = 0; i < _waitingOrder.Count; i++)
+        {
+            if (_waitingOrder[i] == card)
+            {
+                // 兜底路径：极端情况下快照尚未建立，用逻辑顺序保证至少能播放近似槽位特效。
                 return i;
             }
         }

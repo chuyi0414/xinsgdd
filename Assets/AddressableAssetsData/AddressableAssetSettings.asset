@@ -15,9 +15,9 @@ MonoBehaviour:
   m_DefaultGroup: b8cc2399154852140b551d5f8e6dcdfa
   m_currentHash:
     serializedVersion: 2
-    Hash: 9837204706c19c141b6a6d110f87ab0c
+    Hash: 00000000000000000000000000000000
   m_OptimizeCatalogSize: 0
-  m_BuildRemoteCatalog: 0
+  m_BuildRemoteCatalog: 1
   m_BundleLocalCatalog: 0
   m_CatalogRequestsTimeout: 0
   m_DisableCatalogUpdateOnStart: 0
@@ -46,6 +46,7 @@ MonoBehaviour:
   m_GroupAssets:
   - {fileID: 11400000, guid: 69d7ee0fde09e164081421f00c7f562e, type: 2}
   - {fileID: 11400000, guid: fec543bc35050e24cbc8ba00918a8f43, type: 2}
+  - {fileID: 11400000, guid: 867a5d60d2461c2419937efcd477a748, type: 2}
   - {fileID: 11400000, guid: 310a1cb9f556ba94fa51e445728dd51d, type: 2}
   m_BuildSettings:
     m_CompileScriptsInVirtualMode: 0
@@ -89,6 +90,12 @@ MonoBehaviour:
     m_LabelNames:
     - default
     - Load
+    - Pet_LuLu
+    - Pet_DuoDuo
+    - Pet_MieMieYang
+    - Pet_PaPaGui
+    - Pet_ShuXiaoXiao
+    - Pet_TuJian
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: 6bf8a47d9d811a3448188709ffb92cca, type: 2}
@@ -119,7 +126,7 @@ MonoBehaviour:
           m_Key: HostingServiceUploadSpeed
         - m_AssemblyName: mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089
           m_ClassName: System.String
-          m_Data: ServerData_sgdd/WebGL
+          m_Data: Library/com.unity.addressables/aa/WebGL/WebGL;ServerData_sgdd/WebGL
           m_Key: ContentRoot
         - m_AssemblyName: mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089
           m_ClassName: System.Boolean

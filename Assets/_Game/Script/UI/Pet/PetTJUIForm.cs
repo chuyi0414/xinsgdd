@@ -33,6 +33,12 @@ public sealed class PetTJUIForm : UIFormLogic
     private static readonly QualityType[] QualityOrders = { QualityType.Normal, QualityType.Rare, QualityType.Epic, QualityType.Legendary, QualityType.Mythic };
 
     /// <summary>
+    /// 详情面板出现条件文本格式。
+    /// 参数来自 PetDataRow.RequiredStars，表示该宠物进入孵化候选池需要拥有的星星数。
+    /// </summary>
+    private const string DetailOccurrenceConditionsFormat = "出现条件:拥有{0}星星";
+
+    /// <summary>
     /// 单个宠物列表条目的运行时缓存。
     /// </summary>
     private sealed class PetItemEntry
@@ -138,6 +144,11 @@ public sealed class PetTJUIForm : UIFormLogic
         /// 宠物介绍文本。
         /// </summary>
         public TextMeshProUGUI TxtIntroduce;
+
+        /// <summary>
+        /// 宠物出现条件文本。
+        /// </summary>
+        public TextMeshProUGUI TxtOccurrenceConditions;
 
         /// <summary>
         /// 详情宠物 Spine 图像挂点。
@@ -273,6 +284,13 @@ public sealed class PetTJUIForm : UIFormLogic
     private TextMeshProUGUI _txtDetailIntroduce;
 
     /// <summary>
+    /// 详情面板宠物出现条件文本。
+    /// 用户需要在 Inspector 中把 PetDetailed/TxtOccurrenceConditions 拖进来。
+    /// </summary>
+    [SerializeField]
+    private TextMeshProUGUI _txtDetailOccurrenceConditions;
+
+    /// <summary>
     /// 详情面板宠物 Spine 挂点。
     /// 用户需要在 Inspector 中把 PetDetailed/Pet 拖进来。
     /// </summary>
@@ -302,6 +320,12 @@ public sealed class PetTJUIForm : UIFormLogic
     /// 打开界面时默认重置为普通品质。
     /// </summary>
     private QualityType _currentQuality = QualityType.Normal;
+
+    /// <summary>
+    /// 已经由本界面发起过按需请求的 UI SkeletonData 路径集合。
+    /// 初始为空；关闭界面时清空，避免下次打开时因为上一次失败状态永久阻止重新请求。
+    /// </summary>
+    private readonly HashSet<string> _requestedUiSkeletonDataPaths = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// 选中态页签背景图。
@@ -344,6 +368,12 @@ public sealed class PetTJUIForm : UIFormLogic
     private bool _hasLoggedMissingReferenceWarning;
 
     /// <summary>
+    /// 是否已经监听宠物 SkeletonData 加载状态事件。
+    /// 初始为 false；只有图鉴发现 UI SkeletonData 缺缓存时才临时订阅。
+    /// </summary>
+    private bool _isListeningPetSkeletonDataStateChanged;
+
+    /// <summary>
     /// 初始化界面。
     /// 这里只做显式引用缓存和一次性事件绑定，不做业务数据刷新。
     /// </summary>
@@ -377,6 +407,19 @@ public sealed class PetTJUIForm : UIFormLogic
         RefreshTabs();
         RefreshList();
         HideDetail();
+    }
+
+    /// <summary>
+    /// 界面关闭时释放宠物 SkeletonData 按需加载事件监听。
+    /// 列表和详情里的 SkeletonGraphic 对象保留复用，不在这里销毁。
+    /// </summary>
+    /// <param name="isShutdown">是否为关闭流程。</param>
+    /// <param name="userData">用户自定义数据。</param>
+    protected override void OnClose(bool isShutdown, object userData)
+    {
+        ReleasePetSkeletonDataStateSubscription();
+        _requestedUiSkeletonDataPaths.Clear();
+        base.OnClose(isShutdown, userData);
     }
 
     /// <summary>
@@ -419,6 +462,7 @@ public sealed class PetTJUIForm : UIFormLogic
         _detailView.TxtQuality = _txtDetailQuality;
         _detailView.TxtProperty = _txtDetailProperty;
         _detailView.TxtIntroduce = _txtDetailIntroduce;
+        _detailView.TxtOccurrenceConditions = _txtDetailOccurrenceConditions;
         _detailView.PetRoot = _trDetailPetRoot;
 
         CacheQualityTab(0, _btnQualityNormal, QualityOrders[0]);
@@ -489,6 +533,7 @@ public sealed class PetTJUIForm : UIFormLogic
             && _txtDetailQuality != null
             && _txtDetailProperty != null
             && _txtDetailIntroduce != null
+            && _txtDetailOccurrenceConditions != null
             && _trDetailPetRoot != null;
     }
 
@@ -566,6 +611,11 @@ public sealed class PetTJUIForm : UIFormLogic
         if (_txtDetailIntroduce == null)
         {
             Log.Warning("PetTJUIForm 缺少 _txtDetailIntroduce 引用，请在 Inspector 中把 PetDetailed/TxtIntroduce 拖入。");
+        }
+
+        if (_txtDetailOccurrenceConditions == null)
+        {
+            Log.Warning("PetTJUIForm 缺少 _txtDetailOccurrenceConditions 引用，请在 Inspector 中把 PetDetailed/TxtOccurrenceConditions 拖入。");
         }
 
         if (_trDetailPetRoot == null)
@@ -847,6 +897,105 @@ public sealed class PetTJUIForm : UIFormLogic
     }
 
     /// <summary>
+    /// 确保宠物图鉴 UI SkeletonData 资源已经被请求。
+    /// 只在同步缓存未命中时调用；不会恢复启动阶段的宠物全量预加载。
+    /// </summary>
+    /// <param name="row">当前需要显示的宠物数据行。</param>
+    private void RequestPetUiSkeletonDataIfNeeded(PetDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.UiSkeletonDataPath) || GameEntry.GameAssets == null)
+        {
+            return;
+        }
+
+        if (GameEntry.GameAssets.TryGetPetSkeletonDataAsset(row.UiSkeletonDataPath, out SkeletonDataAsset cachedSkeletonDataAsset) && cachedSkeletonDataAsset != null)
+        {
+            _requestedUiSkeletonDataPaths.Remove(row.UiSkeletonDataPath);
+            return;
+        }
+
+        EnsurePetSkeletonDataStateSubscription();
+        if (_requestedUiSkeletonDataPaths.Add(row.UiSkeletonDataPath))
+        {
+            GameEntry.GameAssets.RequestPetUiSkeletonDataAsset(row);
+        }
+    }
+
+    /// <summary>
+    /// 确保图鉴界面已经监听宠物 SkeletonData 加载状态。
+    /// 监听范围由 OnPetSkeletonDataStateChanged 内部按 UiSkeletonDataPath 精准过滤。
+    /// </summary>
+    private void EnsurePetSkeletonDataStateSubscription()
+    {
+        if (_isListeningPetSkeletonDataStateChanged || GameEntry.GameAssets == null)
+        {
+            return;
+        }
+
+        GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
+        GameEntry.GameAssets.PetSkeletonDataStateChanged += OnPetSkeletonDataStateChanged;
+        _isListeningPetSkeletonDataStateChanged = true;
+    }
+
+    /// <summary>
+    /// 释放宠物 SkeletonData 加载状态监听。
+    /// 界面关闭或销毁时调用，防止 UIForm 回池后继续响应资源事件。
+    /// </summary>
+    private void ReleasePetSkeletonDataStateSubscription()
+    {
+        if (!_isListeningPetSkeletonDataStateChanged || GameEntry.GameAssets == null)
+        {
+            _isListeningPetSkeletonDataStateChanged = false;
+            return;
+        }
+
+        GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
+        _isListeningPetSkeletonDataStateChanged = false;
+    }
+
+    /// <summary>
+    /// 宠物 SkeletonData 加载状态变化回调。
+    /// 只刷新 UiSkeletonDataPath 命中当前可见条目或当前详情的宠物，避免实体 SkeletonData 事件误触发整页重刷。
+    /// </summary>
+    /// <param name="skeletonDataPath">发生变化的 SkeletonData 资源路径。</param>
+    private void OnPetSkeletonDataStateChanged(string skeletonDataPath)
+    {
+        if (string.IsNullOrWhiteSpace(skeletonDataPath))
+        {
+            return;
+        }
+
+        bool isLoaded = GameEntry.GameAssets != null
+            && GameEntry.GameAssets.TryGetPetSkeletonDataAsset(skeletonDataPath, out SkeletonDataAsset skeletonDataAsset)
+            && skeletonDataAsset != null;
+        if (isLoaded)
+        {
+            _requestedUiSkeletonDataPaths.Remove(skeletonDataPath);
+        }
+
+        for (int i = 0; i < _entries.Count; i++)
+        {
+            PetItemEntry entry = _entries[i];
+            if (entry == null
+                || entry.DataRow == null
+                || !string.Equals(entry.DataRow.UiSkeletonDataPath, skeletonDataPath, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(entry.DataRow.Code);
+            ApplyPetGraphic(entry.PetRoot, ref entry.PetGraphic, entry.DataRow, isUnlocked);
+        }
+
+        if (_detailView.CurrentDataRow != null
+            && string.Equals(_detailView.CurrentDataRow.UiSkeletonDataPath, skeletonDataPath, StringComparison.Ordinal))
+        {
+            bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(_detailView.CurrentDataRow.Code);
+            ApplyPetGraphic(_detailView.PetRoot, ref _detailView.PetGraphic, _detailView.CurrentDataRow, isUnlocked);
+        }
+    }
+
+    /// <summary>
     /// 品质按钮点击回调。
     /// 切换当前品质后，统一刷新页签、列表和详情面板。
     /// </summary>
@@ -941,6 +1090,20 @@ public sealed class PetTJUIForm : UIFormLogic
         if (_detailView.TxtIntroduce != null)
         {
             _detailView.TxtIntroduce.text = row.Description;
+        }
+
+        if (_detailView.TxtOccurrenceConditions != null)
+        {
+            bool shouldShowOccurrenceConditions = row.RequiredStars > 0;
+            if (_detailView.TxtOccurrenceConditions.gameObject.activeSelf != shouldShowOccurrenceConditions)
+            {
+                _detailView.TxtOccurrenceConditions.gameObject.SetActive(shouldShowOccurrenceConditions);
+            }
+
+            if (shouldShowOccurrenceConditions)
+            {
+                _detailView.TxtOccurrenceConditions.SetText(DetailOccurrenceConditionsFormat, row.RequiredStars);
+            }
         }
 
         bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(row.Code);
@@ -1053,7 +1216,7 @@ public sealed class PetTJUIForm : UIFormLogic
     /// <param name="graphic">要复用的 SkeletonGraphic 缓存引用。</param>
     /// <param name="row">当前宠物数据行。</param>
     /// <param name="isUnlocked">当前宠物是否已解锁。</param>
-    private static void ApplyPetGraphic(Transform host, ref SkeletonGraphic graphic, PetDataRow row, bool isUnlocked)
+    private void ApplyPetGraphic(Transform host, ref SkeletonGraphic graphic, PetDataRow row, bool isUnlocked)
     {
         if (host == null)
         {
@@ -1068,7 +1231,7 @@ public sealed class PetTJUIForm : UIFormLogic
 
         if (!GameEntry.GameAssets.TryGetPetSkeletonDataAsset(row.UiSkeletonDataPath, out SkeletonDataAsset skeletonDataAsset) || skeletonDataAsset == null)
         {
-            Log.Warning("PetTJUIForm can not find cached ui skeleton data by path '{0}'.", row.UiSkeletonDataPath);
+            RequestPetUiSkeletonDataIfNeeded(row);
             SetGraphicActive(graphic, false);
             return;
         }
@@ -1183,6 +1346,15 @@ public sealed class PetTJUIForm : UIFormLogic
         }
 
         graphic.gameObject.SetActive(isActive);
+    }
+
+    /// <summary>
+    /// 对象销毁时释放事件监听。
+    /// OnClose 正常路径会先释放一次，这里再做兜底，保证异常销毁时也不残留委托。
+    /// </summary>
+    private void OnDestroy()
+    {
+        ReleasePetSkeletonDataStateSubscription();
     }
 
     /// <summary>

@@ -70,6 +70,12 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
         /// 购买按钮文本。
         /// </summary>
         public TextMeshProUGUI PurchaseText;
+
+        /// <summary>
+        /// 购买星星条件文本。
+        /// 对应条目根节点下的 Text (TMP) (1)。
+        /// </summary>
+        public TextMeshProUGUI RequiredStarsText;
     }
 
     /// <summary>
@@ -157,8 +163,9 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
             Transform entryTransform = _eggsRoot.GetChild(i);
             Transform iconTransform = entryTransform.Find("Egg");
             Transform detailTransform = entryTransform.Find("Text (TMP)");
+            Transform requiredStarsTransform = entryTransform.Find("Text (TMP) (1)");
             Transform buttonTransform = entryTransform.Find("Button");
-            if (iconTransform == null || detailTransform == null || buttonTransform == null)
+            if (iconTransform == null || detailTransform == null || requiredStarsTransform == null || buttonTransform == null)
             {
                 Log.Error("PurchaseEggsUIForm 初始化失败，条目 '{0}' 结构无效。", entryTransform.name);
                 return false;
@@ -167,8 +174,9 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
             Image iconImage = iconTransform.GetComponent<Image>();
             Button purchaseButton = buttonTransform.GetComponent<Button>();
             TextMeshProUGUI detailText = detailTransform.GetComponent<TextMeshProUGUI>();
+            TextMeshProUGUI requiredStarsText = requiredStarsTransform.GetComponent<TextMeshProUGUI>();
             TextMeshProUGUI purchaseText = buttonTransform.GetComponentInChildren<TextMeshProUGUI>(true);
-            if (iconImage == null || purchaseButton == null || detailText == null || purchaseText == null)
+            if (iconImage == null || purchaseButton == null || detailText == null || requiredStarsText == null || purchaseText == null)
             {
                 Log.Error("PurchaseEggsUIForm 初始化失败，条目 '{0}' 组件缺失。", entryTransform.name);
                 return false;
@@ -181,6 +189,7 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
                 DetailText = detailText,
                 PurchaseButton = purchaseButton,
                 PurchaseText = purchaseText,
+                RequiredStarsText = requiredStarsText,
             };
         }
 
@@ -387,6 +396,34 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
         {
             entryView.PurchaseText.text = BuildPurchaseText(eggDataRow.PurchaseGold);
         }
+
+        RefreshRequiredStarsText(entryView, eggDataRow.RequiredStars);
+    }
+
+    /// <summary>
+    /// 刷新购买蛋条目的星星解锁条件文本。
+    /// </summary>
+    /// <param name="entryView">条目视图。</param>
+    /// <param name="requiredStars">购买该蛋需要达到的星星数量。</param>
+    private static void RefreshRequiredStarsText(EggShopEntryView entryView, int requiredStars)
+    {
+        if (entryView == null || entryView.RequiredStarsText == null)
+        {
+            return;
+        }
+
+        bool shouldShowRequiredStars = requiredStars > 0;
+        if (entryView.RequiredStarsText.gameObject.activeSelf != shouldShowRequiredStars)
+        {
+            entryView.RequiredStarsText.gameObject.SetActive(shouldShowRequiredStars);
+        }
+
+        if (!shouldShowRequiredStars)
+        {
+            return;
+        }
+
+        entryView.RequiredStarsText.SetText("解锁条件:{0}星星", requiredStars);
     }
 
     /// <summary>

@@ -44,6 +44,24 @@ public sealed class PetEntityLogic : EntityLogic
     private string _currentPetCode;
 
     /// <summary>
+    /// 当前等待按需加载 SkeletonData 的宠物 Code。
+    /// 初始状态为空；当实体显示非默认宠物但缓存中暂时没有对应 SkeletonData 时写入，用于资源加载完成回调中精确重刷当前实体。
+    /// </summary>
+    private string _pendingPetCode;
+
+    /// <summary>
+    /// 当前已经发起过 SkeletonData 按需请求的宠物 Code。
+    /// 初始状态为空；用于防止资源路径配置错误或加载失败时，被 PetSkeletonDataStateChanged 事件反复触发同一路径重试。
+    /// </summary>
+    private string _requestedPetCode;
+
+    /// <summary>
+    /// 当前正在等待加载完成的实体 SkeletonData 资源路径。
+    /// 初始状态为空；资源成功或失败回调到达后用它过滤无关宠物资源事件。
+    /// </summary>
+    private string _pendingSkeletonDataPath;
+
+    /// <summary>
     /// Spine Skeleton 初始化后的默认 ScaleX。
     /// 用于在运行时朝向切换时保留 Spine 自身的翻转语义。
     /// </summary>
@@ -133,6 +151,10 @@ public sealed class PetEntityLogic : EntityLogic
     /// </summary>
     protected override void OnHide(bool isShutdown, object userData)
     {
+        ReleaseGameAssetPreloadStateSubscription();
+        _pendingPetCode = null;
+        _requestedPetCode = null;
+        _pendingSkeletonDataPath = null;
         ClearRewardAnimationCallback();
         StopMoveTween();
         base.OnHide(isShutdown, userData);
@@ -384,9 +406,23 @@ public sealed class PetEntityLogic : EntityLogic
 
         if (skeletonDataAsset == null)
         {
-            Log.Warning("PetEntityLogic can not find cached entity skeleton data by path '{0}'.", petDataRow.EntitySkeletonDataPath);
+            _pendingPetCode = petCode;
+            _pendingSkeletonDataPath = petDataRow.EntitySkeletonDataPath;
+            SetSkeletonVisible(false);
+            EnsureGameAssetPreloadStateSubscription();
+            if (GameEntry.GameAssets != null && !string.Equals(_requestedPetCode, petCode, System.StringComparison.Ordinal))
+            {
+                _requestedPetCode = petCode;
+                GameEntry.GameAssets.RequestPetEntitySkeletonDataAsset(petDataRow);
+            }
+
             return;
         }
+
+        _pendingPetCode = null;
+        _requestedPetCode = null;
+        _pendingSkeletonDataPath = null;
+        SetSkeletonVisible(true);
 
         if (_skeletonAnimation.skeletonDataAsset != skeletonDataAsset || !string.Equals(_currentPetCode, petCode, System.StringComparison.Ordinal))
         {
@@ -399,6 +435,84 @@ public sealed class PetEntityLogic : EntityLogic
 
         ApplyFacingDirection(_facingDirection);
         PlayAnimation(petDataRow.IdleAnimationName);
+    }
+
+    /// <summary>
+    /// 确保当前实体已经监听宠物 SkeletonData 加载状态。
+    /// 宠物实体只在 SkeletonData 缺失时临时监听指定资源路径，资源补齐或失败后会立即解绑，避免常驻事件订阅。
+    /// </summary>
+    private void EnsureGameAssetPreloadStateSubscription()
+    {
+        if (GameEntry.GameAssets == null)
+        {
+            return;
+        }
+
+        GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
+        GameEntry.GameAssets.PetSkeletonDataStateChanged += OnPetSkeletonDataStateChanged;
+    }
+
+    /// <summary>
+    /// 取消宠物 SkeletonData 加载状态监听。
+    /// 实体隐藏或资源补齐后调用，防止对象池复用时旧宠物 Code 的回调污染新实体。
+    /// </summary>
+    private void ReleaseGameAssetPreloadStateSubscription()
+    {
+        if (GameEntry.GameAssets == null)
+        {
+            return;
+        }
+
+        GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
+    }
+
+    /// <summary>
+    /// 宠物 SkeletonData 加载状态变化回调。
+    /// 当按需请求的同一路径 SkeletonData 加载完成后，重新执行 ApplyPetVisual，把实体从预制体默认外观切换为真实孵化出的宠物外观。
+    /// </summary>
+    /// <param name="skeletonDataPath">发生变化的 SkeletonData 资源路径。</param>
+    private void OnPetSkeletonDataStateChanged(string skeletonDataPath)
+    {
+        if (string.IsNullOrWhiteSpace(_pendingPetCode) || string.IsNullOrWhiteSpace(_pendingSkeletonDataPath))
+        {
+            ReleaseGameAssetPreloadStateSubscription();
+            return;
+        }
+
+        if (!string.Equals(_pendingSkeletonDataPath, skeletonDataPath, System.StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        string pendingPetCode = _pendingPetCode;
+        ApplyPetVisual(pendingPetCode);
+        if (string.IsNullOrWhiteSpace(_pendingPetCode))
+        {
+            ReleaseGameAssetPreloadStateSubscription();
+            return;
+        }
+
+        Log.Warning("PetEntityLogic can not apply pet visual after SkeletonData state changed, pet code '{0}', path '{1}'.", pendingPetCode, skeletonDataPath);
+        _pendingPetCode = null;
+        _requestedPetCode = null;
+        _pendingSkeletonDataPath = null;
+        ReleaseGameAssetPreloadStateSubscription();
+    }
+
+    /// <summary>
+    /// 控制 Spine 渲染节点显隐。
+    /// 当真实宠物资源尚未加载完成时先隐藏预制体默认 Skeleton，避免玩家看到“孵化出来全是默认宠物”的错误表现。
+    /// </summary>
+    /// <param name="isVisible">是否显示 Spine 渲染对象。</param>
+    private void SetSkeletonVisible(bool isVisible)
+    {
+        CacheComponents();
+        if (_skeletonAnimation == null || _skeletonAnimation.gameObject.activeSelf == isVisible)
+        {
+            return;
+        }
+
+        _skeletonAnimation.gameObject.SetActive(isVisible);
     }
 
     /// <summary>

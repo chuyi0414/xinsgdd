@@ -132,6 +132,12 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
         public TextMeshProUGUI ActionText;
 
         /// <summary>
+        /// 解锁星星条件文本。
+        /// 每个建筑条目 prefab 下都必须存在 RequiredStarsTxt 节点。
+        /// </summary>
+        public TextMeshProUGUI RequiredStarsText;
+
+        /// <summary>
         /// 等级指示物数组。
         /// 数量由 prefab 动态决定，超出当前最大等级的指示物保持暗淡。
         /// 所有物体都会保持显示，通过 Sprite 图片和透明度区分已达成与未达成。
@@ -310,6 +316,10 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
         }
 
         _entryViews = new ArchitectureEntryView[_contentRoot.childCount];
+        int hatchSlotIndex = 0;
+        int dietSlotIndex = 0;
+        int fruiterSlotIndex = 0;
+        int savingPotSlotIndex = 0;
         for (int i = 0; i < _contentRoot.childCount; i++)
         {
             RectTransform entryRoot = _contentRoot.GetChild(i) as RectTransform;
@@ -319,10 +329,34 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
                 return false;
             }
 
-            if (!TryParseEntryIdentity(entryRoot.name, out PlayerRuntimeModule.ArchitectureCategory category, out int slotIndex))
+            if (!TryParseEntryCategory(entryRoot.name, out PlayerRuntimeModule.ArchitectureCategory category))
             {
                 Log.Error("ArchitectureUpgradeUIForm 初始化失败，条目名称 '{0}' 无效。", entryRoot.name);
                 return false;
+            }
+
+            int slotIndex;
+            switch (category)
+            {
+                case PlayerRuntimeModule.ArchitectureCategory.Hatch:
+                    hatchSlotIndex++;
+                    slotIndex = hatchSlotIndex;
+                    break;
+                case PlayerRuntimeModule.ArchitectureCategory.Diet:
+                    dietSlotIndex++;
+                    slotIndex = dietSlotIndex;
+                    break;
+                case PlayerRuntimeModule.ArchitectureCategory.Fruiter:
+                    fruiterSlotIndex++;
+                    slotIndex = fruiterSlotIndex;
+                    break;
+                case PlayerRuntimeModule.ArchitectureCategory.SavingPot:
+                    savingPotSlotIndex++;
+                    slotIndex = savingPotSlotIndex;
+                    break;
+                default:
+                    Log.Error("ArchitectureUpgradeUIForm 初始化失败，条目 '{0}' 分类无效。", entryRoot.name);
+                    return false;
             }
 
             Button actionButton = entryRoot.Find("Button") != null ? entryRoot.Find("Button").GetComponent<Button>() : null;
@@ -330,6 +364,9 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
                 ? entryRoot.Find("Text (TMP)").GetComponent<TextMeshProUGUI>()
                 : null;
             TextMeshProUGUI actionText = actionButton != null ? actionButton.GetComponentInChildren<TextMeshProUGUI>(true) : null;
+            TextMeshProUGUI requiredStarsText = entryRoot.Find("RequiredStarsTxt") != null
+                ? entryRoot.Find("RequiredStarsTxt").GetComponent<TextMeshProUGUI>()
+                : null;
             ScrollRect levelScrollRect = entryRoot.Find("Scroll View") != null
                 ? entryRoot.Find("Scroll View").GetComponent<ScrollRect>()
                 : null;
@@ -338,6 +375,7 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
             if (actionButton == null
                 || titleText == null
                 || actionText == null
+                || requiredStarsText == null
                 || levelScrollRect == null
                 || levelViewport == null
                 || indicatorRoot == null)
@@ -382,6 +420,7 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
                 TitleText = titleText,
                 ActionButton = actionButton,
                 ActionText = actionText,
+                RequiredStarsText = requiredStarsText,
                 LevelScrollRect = levelScrollRect,
                 LevelViewport = levelViewport,
                 LevelContent = indicatorRoot,
@@ -391,6 +430,20 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
                 LevelIndicatorRects = levelIndicatorRects,
                 LevelIndicatorBaseColors = levelIndicatorBaseColors,
             };
+        }
+
+        if (hatchSlotIndex != PlayerRuntimeModule.HatchArchitectureCountValue
+            || dietSlotIndex != PlayerRuntimeModule.DietArchitectureCountValue
+            || fruiterSlotIndex != PlayerRuntimeModule.FruiterArchitectureCountValue
+            || savingPotSlotIndex != PlayerRuntimeModule.SavingPotArchitectureCountValue)
+        {
+            Log.Error(
+                "ArchitectureUpgradeUIForm 初始化失败，Content 分类数量异常，Hatch='{0}'，Diet='{1}'，Fruiter='{2}'，SavingPot='{3}'。",
+                hatchSlotIndex,
+                dietSlotIndex,
+                fruiterSlotIndex,
+                savingPotSlotIndex);
+            return false;
         }
 
         return true;
@@ -838,8 +891,37 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
                     : titlePrefix + "\t未购买");
         }
 
-        RefreshLevelIndicators(entryView.Category, entryView.LevelIndicators, entryView.LevelIndicatorImages, entryView.LevelIndicatorGraphics, entryView.LevelIndicatorBaseColors, entryState.IsUnlocked, entryState.Level);
+        RefreshRequiredStarsText(entryView);
+        RefreshLevelIndicators(entryView.Category, entryView.LevelIndicators, entryView.LevelIndicatorImages, entryView.LevelIndicatorGraphics, entryView.LevelIndicatorBaseColors, entryState.IsUnlocked, entryState.Level, entryState.MaxLevel);
         RefreshActionButton(entryView, entryState);
+    }
+
+    /// <summary>
+    /// 刷新单个建筑条目的解锁星星条件文本。
+    /// </summary>
+    /// <param name="entryView">目标条目视图缓存。</param>
+    private static void RefreshRequiredStarsText(ArchitectureEntryView entryView)
+    {
+        if (entryView == null || entryView.RequiredStarsText == null)
+        {
+            return;
+        }
+
+        int requiredStars = GameEntry.Fruits != null
+            ? GameEntry.Fruits.GetArchitectureActionRequiredStars(entryView.Category, entryView.SlotIndex)
+            : 0;
+        bool shouldShowRequiredStars = requiredStars > 0;
+        if (entryView.RequiredStarsText.gameObject.activeSelf != shouldShowRequiredStars)
+        {
+            entryView.RequiredStarsText.gameObject.SetActive(shouldShowRequiredStars);
+        }
+
+        if (!shouldShowRequiredStars)
+        {
+            return;
+        }
+
+        entryView.RequiredStarsText.SetText("解锁条件:{0}星星", requiredStars);
     }
 
     /// <summary>
@@ -854,6 +936,7 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     /// <param name="levelIndicatorBaseColors">等级指示物的原始颜色缓存。</param>
     /// <param name="isUnlocked">当前槽位是否已解锁。</param>
     /// <param name="level">当前等级。</param>
+    /// <param name="maxLevel">当前建筑类别在配置表中的最大等级。</param>
     private static void RefreshLevelIndicators(
         PlayerRuntimeModule.ArchitectureCategory category,
         GameObject[] levelIndicators,
@@ -861,7 +944,8 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
         Graphic[] levelIndicatorGraphics,
         Color[] levelIndicatorBaseColors,
         bool isUnlocked,
-        int level)
+        int level,
+        int maxLevel)
     {
         if (levelIndicators == null)
         {
@@ -878,14 +962,20 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
                 continue;
             }
 
-            if (!levelIndicatorObject.activeSelf)
-            {
-                levelIndicatorObject.SetActive(true);
-            }
-
             // 从配置表读取对应等级的精灵并赋给 Image。
             // 下标 i 对应等级 i+1。
             int indicatorLevel = i + 1;
+            bool shouldShowIndicator = indicatorLevel <= maxLevel;
+            if (levelIndicatorObject.activeSelf != shouldShowIndicator)
+            {
+                levelIndicatorObject.SetActive(shouldShowIndicator);
+            }
+
+            if (!shouldShowIndicator)
+            {
+                continue;
+            }
+
             if (levelIndicatorImages != null && i < levelIndicatorImages.Length && levelIndicatorImages[i] != null && runtimeModule != null)
             {
                 string spritePath = runtimeModule.GetIndicatorSpritePath(category, indicatorLevel);
@@ -967,75 +1057,46 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     }
 
     /// <summary>
-    /// 根据 prefab 里的固定节点名称解析建筑条目类型和索引。
+    /// 根据 prefab 里的固定节点名称解析建筑条目类型。
     /// </summary>
-    /// <param name="entryName">例如 GoDiet (3)。</param>
+    /// <param name="entryName">例如 GoDiet 或 GoDiet (3)。</param>
     /// <param name="category">返回建筑条目类型。</param>
-    /// <param name="slotIndex">返回 1 基索引。</param>
     /// <returns>是否解析成功。</returns>
-    private static bool TryParseEntryIdentity(
+    private static bool TryParseEntryCategory(
         string entryName,
-        out PlayerRuntimeModule.ArchitectureCategory category,
-        out int slotIndex)
+        out PlayerRuntimeModule.ArchitectureCategory category)
     {
         category = PlayerRuntimeModule.ArchitectureCategory.Hatch;
-        slotIndex = 0;
         if (string.IsNullOrEmpty(entryName))
         {
             return false;
         }
 
-        if (entryName.StartsWith("GoHatch ", System.StringComparison.Ordinal))
+        if (entryName.StartsWith("GoHatch", System.StringComparison.Ordinal))
         {
             category = PlayerRuntimeModule.ArchitectureCategory.Hatch;
-            return TryParseSlotIndex(entryName, out slotIndex);
+            return true;
         }
 
-        if (entryName.StartsWith("GoDiet ", System.StringComparison.Ordinal))
+        if (entryName.StartsWith("GoDiet", System.StringComparison.Ordinal))
         {
             category = PlayerRuntimeModule.ArchitectureCategory.Diet;
-            return TryParseSlotIndex(entryName, out slotIndex);
+            return true;
         }
 
-        if (entryName.StartsWith("GoFruiter ", System.StringComparison.Ordinal))
+        if (entryName.StartsWith("GoFruiter", System.StringComparison.Ordinal))
         {
             category = PlayerRuntimeModule.ArchitectureCategory.Fruiter;
-            return TryParseSlotIndex(entryName, out slotIndex);
+            return true;
         }
 
-        if (entryName.StartsWith("GoSavingPot ", System.StringComparison.Ordinal))
+        if (entryName.StartsWith("GoSavingPot", System.StringComparison.Ordinal))
         {
             category = PlayerRuntimeModule.ArchitectureCategory.SavingPot;
-            return TryParseSlotIndex(entryName, out slotIndex);
+            return true;
         }
 
         return false;
-    }
-
-    /// <summary>
-    /// 从节点名末尾的括号中解析 1 基索引。
-    /// 例如 GoDiet (6) 会解析出 6。
-    /// </summary>
-    /// <param name="entryName">节点名。</param>
-    /// <param name="slotIndex">返回的索引。</param>
-    /// <returns>是否解析成功。</returns>
-    private static bool TryParseSlotIndex(string entryName, out int slotIndex)
-    {
-        slotIndex = 0;
-        if (string.IsNullOrEmpty(entryName))
-        {
-            return false;
-        }
-
-        int leftParenthesisIndex = entryName.LastIndexOf('(');
-        int rightParenthesisIndex = entryName.LastIndexOf(')');
-        if (leftParenthesisIndex < 0 || rightParenthesisIndex <= leftParenthesisIndex + 1)
-        {
-            return false;
-        }
-
-        string slotIndexText = entryName.Substring(leftParenthesisIndex + 1, rightParenthesisIndex - leftParenthesisIndex - 1);
-        return int.TryParse(slotIndexText, out slotIndex) && slotIndex > 0;
     }
 
     /// <summary>

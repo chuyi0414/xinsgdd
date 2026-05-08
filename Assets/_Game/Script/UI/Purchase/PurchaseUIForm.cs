@@ -168,7 +168,7 @@ public sealed class PurchaseUIForm : UIFormLogic
         }
 
         int currentGold = GameEntry.Fruits != null ? GameEntry.Fruits.CurrentGold : 0;
-        _txtGoldInfo.text = Utility.Text.Format("拥有金币:{0}\n价格:{1}", currentGold, _currentData.AcquireParam);
+        _txtGoldInfo.text = Utility.Text.Format("价格:{0}\n拥有金币:{1}", currentGold, _currentData.AcquireParam);
     }
 
     /// <summary>

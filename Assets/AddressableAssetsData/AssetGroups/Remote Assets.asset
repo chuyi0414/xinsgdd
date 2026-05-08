@@ -17,50 +17,8 @@ MonoBehaviour:
     m_SerializedData: []
   m_GUID: fe45ca490f4f818469cc29147bc706d5
   m_SerializeEntries:
-  - m_GUID: 243e816478afd0c47aba1b9310c0f18b
-    m_Address: Arts/Load/UI_Jiazai_005
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Load
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 280bce4e4ffede3449920327355a03ff
-    m_Address: Arts/Load/UI_Jiazai_003
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Load
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 33c265aa21167d54a878cf135042a97e
-    m_Address: Arts/Load/UI_Jiazai_002
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Load
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3c369aea5001ced4284ea91dac74aa7a
     m_Address: Prefabs/UI/Load/LoadUIForm
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Load
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 66e7b867170d4f34380027087338623d
-    m_Address: Arts/Load/UI_Jiazai_004
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Load
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 774d69d9d8b694d4191ef7f788182eb8
-    m_Address: "Arts/Load/\u9002\u9F8412+"
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Load
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d44180fcda31e3d40a03cff0fbc1026b
-    m_Address: Arts/Load/UI_Jiazai_001
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Load
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ee4b9c044f9ffe54d8f102a62655c683
-    m_Address: Arts/Load/UI_Jiazai_004 1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Load
