@@ -376,6 +376,7 @@ public sealed class PersonalSettingUIForm : UIFormLogic
         BuildHeadPortraitList();
         RefreshHeadPortraitList();
         RefreshCurrentAvatar();
+        RefreshCurrentAvatarFrame();
         RefreshStarsText();
     }
 
