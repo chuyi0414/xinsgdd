@@ -68,6 +68,20 @@ public partial class MainUIForm
     private TextMeshProUGUI _goldText;
 
     /// <summary>
+    /// 离线收益按钮。
+    /// 初始可由 Inspector 绑定；未绑定时会按当前 MainUIForm.prefab 中的 GameObject/BtnOfflineEarnings 路径缓存。
+    /// </summary>
+    [SerializeField]
+    private Button _btnOfflineEarnings;
+
+    /// <summary>
+    /// 离线收益按钮上的 TMP 文本。
+    /// 初始可由 Inspector 绑定；未绑定时会从 _btnOfflineEarnings 子节点自动缓存。
+    /// </summary>
+    [SerializeField]
+    private TextMeshProUGUI _offlineEarningsText;
+
+    /// <summary>
     /// 金币 UI 容器。
     /// 屏幕空间金币统一挂在这里。
     /// </summary>
@@ -135,8 +149,11 @@ public partial class MainUIForm
     private void InitializeGoldView()
     {
         EnsureGoldCoinRoot();
+        CacheOfflineEarningsReferences();
+        RegisterOfflineEarningsButtonListener();
         EnsureGoldEventSubscription();
         RefreshGoldText();
+        RefreshOfflineEarningsText();
     }
 
     /// <summary>
@@ -144,7 +161,10 @@ public partial class MainUIForm
     /// </summary>
     private void OpenGoldView()
     {
+        CacheOfflineEarningsReferences();
+        RegisterOfflineEarningsButtonListener();
         RefreshGoldText();
+        RefreshOfflineEarningsText();
         UpdateGoldRewardUiVisibility(CanPresentPetRewardDropsNow());
     }
 
@@ -163,6 +183,7 @@ public partial class MainUIForm
     /// </summary>
     private void DestroyGoldView()
     {
+        UnregisterOfflineEarningsButtonListener();
         ReleaseGoldEventSubscription();
         DestroyAllGoldCoinToasts();
         DestroyAllGoldCoins();
@@ -193,6 +214,8 @@ public partial class MainUIForm
         if (GameEntry.Fruits != null)
         {
             GameEntry.Fruits.GoldChanged += OnGoldChanged;
+            GameEntry.Fruits.OfflineEarningsChanged += OnOfflineEarningsChanged;
+            GameEntry.Fruits.ArchitectureStateChanged += OnArchitectureStateChangedForOfflineEarnings;
         }
 
         _isGoldEventSubscribed = true;
@@ -216,6 +239,8 @@ public partial class MainUIForm
         if (GameEntry.Fruits != null)
         {
             GameEntry.Fruits.GoldChanged -= OnGoldChanged;
+            GameEntry.Fruits.OfflineEarningsChanged -= OnOfflineEarningsChanged;
+            GameEntry.Fruits.ArchitectureStateChanged -= OnArchitectureStateChangedForOfflineEarnings;
         }
 
         _isGoldEventSubscribed = false;
@@ -265,6 +290,46 @@ public partial class MainUIForm
     private void OnGoldChanged(int newGold)
     {
         RefreshGoldText();
+    }
+
+    /// <summary>
+    /// 离线收益待领取数量变化回调：刷新离线收益按钮文本。
+    /// </summary>
+    private void OnOfflineEarningsChanged()
+    {
+        RefreshOfflineEarningsText();
+    }
+
+    /// <summary>
+    /// 建筑状态变化回调：刷新离线收益按钮文本中的“金币/分钟”和上限相关状态。
+    /// </summary>
+    private void OnArchitectureStateChangedForOfflineEarnings()
+    {
+        RefreshOfflineEarningsText();
+    }
+
+    /// <summary>
+    /// 离线收益按钮点击回调。
+    /// 有可领取收益时立即把待领取金币转入玩家金币总额，没有收益时只刷新显示。
+    /// </summary>
+    private void OnOfflineEarningsClicked()
+    {
+        UIInteractionSound.PlayClick();
+        if (GameEntry.Fruits == null)
+        {
+            RefreshOfflineEarningsText();
+            return;
+        }
+
+        int claimedGold = GameEntry.Fruits.ClaimOfflineEarnings();
+        RefreshOfflineEarningsText();
+        if (claimedGold <= 0)
+        {
+            return;
+        }
+
+        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.SaveNow(true);
     }
 
     /// <summary>
@@ -346,6 +411,77 @@ public partial class MainUIForm
 
         int currentGold = GameEntry.Fruits != null ? GameEntry.Fruits.CurrentGold : 0;
         _goldText.SetText(currentGold.ToString());
+    }
+
+    /// <summary>
+    /// 缓存离线收益按钮及其文本引用。
+    /// Inspector 未绑定时，只在低频初始化/打开阶段按固定路径兜底查找，不进入 Update 高频路径。
+    /// </summary>
+    private void CacheOfflineEarningsReferences()
+    {
+        if (_btnOfflineEarnings == null)
+        {
+            Transform offlineEarningsButton = transform.Find("GameObject/BtnOfflineEarnings");
+            if (offlineEarningsButton != null)
+            {
+                _btnOfflineEarnings = offlineEarningsButton.GetComponent<Button>();
+            }
+        }
+
+        if (_offlineEarningsText == null && _btnOfflineEarnings != null)
+        {
+            _offlineEarningsText = _btnOfflineEarnings.GetComponentInChildren<TextMeshProUGUI>(true);
+        }
+    }
+
+    /// <summary>
+    /// 注册离线收益按钮点击监听。
+    /// 先 Remove 再 Add，保证 MainUIForm 反复打开时不会重复绑定。
+    /// </summary>
+    private void RegisterOfflineEarningsButtonListener()
+    {
+        if (_btnOfflineEarnings == null)
+        {
+            return;
+        }
+
+        _btnOfflineEarnings.onClick.RemoveListener(OnOfflineEarningsClicked);
+        _btnOfflineEarnings.onClick.AddListener(OnOfflineEarningsClicked);
+    }
+
+    /// <summary>
+    /// 取消离线收益按钮点击监听。
+    /// </summary>
+    private void UnregisterOfflineEarningsButtonListener()
+    {
+        if (_btnOfflineEarnings == null)
+        {
+            return;
+        }
+
+        _btnOfflineEarnings.onClick.RemoveListener(OnOfflineEarningsClicked);
+    }
+
+    /// <summary>
+    /// 刷新离线收益按钮文本。
+    /// 有待领取金币时显示“离线收益(可领取)”，否则显示当前每分钟收益。
+    /// </summary>
+    private void RefreshOfflineEarningsText()
+    {
+        if (_offlineEarningsText == null)
+        {
+            return;
+        }
+
+        int pendingGold = GameEntry.Fruits != null ? GameEntry.Fruits.PendingOfflineEarningGold : 0;
+        if (pendingGold > 0)
+        {
+            _offlineEarningsText.SetText("离线收益(可领取)\n{0}", pendingGold);
+            return;
+        }
+
+        int goldPerMinute = GameEntry.Fruits != null ? GameEntry.Fruits.OfflineEarningGoldPerMinute : 0;
+        _offlineEarningsText.SetText("离线收益\n{0}金币/分钟", goldPerMinute);
     }
 
     /// <summary>

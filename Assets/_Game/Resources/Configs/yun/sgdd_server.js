@@ -31,6 +31,7 @@ const playerProfileQueryBatchSize = 100
 // 新账号首次建档时只使用这里的数据，不再信任客户端传来的编辑器快照，方便在云函数内直接改数值测试。
 const initialSnapshotTemplate = {
     currentGold: 0,
+    pendingOfflineEarningGold: 0,
     currentStars: 60,
     hasClaimedNewcomerPackage: false,
     playerName: '',
@@ -314,6 +315,7 @@ function normalizeSnapshot(snapshot) {
     }
 
     snapshot.currentGold = normalizeNonNegativeInteger(snapshot.currentGold, initialSnapshotTemplate.currentGold)
+    snapshot.pendingOfflineEarningGold = normalizeNonNegativeInteger(snapshot.pendingOfflineEarningGold, initialSnapshotTemplate.pendingOfflineEarningGold)
     snapshot.currentStars = normalizeNonNegativeInteger(snapshot.currentStars, initialSnapshotTemplate.currentStars)
     snapshot.hasClaimedNewcomerPackage = normalizeBoolean(snapshot.hasClaimedNewcomerPackage, initialSnapshotTemplate.hasClaimedNewcomerPackage)
     snapshot.playerName = normalizeString(snapshot.playerName)

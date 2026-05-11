@@ -23,6 +23,7 @@ public sealed partial class PlayerRuntimeModule
         }
 
         snapshot.currentGold = _currentGold;
+        snapshot.pendingOfflineEarningGold = Mathf.Clamp(_pendingOfflineEarningGold, 0, CalculateOfflineEarningCapacity());
         snapshot.currentStars = _currentStars;
         snapshot.hasClaimedNewcomerPackage = _hasClaimedNewcomerPackage;
         snapshot.playerName = _playerName ?? string.Empty;
@@ -69,10 +70,13 @@ public sealed partial class PlayerRuntimeModule
         ApplySelectedCosmetics(snapshot.selectedHeadPortraitCode, snapshot.selectedHeadPortraitFrameCode);
         ApplyProduceCounts(snapshot.produceCounts);
         ApplyArchitectureStates(snapshot.architectures);
+        _pendingOfflineEarningGold = Mathf.Max(0, snapshot.pendingOfflineEarningGold);
+        NormalizePendingOfflineEarningGold();
         _isCandidateCacheDirty = true;
         RebuildCandidateCachesIfNeeded();
         GoldChanged?.Invoke(_currentGold);
         StarsChanged?.Invoke(_currentStars);
+        OfflineEarningsChanged?.Invoke();
         NotifyAllProduceCountsChanged();
         ArchitectureStateChanged?.Invoke();
         NotifyPlayfieldCapacityChanged();

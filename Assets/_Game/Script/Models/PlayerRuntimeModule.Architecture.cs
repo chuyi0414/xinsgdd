@@ -101,9 +101,21 @@ public sealed partial class PlayerRuntimeModule
     private int _orchardSlotCount = 1;
 
     /// <summary>
+    /// 离线收益按整分钟结算时使用的秒数常量。
+    /// 小于 60 秒的离线时长不会产生金币，避免频繁切后台刷收益。
+    /// </summary>
+    private const float OfflineEarningSecondsPerMinute = 60f;
+
+    /// <summary>
     /// 当前会话内的金币总额。
     /// </summary>
     private int _currentGold;
+
+    /// <summary>
+    /// 当前已经结算但尚未领取的离线收益金币。
+    /// 初始为 0；云读档离线结算会累加到这里，点击离线收益按钮后清零并转入 _currentGold。
+    /// </summary>
+    private int _pendingOfflineEarningGold;
 
     /// <summary>
     /// 当前会话内的星星累计总额。
@@ -151,6 +163,12 @@ public sealed partial class PlayerRuntimeModule
     /// </summary>
     public event Action NewcomerPackageClaimStateChanged;
 
+    /// <summary>
+    /// 离线收益待领取数量发生变化时触发。
+    /// MainUIForm 用它刷新 BtnOfflineEarnings 文案，CloudSaveModule 用它标记存档为脏。
+    /// </summary>
+    public event Action OfflineEarningsChanged;
+
     // ───────────── 建筑属性 ─────────────
 
     /// <summary>
@@ -186,6 +204,21 @@ public sealed partial class PlayerRuntimeModule
     /// 当前持有的金币总额。
     /// </summary>
     public int CurrentGold => _currentGold;
+
+    /// <summary>
+    /// 当前已经结算但尚未领取的离线收益金币。
+    /// </summary>
+    public int PendingOfflineEarningGold => _pendingOfflineEarningGold;
+
+    /// <summary>
+    /// 当前离线收益每分钟产出的金币数量。
+    /// </summary>
+    public int OfflineEarningGoldPerMinute => CalculateOfflineEarningGoldPerMinute();
+
+    /// <summary>
+    /// 当前离线收益可暂存的金币上限。
+    /// </summary>
+    public int OfflineEarningCapacity => CalculateOfflineEarningCapacity();
 
     /// <summary>
     /// 当前累计拥有的星星总额。
@@ -525,6 +558,98 @@ public sealed partial class PlayerRuntimeModule
     }
 
     /// <summary>
+    /// 应用一段离线真实秒数产生的金币收益。
+    /// 离线收益只进入待领取池，不会直接写入 CurrentGold；玩家点击 BtnOfflineEarnings 后才真正入账。
+    /// </summary>
+    /// <param name="offlineSeconds">从上次云端快照到本次读档之间经过的真实秒数。</param>
+    /// <returns>本次是否改变了待领取离线收益。</returns>
+    public bool ApplyOfflineEarningSeconds(float offlineSeconds)
+    {
+        if (!EnsureInitialized())
+        {
+            return false;
+        }
+
+        bool hasChanged = NormalizePendingOfflineEarningGold();
+        if (offlineSeconds < OfflineEarningSecondsPerMinute)
+        {
+            if (hasChanged)
+            {
+                OfflineEarningsChanged?.Invoke();
+            }
+
+            return hasChanged;
+        }
+
+        int goldPerMinute = CalculateOfflineEarningGoldPerMinute();
+        int capacity = CalculateOfflineEarningCapacity();
+        if (goldPerMinute <= 0 || capacity <= 0 || _pendingOfflineEarningGold >= capacity)
+        {
+            if (hasChanged)
+            {
+                OfflineEarningsChanged?.Invoke();
+            }
+
+            return hasChanged;
+        }
+
+        int offlineMinutes = Mathf.FloorToInt(offlineSeconds / OfflineEarningSecondsPerMinute);
+        if (offlineMinutes <= 0)
+        {
+            if (hasChanged)
+            {
+                OfflineEarningsChanged?.Invoke();
+            }
+
+            return hasChanged;
+        }
+
+        long rawEarnedGold = (long)offlineMinutes * goldPerMinute;
+        int earnedGold = rawEarnedGold >= int.MaxValue ? int.MaxValue : (int)rawEarnedGold;
+        int remainingCapacity = capacity - _pendingOfflineEarningGold;
+        int addedGold = Mathf.Min(remainingCapacity, earnedGold);
+        if (addedGold <= 0)
+        {
+            if (hasChanged)
+            {
+                OfflineEarningsChanged?.Invoke();
+            }
+
+            return hasChanged;
+        }
+
+        _pendingOfflineEarningGold += addedGold;
+        OfflineEarningsChanged?.Invoke();
+        return true;
+    }
+
+    /// <summary>
+    /// 领取当前待领取的离线收益金币。
+    /// 成功领取时会清空待领取池、增加金币总额，并同时广播金币变化与离线收益变化事件。
+    /// </summary>
+    /// <returns>本次实际领取并入账的金币数量；没有可领取收益时返回 0。</returns>
+    public int ClaimOfflineEarnings()
+    {
+        if (!EnsureInitialized())
+        {
+            return 0;
+        }
+
+        NormalizePendingOfflineEarningGold();
+        if (_pendingOfflineEarningGold <= 0)
+        {
+            return 0;
+        }
+
+        int claimedGold = _pendingOfflineEarningGold;
+        _pendingOfflineEarningGold = 0;
+        _currentGold += claimedGold;
+        GoldChanged?.Invoke(_currentGold);
+        OfflineEarningsChanged?.Invoke();
+        return claimedGold;
+    }
+
+    /// <summary>
     /// 尝试把新人礼包标记为已领取。
     /// 该方法只负责修改领取状态，不直接发放奖励，避免存档状态和奖励逻辑互相耦合。
     /// </summary>
@@ -571,6 +696,158 @@ public sealed partial class PlayerRuntimeModule
         }
 
         return _currentStars >= required;
+    }
+
+    /// <summary>
+    /// 计算当前所有已解锁建筑提供的离线收益每分钟金币。
+    /// 只读取已经完成的购买/升级进度，不读取未来等级，保证收益和玩家实际进度严格一致。
+    /// </summary>
+    /// <returns>当前离线收益每分钟金币；未初始化或没有收益配置时返回 0。</returns>
+    private int CalculateOfflineEarningGoldPerMinute()
+    {
+        if (!_isInitialized)
+        {
+            return 0;
+        }
+
+        long totalGoldPerMinute = 0L;
+        totalGoldPerMinute += CalculateArchitectureCategoryOfflineEarningGold(ArchitectureCategory.Hatch, _hatchArchitectureStates);
+        totalGoldPerMinute += CalculateArchitectureCategoryOfflineEarningGold(ArchitectureCategory.Diet, _dietArchitectureStates);
+        totalGoldPerMinute += CalculateArchitectureCategoryOfflineEarningGold(ArchitectureCategory.Fruiter, _fruiterArchitectureStates);
+        return totalGoldPerMinute >= int.MaxValue ? int.MaxValue : (int)totalGoldPerMinute;
+    }
+
+    /// <summary>
+    /// 计算指定建筑类别当前已经生效的离线收益金币。
+    /// 每个已解锁槽位只取“当前最高已解锁等级”的 SaveGold：
+    /// 1 级取 ArchitectureSlot.SaveGold，2 级及以上取最后一次完成升级对应的 ArchitectureUpgrade.SaveGold。
+    /// 注意：同一个槽位不会把 1→2、2→3、3→4 等历史升级值叠加，避免把阶段值误当增量值。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="slotStates">该类别的运行时槽位状态数组。</param>
+    /// <returns>该类别当前每分钟收益。</returns>
+    private long CalculateArchitectureCategoryOfflineEarningGold(ArchitectureCategory category, ArchitectureSlotState[] slotStates)
+    {
+        if (slotStates == null || slotStates.Length <= 0)
+        {
+            return 0L;
+        }
+
+        long totalGoldPerMinute = 0L;
+        for (int i = 0; i < slotStates.Length; i++)
+        {
+            ArchitectureSlotState slotState = slotStates[i];
+            if (slotState == null || !slotState.IsUnlocked)
+            {
+                continue;
+            }
+
+            int slotIndex = i + 1;
+            totalGoldPerMinute += GetLatestUnlockedSaveGold(category, slotIndex, slotState.Level);
+        }
+
+        return totalGoldPerMinute;
+    }
+
+    /// <summary>
+    /// 获取指定建筑槽位当前最高已解锁等级提供的离线收益。
+    /// 当前等级为 1 时读取槽位解锁表 SaveGold；当前等级大于 1 时读取“升到当前等级”的升级表 SaveGold。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="slotIndex">1 基槽位索引。</param>
+    /// <param name="level">该槽位当前已解锁等级。</param>
+    /// <returns>当前最高已解锁等级收益；配置缺失时返回 0。</returns>
+    private int GetLatestUnlockedSaveGold(ArchitectureCategory category, int slotIndex, int level)
+    {
+        if (level <= InitialArchitectureLevel)
+        {
+            return GetSlotSaveGold(category, slotIndex);
+        }
+
+        return GetUpgradeSaveGold(category, slotIndex, level - 1);
+    }
+
+    /// <summary>
+    /// 获取指定建筑槽位解锁后提供的离线收益。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="slotIndex">1 基槽位索引。</param>
+    /// <returns>该槽位解锁收益；配置缺失时返回 0。</returns>
+    private int GetSlotSaveGold(ArchitectureCategory category, int slotIndex)
+    {
+        if (slotIndex <= 0
+            || !_architectureSlotRowsByCategory.TryGetValue(category, out Dictionary<int, ArchitectureSlotDataRow> rowsBySlotIndex)
+            || rowsBySlotIndex == null
+            || !rowsBySlotIndex.TryGetValue(slotIndex, out ArchitectureSlotDataRow row)
+            || row == null)
+        {
+            return 0;
+        }
+
+        return Mathf.Max(0, row.SaveGold);
+    }
+
+    /// <summary>
+    /// 获取指定建筑完成一次升级后提供的离线收益增量。
+    /// </summary>
+    /// <param name="category">建筑类别。</param>
+    /// <param name="slotIndex">1 基槽位索引。</param>
+    /// <param name="currentLevel">升级前等级，对应 ArchitectureUpgrade.CurrentLevel。</param>
+    /// <returns>该升级增量收益；配置缺失或存钱罐类别时返回 0。</returns>
+    private int GetUpgradeSaveGold(ArchitectureCategory category, int slotIndex, int currentLevel)
+    {
+        if (category == ArchitectureCategory.SavingPot
+            || currentLevel < InitialArchitectureLevel
+            || slotIndex <= 0
+            || !_architectureUpgradeRowsByCategory.TryGetValue(category, out Dictionary<(int slotIndex, int currentLevel), ArchitectureUpgradeDataRow> rowsBySlotAndLevel)
+            || rowsBySlotAndLevel == null
+            || !rowsBySlotAndLevel.TryGetValue((slotIndex, currentLevel), out ArchitectureUpgradeDataRow row)
+            || row == null)
+        {
+            return 0;
+        }
+
+        return Mathf.Max(0, row.SaveGold);
+    }
+
+    /// <summary>
+    /// 计算当前存钱罐等级提供的离线收益暂存上限。
+    /// 上限直接读取 SavingPot.txt 当前等级行的 EffectParam 字段。
+    /// </summary>
+    /// <returns>当前离线收益上限；未初始化、未解锁或配置缺失时返回 0。</returns>
+    private int CalculateOfflineEarningCapacity()
+    {
+        if (!_isInitialized)
+        {
+            return 0;
+        }
+
+        ArchitectureSlotState savingPotState = GetArchitectureSlotState(ArchitectureCategory.SavingPot, 1);
+        if (savingPotState == null || !savingPotState.IsUnlocked || savingPotState.Level < InitialArchitectureLevel)
+        {
+            return 0;
+        }
+
+        return _savingPotRowsByLevel.TryGetValue(savingPotState.Level, out SavingPotDataRow row) && row != null
+            ? Mathf.Max(0, row.EffectParam)
+            : 0;
+    }
+
+    /// <summary>
+    /// 把待领取离线收益限制到当前存钱罐上限内。
+    /// 云端手改、配置降级或旧档迁移都可能让待领取值越界，因此读档和领取前都要防御。
+    /// </summary>
+    /// <returns>本次是否修改了待领取值。</returns>
+    private bool NormalizePendingOfflineEarningGold()
+    {
+        int normalizedGold = Mathf.Clamp(_pendingOfflineEarningGold, 0, CalculateOfflineEarningCapacity());
+        if (normalizedGold == _pendingOfflineEarningGold)
+        {
+            return false;
+        }
+
+        _pendingOfflineEarningGold = normalizedGold;
+        return true;
     }
 
     /// <summary>

@@ -15,6 +15,12 @@ public sealed class PlayerCloudSaveSnapshot
     public int currentGold;
 
     /// <summary>
+    /// 当前已经结算但尚未点击领取的离线收益金币。
+    /// 该值进入云存档，避免玩家离线收益已经产生但未点击领取时退出后丢失。
+    /// </summary>
+    public int pendingOfflineEarningGold;
+
+    /// <summary>
     /// 当前玩家累计拥有的星星总额。
     /// 星星只作为解锁阈值，不在购买行为中消耗。
     /// </summary>

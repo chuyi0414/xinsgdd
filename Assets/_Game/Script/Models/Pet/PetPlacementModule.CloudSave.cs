@@ -111,6 +111,82 @@ public sealed partial class PetPlacementModule
     }
 
     /// <summary>
+    /// 根据蛋配置抽取一只宠物，并像云存档宠物恢复一样直接放入游玩区。
+    /// 该入口专供离线孵化结算使用，不设置 PendingSpawnHatchSlotIndex，避免宠物从孵化槽播放出生移动动画。
+    /// </summary>
+    /// <param name="eggCode">已经离线孵化完成的蛋 Code。</param>
+    /// <param name="petState">成功生成的宠物运行时状态。</param>
+    /// <returns>成功生成并登记宠物返回 true。</returns>
+    public bool TryHatchPetFromEggCodeToPlayArea(string eggCode, out PetRuntimeState petState)
+    {
+        petState = null;
+        if (string.IsNullOrWhiteSpace(eggCode))
+        {
+            Log.Warning("PetPlacementModule can not hatch offline pet because egg code is empty.");
+            return false;
+        }
+
+        if (GameEntry.DataTables == null
+            || !GameEntry.DataTables.IsAvailable<EggDataRow>()
+            || !GameEntry.DataTables.IsAvailable<PetDataRow>())
+        {
+            Log.Warning("PetPlacementModule can not hatch offline pet because required data tables are unavailable.");
+            return false;
+        }
+
+        EggDataRow eggDataRow = GameEntry.DataTables.GetDataRowByCode<EggDataRow>(eggCode);
+        if (eggDataRow == null)
+        {
+            Log.Warning("PetPlacementModule can not hatch offline pet because egg '{0}' can not be found.", eggCode);
+            return false;
+        }
+
+        if (!TryRollPetQuality(eggDataRow, out QualityType petQuality))
+        {
+            Log.Warning("PetPlacementModule can not hatch offline pet because egg '{0}' failed to roll quality.", eggCode);
+            return false;
+        }
+
+        if (!TryPickPetCodeByQuality(petQuality, out string petCode))
+        {
+            return false;
+        }
+
+        int instanceId = AcquireInstanceId();
+        if (instanceId <= 0)
+        {
+            Log.Error("PetPlacementModule can not hatch offline pet because instance id is invalid.");
+            return false;
+        }
+
+        int playAreaCount = ResolveCloudLoadPlayAreaCount();
+        int playAreaIndex = UnityEngine.Random.Range(0, playAreaCount);
+        petState = new PetRuntimeState
+        {
+            InstanceId = instanceId,
+            PetCode = petCode,
+            Quality = petQuality,
+            PlacementType = PetPlacementType.PlayArea,
+            SlotIndex = playAreaIndex,
+            DesiredFruitCode = null,
+            DiningWishState = PetDiningWishState.None,
+            RemainingDiningStageSeconds = 0f,
+            PlayAreaIndex = playAreaIndex,
+            PlayAreaRandomPosition01 = new Vector2(UnityEngine.Random.value, UnityEngine.Random.value),
+            RemainingPostMealSeconds = 0f,
+            PendingSpawnHatchSlotIndex = -1,
+            OrchardSlotIndex = -1,
+            PendingPromoteToDining = false,
+            RemainingEatFruitCount = ResolveInitialEatFruitCount(petCode)
+        };
+
+        _petStates.Add(instanceId, petState);
+        GameEntry.Fruits?.TryUnlockPet(petCode);
+        NotifyPlacementChanged();
+        return true;
+    }
+
+    /// <summary>
     /// 计算云读档时可用的 PlayArea 数量。
     /// </summary>
     /// <returns>可用 PlayArea 数量，至少为 1。</returns>

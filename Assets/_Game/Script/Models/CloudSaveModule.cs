@@ -85,6 +85,18 @@ public sealed class CloudSaveModule
     private bool _pendingSaveAfterCurrentCloudCall;
 
     /// <summary>
+    /// 当前是否已经真正进入主界面并允许业务秒数持续推进。
+    /// 初始为 false，LoadUIForm 阶段只读档和一次性离线结算，不开启孵化等模块的在线 Update 跑秒。
+    /// </summary>
+    private bool _hasGameplayStarted;
+
+    /// <summary>
+    /// 当前是否允许在主界面打开前执行保存。
+    /// 仅启动期离线结算产生变化后置 true，用于立即落盘并在失败时允许重试，避免普通加载等待刷新 clientSaveTime。
+    /// </summary>
+    private bool _isPreGameplaySaveAllowed;
+
+    /// <summary>
     /// 自动保存间隔秒数。
     /// 初始化时从 GameplayRule.CloudAutoSaveIntervalMinutes 换算得到。
     /// </summary>
@@ -190,6 +202,11 @@ public sealed class CloudSaveModule
             return;
         }
 
+        if (!_hasGameplayStarted && !_isPreGameplaySaveAllowed)
+        {
+            return;
+        }
+
         if (_retryCountdownSeconds > 0f)
         {
             _retryCountdownSeconds -= realElapseSeconds;
@@ -261,6 +278,21 @@ public sealed class CloudSaveModule
 
         CallCloudFunction("saveSnapshot", snapshot, OnSaveCloudSuccess, OnSaveCloudFailure);
         return true;
+    }
+
+    /// <summary>
+    /// 通知云存档模块玩家已经真正进入主界面。
+    /// 该方法只打开在线业务秒数推进开关，不做离线结算；离线结算已经在启动期云读档成功后立即完成。
+    /// </summary>
+    public void NotifyGameplayStarted()
+    {
+        if (_hasGameplayStarted)
+        {
+            return;
+        }
+
+        _hasGameplayStarted = true;
+        GameEntry.EggHatch?.SetRuntimeTickEnabled(true);
     }
 
     /// <summary>
@@ -375,10 +407,15 @@ public sealed class CloudSaveModule
         {
             _mainUIForm.AppendPendingGoldDropsForCloudSave(goldDrops);
             _mainUIForm.AppendPendingProduceDropsForCloudSave(produceDrops);
+            snapshot.pendingGoldDrops = goldDrops.ToArray();
+            snapshot.pendingProduceDrops = produceDrops.ToArray();
+        }
+        else
+        {
+            snapshot.pendingGoldDrops = _loadedPendingGoldDrops ?? Array.Empty<PendingGoldDropSaveData>();
+            snapshot.pendingProduceDrops = _loadedPendingProduceDrops ?? Array.Empty<PendingProduceDropSaveData>();
         }
 
-        snapshot.pendingGoldDrops = goldDrops.ToArray();
-        snapshot.pendingProduceDrops = produceDrops.ToArray();
         NormalizeSnapshotForWechatCloudCall(snapshot);
         return true;
     }
@@ -614,6 +651,70 @@ public sealed class CloudSaveModule
     }
 
     /// <summary>
+    /// 应用云存档读取后需要立即结算的离线业务秒数。
+    /// 该结算只扣减存档时间差，不开启在线 Update 跑秒；若有蛋完成孵化，会直接生成到游玩区。
+    /// </summary>
+    /// <param name="snapshot">刚从云端读取到的快照。</param>
+    /// <returns>本次离线结算是否改变了需要保存的运行时状态。</returns>
+    private static bool ApplyInitialOfflineSettlement(PlayerCloudSaveSnapshot snapshot)
+    {
+        if (snapshot == null)
+        {
+            return false;
+        }
+
+        float offlineSeconds = CalculateOfflineElapsedSeconds(snapshot);
+        if (offlineSeconds <= 0f)
+        {
+            return false;
+        }
+
+        bool hasChanged = false;
+        if (GameEntry.EggHatch != null && GameEntry.EggHatch.ApplyOfflineElapsedSeconds(offlineSeconds))
+        {
+            hasChanged = true;
+        }
+
+        if (GameEntry.Fruits != null && GameEntry.Fruits.ApplyOfflineEarningSeconds(offlineSeconds))
+        {
+            hasChanged = true;
+        }
+
+        return hasChanged;
+    }
+
+    /// <summary>
+    /// 根据快照中的客户端保存时间计算离线秒数。
+    /// clientSaveTime 使用 UTC ISO-8601 字符串保存；解析失败、未来时间或空字符串都按 0 秒处理。
+    /// </summary>
+    /// <param name="snapshot">云端快照。</param>
+    /// <returns>需要一次性结算的真实秒数。</returns>
+    private static float CalculateOfflineElapsedSeconds(PlayerCloudSaveSnapshot snapshot)
+    {
+        if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.clientSaveTime))
+        {
+            return 0f;
+        }
+
+        if (!DateTime.TryParse(
+                snapshot.clientSaveTime,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out DateTime clientSaveTime))
+        {
+            return 0f;
+        }
+
+        double elapsedSeconds = (DateTime.UtcNow - clientSaveTime.ToUniversalTime()).TotalSeconds;
+        if (elapsedSeconds <= 0d)
+        {
+            return 0f;
+        }
+
+        return elapsedSeconds >= float.MaxValue ? float.MaxValue : (float)elapsedSeconds;
+    }
+
+    /// <summary>
     /// 如果主界面已经打开，则把启动期读取到的掉落物恢复到 UI。
     /// </summary>
     private void RestoreLoadedDropsIfPossible()
@@ -683,6 +784,11 @@ public sealed class CloudSaveModule
             return;
         }
 
+        if (!_hasGameplayStarted && !_isPreGameplaySaveAllowed)
+        {
+            return;
+        }
+
         MarkDirty();
         SaveNow(true);
     }
@@ -706,6 +812,7 @@ public sealed class CloudSaveModule
             GameEntry.Fruits.ArchitectureStateChanged += OnPlayerArchitectureStateChanged;
             GameEntry.Fruits.PlayfieldCapacityChanged += OnPlayerPlayfieldCapacityChanged;
             GameEntry.Fruits.NewcomerPackageClaimStateChanged += OnNewcomerPackageClaimStateChanged;
+            GameEntry.Fruits.OfflineEarningsChanged += OnOfflineEarningsChanged;
             GameEntry.Fruits.SelectedHeadPortraitChanged += OnSelectedHeadPortraitChanged;
             GameEntry.Fruits.SelectedHeadPortraitFrameChanged += OnSelectedHeadPortraitFrameChanged;
         }
@@ -741,6 +848,7 @@ public sealed class CloudSaveModule
             GameEntry.Fruits.ArchitectureStateChanged -= OnPlayerArchitectureStateChanged;
             GameEntry.Fruits.PlayfieldCapacityChanged -= OnPlayerPlayfieldCapacityChanged;
             GameEntry.Fruits.NewcomerPackageClaimStateChanged -= OnNewcomerPackageClaimStateChanged;
+            GameEntry.Fruits.OfflineEarningsChanged -= OnOfflineEarningsChanged;
             GameEntry.Fruits.SelectedHeadPortraitChanged -= OnSelectedHeadPortraitChanged;
             GameEntry.Fruits.SelectedHeadPortraitFrameChanged -= OnSelectedHeadPortraitFrameChanged;
         }
@@ -821,6 +929,14 @@ public sealed class CloudSaveModule
     }
 
     /// <summary>
+    /// 离线收益待领取数量变化事件回调。
+    /// </summary>
+    private void OnOfflineEarningsChanged()
+    {
+        MarkDirty();
+    }
+
+    /// <summary>
     /// 玩家选中头像变化事件回调。
     /// </summary>
     /// <param name="headPortraitCode">最新头像 Code。</param>
@@ -856,9 +972,19 @@ public sealed class CloudSaveModule
         PlayerCloudSaveEnvelope envelope = ParseCloudSaveEnvelope(responseJson);
         if (envelope != null && envelope.ok)
         {
-            ApplySnapshotToRuntime(envelope.snapshot);
-            _isDirty = false;
+            PlayerCloudSaveSnapshot snapshot = envelope.snapshot;
+            ApplySnapshotToRuntime(snapshot);
+            bool hasOfflineSettlementChanged = !envelope.created && ApplyInitialOfflineSettlement(snapshot);
+            _isDirty = hasOfflineSettlementChanged;
+            _isPreGameplaySaveAllowed = hasOfflineSettlementChanged;
             _isReady = true;
+            _retryCountdownSeconds = 0f;
+            _autoSaveCountdownSeconds = _autoSaveIntervalSeconds;
+            if (hasOfflineSettlementChanged)
+            {
+                SaveNow(true);
+            }
+
             return;
         }
 
@@ -898,6 +1024,7 @@ public sealed class CloudSaveModule
             }
 
             _isDirty = false;
+            _isPreGameplaySaveAllowed = false;
             _retryCountdownSeconds = 0f;
             _autoSaveCountdownSeconds = _autoSaveIntervalSeconds;
             SaveSucceeded?.Invoke();
@@ -931,6 +1058,7 @@ public sealed class CloudSaveModule
     {
         _isReady = true;
         _isDirty = true;
+        _isPreGameplaySaveAllowed = false;
         _retryCountdownSeconds = RetryDelaySeconds;
     }
 

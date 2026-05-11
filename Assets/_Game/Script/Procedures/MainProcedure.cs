@@ -54,6 +54,7 @@ public class MainProcedure : ProcedureBase
         if (returningFromCombat)
         {
             procedureOwner.RemoveData(ReturningFromCombatDataName);
+            GameEntry.CloudSave?.NotifyGameplayStarted();
             // MainUIForm 仍然存活，直接恢复每日一关视图。
             RestoreDailyChallengeOnMainUIForm();
         }
@@ -126,6 +127,7 @@ public class MainProcedure : ProcedureBase
 
         UnsubscribeOpenSuccessEvent();
         ClosePendingLoadUIForm();
+        GameEntry.CloudSave?.NotifyGameplayStarted();
         TryOpenNewcomerPackageUI();
     }
 

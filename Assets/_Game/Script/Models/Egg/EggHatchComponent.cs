@@ -74,6 +74,12 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     private float _refillElapsedSeconds;
 
     /// <summary>
+    /// 当前是否允许在线业务秒数每帧推进。
+    /// 初始为 false，保证 LoadUIForm 阶段只读档和做一次性离线结算，不让 Unity Update 持续扣秒。
+    /// </summary>
+    private bool _isRuntimeTickEnabled;
+
+    /// <summary>
     /// 孵化运行时状态发生离散变化时触发。
     /// 仅在库存数量、库存内容、孵化槽占用、孵化完成、读档覆盖等低频节点派发，不在每帧倒计时里派发。
     /// </summary>
@@ -88,6 +94,11 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     /// 当前组件是否可用于业务逻辑。
     /// </summary>
     public bool IsAvailable => _isAvailable;
+
+    /// <summary>
+    /// 当前是否允许在线业务秒数每帧推进。
+    /// </summary>
+    public bool IsRuntimeTickEnabled => _isRuntimeTickEnabled;
 
     /// <summary>
     /// 当前手动蛋库存。
@@ -200,7 +211,7 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     /// </summary>
     private void Update()
     {
-        if (!_isInitialized || !_isAvailable)
+        if (!_isInitialized || !_isAvailable || !_isRuntimeTickEnabled)
         {
             return;
         }
@@ -213,6 +224,15 @@ public sealed class EggHatchComponent : GameFrameworkComponent
 
         UpdateHatchSlots(deltaTime);
         UpdateRefillProgress(deltaTime);
+    }
+
+    /// <summary>
+    /// 设置在线业务秒数是否允许推进。
+    /// </summary>
+    /// <param name="isEnabled">true 表示主界面已进入，可以从当前帧开始按真实时间推进孵化和补蛋。</param>
+    public void SetRuntimeTickEnabled(bool isEnabled)
+    {
+        _isRuntimeTickEnabled = isEnabled;
     }
 
     /// <summary>
@@ -471,6 +491,66 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         RestoreHatchSlots(saveData.slots);
         NotifyEggSlotsChanged();
         NotifyHatchStateChanged();
+    }
+
+    /// <summary>
+    /// 应用云存档离线期间累计的真实秒数。
+    /// 该方法只做一次性结算，不打开每帧在线跑秒；LoadUIForm 阶段可安全调用。
+    /// </summary>
+    /// <param name="offlineSeconds">从上次云端快照到本次读档之间经过的真实秒数。</param>
+    /// <returns>本次是否改变了库存蛋、孵化槽或孵化出的宠物状态。</returns>
+    public bool ApplyOfflineElapsedSeconds(float offlineSeconds)
+    {
+        EnsureInitialized();
+        if (!_isInitialized || !_isAvailable || offlineSeconds <= 0f)
+        {
+            return false;
+        }
+
+        bool hasStateChanged = false;
+        if (_gameplayRuleDataRow != null && _manualEggCount < _gameplayRuleDataRow.MaxManualEggCount)
+        {
+            _refillElapsedSeconds += offlineSeconds;
+            hasStateChanged = true;
+            if (ApplyCompletedRefill())
+            {
+                hasStateChanged = true;
+            }
+        }
+
+        int unlockedSlotCount = UnlockedSlotCount;
+        for (int i = 0; i < unlockedSlotCount; i++)
+        {
+            if (GameEntry.Fruits != null && !GameEntry.Fruits.IsArchitectureSlotUnlocked(PlayerRuntimeModule.ArchitectureCategory.Hatch, i + 1))
+            {
+                continue;
+            }
+
+            EggHatchSlotState slotState = _slotStates[i];
+            if (slotState == null || !slotState.IsOccupied)
+            {
+                continue;
+            }
+
+            if (offlineSeconds >= slotState.RemainingSeconds)
+            {
+                TrySpawnOfflineHatchedPetToPlayArea(slotState);
+                slotState.Clear();
+                hasStateChanged = true;
+                continue;
+            }
+
+            slotState.RemainingSeconds -= offlineSeconds;
+            hasStateChanged = true;
+        }
+
+        if (hasStateChanged)
+        {
+            NotifyEggSlotsChanged();
+            NotifyHatchStateChanged();
+        }
+
+        return hasStateChanged;
     }
 
     /// <summary>
@@ -824,6 +904,27 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         }
 
         GameEntry.PetPlacement.TryHatchPetFromEggCode(slotState.EggCode, hatchSlotIndex, out _);
+    }
+
+    /// <summary>
+    /// 处理离线期间已经完成孵化的蛋。
+    /// 离线恢复不播放孵化槽出生动画，宠物会像云存档恢复宠物一样直接出现在游玩区。
+    /// </summary>
+    /// <param name="slotState">已经达到完成条件的孵化槽状态。</param>
+    private static void TrySpawnOfflineHatchedPetToPlayArea(EggHatchSlotState slotState)
+    {
+        if (slotState == null || string.IsNullOrWhiteSpace(slotState.EggCode))
+        {
+            return;
+        }
+
+        if (GameEntry.PetPlacement == null)
+        {
+            Log.Warning("EggHatchComponent can not spawn offline pet because PetPlacementModule is missing.");
+            return;
+        }
+
+        GameEntry.PetPlacement.TryHatchPetFromEggCodeToPlayArea(slotState.EggCode, out _);
     }
 
     /// <summary>
