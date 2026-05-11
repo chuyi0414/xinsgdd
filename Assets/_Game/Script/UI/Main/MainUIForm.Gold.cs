@@ -280,7 +280,7 @@ public partial class MainUIForm
             EnqueuePendingGoldDropRequest(startWorldPos, endWorldPos, coinAmount);
         }
 
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
     }
 
     /// <summary>
@@ -328,7 +328,7 @@ public partial class MainUIForm
             return;
         }
 
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PlayerProgress);
         GameEntry.CloudSave?.SaveNow(true);
     }
 
@@ -351,7 +351,7 @@ public partial class MainUIForm
         // 将 TxtJB 的屏幕坐标转到金币容器下的局部坐标
         Vector2 targetLocalPos = GetGoldTextLocalPosInCoinRoot();
         coinItem.PlayFlyToTarget(targetLocalPos);
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
     }
 
     /// <summary>
@@ -372,7 +372,7 @@ public partial class MainUIForm
         }
 
         ReleaseGoldCoinItem(coinItem);
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
     }
 
     /// <summary>
@@ -524,7 +524,7 @@ public partial class MainUIForm
         coinItem.Bind(coinAmount, OnGoldCoinFlyComplete, OnGoldCoinClicked);
         coinItem.PlaySpawnAnimation(startLocalPos, endLocalPos);
         _activeGoldCoins.Add(coinItem);
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
         return true;
     }
 
@@ -548,7 +548,7 @@ public partial class MainUIForm
             CoinAmount = coinAmount,
         };
         _pendingGoldDropRequests.Add(pendingRequest);
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
     }
 
     /// <summary>
@@ -665,7 +665,7 @@ public partial class MainUIForm
         }
 
         UpdateGoldRewardUiVisibility(CanPresentPetRewardDropsNow());
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
     }
 
     /// <summary>

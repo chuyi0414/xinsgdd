@@ -214,7 +214,7 @@ public partial class MainUIForm
             EnqueuePendingProduceDropRequest(startWorldPos, endWorldPos, produceCode);
         }
 
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
     }
 
     /// <summary>
@@ -235,7 +235,7 @@ public partial class MainUIForm
         }
 
         ReleaseOutputProduceItem(produceItem);
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
     }
 
     // ──────────────────────────────────────────────────────────
@@ -332,7 +332,7 @@ public partial class MainUIForm
         produceItem.Bind(produceCode, OnOutputProduceItemCollected);
         produceItem.PlaySpawnAnimation(startLocalPos, endLocalPos);
         _activeProduceItems.Add(produceItem);
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
         return true;
     }
 
@@ -356,7 +356,7 @@ public partial class MainUIForm
             ProduceCode = produceCode,
         };
         _pendingProduceDropRequests.Add(pendingRequest);
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
     }
 
     /// <summary>
@@ -471,7 +471,7 @@ public partial class MainUIForm
         }
 
         UpdateProduceRewardUiVisibility(CanPresentPetRewardDropsNow());
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
     }
 
     /// <summary>

@@ -2,6 +2,77 @@ using System;
 using UnityEngine;
 
 /// <summary>
+/// 云存档模块级脏标记。
+/// 每一位代表 PlayerCloudSaveSnapshot 中一组需要一起覆盖的业务字段，用于部分更新时避免未变化模块被默认值覆盖。
+/// </summary>
+[Flags]
+public enum CloudSaveDirtyModule
+{
+    /// <summary>
+    /// 没有任何模块需要保存。
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// 玩家基础进度模块：金币、待领取离线金币、星星、新人礼包领取状态。
+    /// </summary>
+    PlayerProgress = 1 << 0,
+
+    /// <summary>
+    /// 玩家身份与外观模块：昵称、编号、头像、头像框以及头像/头像框解锁集合。
+    /// </summary>
+    IdentityAndCosmetic = 1 << 1,
+
+    /// <summary>
+    /// 图鉴解锁模块：水果、宠物、产出物解锁集合。
+    /// </summary>
+    CollectionUnlocks = 1 << 2,
+
+    /// <summary>
+    /// 产出物库存模块。
+    /// </summary>
+    ProduceInventory = 1 << 3,
+
+    /// <summary>
+    /// 建筑槽位模块。
+    /// </summary>
+    Architectures = 1 << 4,
+
+    /// <summary>
+    /// 蛋孵化模块。
+    /// </summary>
+    EggHatch = 1 << 5,
+
+    /// <summary>
+    /// 场上宠物轻量数据模块。
+    /// </summary>
+    Pets = 1 << 6,
+
+    /// <summary>
+    /// 主界面未点击金币和产出物掉落模块。
+    /// </summary>
+    PendingDrops = 1 << 7,
+
+    /// <summary>
+    /// 每日一关历史最高分模块。
+    /// </summary>
+    DailyChallengeBest = 1 << 8,
+
+    /// <summary>
+    /// 全部模块。
+    /// </summary>
+    All = PlayerProgress
+        | IdentityAndCosmetic
+        | CollectionUnlocks
+        | ProduceInventory
+        | Architectures
+        | EggHatch
+        | Pets
+        | PendingDrops
+        | DailyChallengeBest
+}
+
+/// <summary>
 /// 玩家云存档的完整快照。
 /// 该对象只承载需要跨会话持久化的数据，不保存宠物动画、点餐流程、果园生产等可重建状态。
 /// </summary>
@@ -347,9 +418,15 @@ public sealed class CloudFunctionRequestData
 
     /// <summary>
     /// 需要提交给云端的玩家快照。
-    /// loadSnapshot 可为空；initOrLoadSave 在新用户创建时使用；saveSnapshot 必填。
+    /// loadSnapshot 可为空；initOrLoadSave 在新用户创建时使用；saveSnapshot 在全量保存和补丁保存时都必填。
     /// </summary>
     public PlayerCloudSaveSnapshot snapshot;
+
+    /// <summary>
+    /// 本次 saveSnapshot 请求中 snapshot 有效的模块掩码。
+    /// 为 0 表示兼容旧协议的全量保存；非 0 表示云函数只合并掩码声明的模块字段。
+    /// </summary>
+    public int patchModules;
 }
 
 /// <summary>

@@ -74,9 +74,15 @@ public sealed class CloudSaveModule
     private bool _isDirtyEventSubscribed;
 
     /// <summary>
-    /// 当前存档是否存在未同步到云端的变化。
+    /// 当前存档中尚未同步到云端的模块集合。
     /// </summary>
-    private bool _isDirty;
+    private CloudSaveDirtyModule _dirtyModules;
+
+    /// <summary>
+    /// 当前已经发往云端、正在等待保存结果的模块集合。
+    /// 保存请求发出时会先从 _dirtyModules 中移除这些位；若请求失败，再把这些位并回 _dirtyModules。
+    /// </summary>
+    private CloudSaveDirtyModule _modulesInFlight;
 
     /// <summary>
     /// 当前云函数请求结束后是否需要立刻再保存一次。
@@ -104,7 +110,7 @@ public sealed class CloudSaveModule
 
     /// <summary>
     /// 下一次自动保存前的倒计时。
-    /// 只有 _isDirty 为 true 时才会持续扣减。
+    /// 只有 _dirtyModules 非空时才会持续扣减。
     /// </summary>
     private float _autoSaveCountdownSeconds = DefaultAutoSaveIntervalSeconds;
 
@@ -144,7 +150,7 @@ public sealed class CloudSaveModule
     /// 当前存档是否存在尚未同步到云端的变化。
     /// 排行榜提交新纪录前会读取该状态，决定是否需要先保存头像、头像框等展示资料。
     /// </summary>
-    public bool HasDirtyChanges => _isDirty;
+    public bool HasDirtyChanges => _dirtyModules != CloudSaveDirtyModule.None;
 
     /// <summary>
     /// 云存档保存成功事件。
@@ -186,7 +192,7 @@ public sealed class CloudSaveModule
             return true;
         }
 
-        CallCloudFunction("initOrLoadSave", initialSnapshot, OnInitialLoadCloudSuccess, OnInitialLoadCloudFailure);
+        CallCloudFunction("initOrLoadSave", initialSnapshot, 0, OnInitialLoadCloudSuccess, OnInitialLoadCloudFailure);
         return true;
     }
 
@@ -224,7 +230,7 @@ public sealed class CloudSaveModule
             return;
         }
 
-        if (_isDirty)
+        if (_dirtyModules != CloudSaveDirtyModule.None)
         {
             SaveNow(false);
             return;
@@ -238,12 +244,26 @@ public sealed class CloudSaveModule
     /// </summary>
     public void MarkDirty()
     {
+        MarkDirty(CloudSaveDirtyModule.All);
+    }
+
+    /// <summary>
+    /// 标记指定云存档模块已经变脏，需要在下一次自动保存或强制保存时同步云端。
+    /// </summary>
+    /// <param name="dirtyModules">发生变化的云存档模块集合。</param>
+    public void MarkDirty(CloudSaveDirtyModule dirtyModules)
+    {
         if (!_isReady)
         {
             return;
         }
 
-        _isDirty = true;
+        if (dirtyModules == CloudSaveDirtyModule.None)
+        {
+            return;
+        }
+
+        _dirtyModules |= dirtyModules;
     }
 
     /// <summary>
@@ -262,21 +282,35 @@ public sealed class CloudSaveModule
         {
             if (markDirtyIfBusy)
             {
-                _isDirty = true;
+                if (_dirtyModules == CloudSaveDirtyModule.None)
+                {
+                    _dirtyModules = CloudSaveDirtyModule.All;
+                }
+
                 _pendingSaveAfterCurrentCloudCall = true;
             }
 
             return false;
         }
 
-        if (!TryBuildCurrentSnapshot(out PlayerCloudSaveSnapshot snapshot))
+        CloudSaveDirtyModule modulesToSave = ResolveModulesToSave();
+        if (modulesToSave == CloudSaveDirtyModule.None)
+        {
+            return false;
+        }
+
+        if (!TryBuildPatchSnapshot(modulesToSave, out PlayerCloudSaveSnapshot snapshot))
         {
             Log.Warning("CloudSaveModule 保存失败：无法构建当前快照。");
+            _dirtyModules |= modulesToSave;
+            _modulesInFlight = CloudSaveDirtyModule.None;
             ScheduleSaveRetry();
             return false;
         }
 
-        CallCloudFunction("saveSnapshot", snapshot, OnSaveCloudSuccess, OnSaveCloudFailure);
+        _modulesInFlight = modulesToSave;
+        _dirtyModules &= ~modulesToSave;
+        CallCloudFunction("saveSnapshot", snapshot, (int)modulesToSave, OnSaveCloudSuccess, OnSaveCloudFailure);
         return true;
     }
 
@@ -414,6 +448,107 @@ public sealed class CloudSaveModule
         {
             snapshot.pendingGoldDrops = _loadedPendingGoldDrops ?? Array.Empty<PendingGoldDropSaveData>();
             snapshot.pendingProduceDrops = _loadedPendingProduceDrops ?? Array.Empty<PendingProduceDropSaveData>();
+        }
+
+        NormalizeSnapshotForWechatCloudCall(snapshot);
+        return true;
+    }
+
+    /// <summary>
+    /// 解析本次实际需要保存的模块集合。
+    /// 只要发生任意保存，就同步孵化模块，保证 clientSaveTime 前移时 eggHatch.remainingSeconds 也一起前移。
+    /// </summary>
+    /// <returns>本次需要提交给云端合并的模块集合。</returns>
+    private CloudSaveDirtyModule ResolveModulesToSave()
+    {
+        if (_dirtyModules == CloudSaveDirtyModule.None)
+        {
+            return CloudSaveDirtyModule.None;
+        }
+
+        return _dirtyModules | CloudSaveDirtyModule.EggHatch;
+    }
+
+    /// <summary>
+    /// 按模块集合组装本次补丁快照。
+    /// 快照对象中只有 patchModules 声明的模块会被云函数读取，其余默认值不会覆盖云端。
+    /// </summary>
+    /// <param name="modulesToSave">本次需要保存的模块集合。</param>
+    /// <param name="snapshot">输出的补丁快照。</param>
+    /// <returns>成功构建返回 true。</returns>
+    private bool TryBuildPatchSnapshot(CloudSaveDirtyModule modulesToSave, out PlayerCloudSaveSnapshot snapshot)
+    {
+        if (modulesToSave == CloudSaveDirtyModule.All)
+        {
+            return TryBuildCurrentSnapshot(out snapshot);
+        }
+
+        if (!TryBuildCurrentSnapshot(out PlayerCloudSaveSnapshot currentSnapshot))
+        {
+            snapshot = null;
+            return false;
+        }
+
+        snapshot = new PlayerCloudSaveSnapshot
+        {
+            clientSaveTime = currentSnapshot.clientSaveTime
+        };
+
+        if ((modulesToSave & CloudSaveDirtyModule.PlayerProgress) != 0)
+        {
+            snapshot.currentGold = currentSnapshot.currentGold;
+            snapshot.pendingOfflineEarningGold = currentSnapshot.pendingOfflineEarningGold;
+            snapshot.currentStars = currentSnapshot.currentStars;
+            snapshot.hasClaimedNewcomerPackage = currentSnapshot.hasClaimedNewcomerPackage;
+        }
+
+        if ((modulesToSave & CloudSaveDirtyModule.IdentityAndCosmetic) != 0)
+        {
+            snapshot.playerName = currentSnapshot.playerName;
+            snapshot.playerCode = currentSnapshot.playerCode;
+            snapshot.selectedHeadPortraitCode = currentSnapshot.selectedHeadPortraitCode;
+            snapshot.selectedHeadPortraitFrameCode = currentSnapshot.selectedHeadPortraitFrameCode;
+            snapshot.unlockedHeadPortraitCodes = currentSnapshot.unlockedHeadPortraitCodes;
+            snapshot.unlockedHeadPortraitFrameCodes = currentSnapshot.unlockedHeadPortraitFrameCodes;
+        }
+
+        if ((modulesToSave & CloudSaveDirtyModule.CollectionUnlocks) != 0)
+        {
+            snapshot.unlockedFruitCodes = currentSnapshot.unlockedFruitCodes;
+            snapshot.unlockedPetCodes = currentSnapshot.unlockedPetCodes;
+            snapshot.unlockedProduceCodes = currentSnapshot.unlockedProduceCodes;
+        }
+
+        if ((modulesToSave & CloudSaveDirtyModule.ProduceInventory) != 0)
+        {
+            snapshot.produceCounts = currentSnapshot.produceCounts;
+        }
+
+        if ((modulesToSave & CloudSaveDirtyModule.Architectures) != 0)
+        {
+            snapshot.architectures = currentSnapshot.architectures;
+        }
+
+        if ((modulesToSave & CloudSaveDirtyModule.EggHatch) != 0)
+        {
+            snapshot.eggHatch = currentSnapshot.eggHatch;
+        }
+
+        if ((modulesToSave & CloudSaveDirtyModule.Pets) != 0)
+        {
+            snapshot.pets = currentSnapshot.pets;
+        }
+
+        if ((modulesToSave & CloudSaveDirtyModule.PendingDrops) != 0)
+        {
+            snapshot.pendingGoldDrops = currentSnapshot.pendingGoldDrops;
+            snapshot.pendingProduceDrops = currentSnapshot.pendingProduceDrops;
+        }
+
+        if ((modulesToSave & CloudSaveDirtyModule.DailyChallengeBest) != 0)
+        {
+            snapshot.dailyChallengeHistoricalBestScore = currentSnapshot.dailyChallengeHistoricalBestScore;
+            snapshot.dailyChallengeHistoricalBestTime = currentSnapshot.dailyChallengeHistoricalBestTime;
         }
 
         NormalizeSnapshotForWechatCloudCall(snapshot);
@@ -789,7 +924,7 @@ public sealed class CloudSaveModule
             return;
         }
 
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.All);
         SaveNow(true);
     }
 #endif
@@ -813,6 +948,8 @@ public sealed class CloudSaveModule
             GameEntry.Fruits.PlayfieldCapacityChanged += OnPlayerPlayfieldCapacityChanged;
             GameEntry.Fruits.NewcomerPackageClaimStateChanged += OnNewcomerPackageClaimStateChanged;
             GameEntry.Fruits.OfflineEarningsChanged += OnOfflineEarningsChanged;
+            GameEntry.Fruits.CollectionUnlocksChanged += OnCollectionUnlocksChanged;
+            GameEntry.Fruits.CosmeticUnlocksChanged += OnCosmeticUnlocksChanged;
             GameEntry.Fruits.SelectedHeadPortraitChanged += OnSelectedHeadPortraitChanged;
             GameEntry.Fruits.SelectedHeadPortraitFrameChanged += OnSelectedHeadPortraitFrameChanged;
         }
@@ -849,6 +986,8 @@ public sealed class CloudSaveModule
             GameEntry.Fruits.PlayfieldCapacityChanged -= OnPlayerPlayfieldCapacityChanged;
             GameEntry.Fruits.NewcomerPackageClaimStateChanged -= OnNewcomerPackageClaimStateChanged;
             GameEntry.Fruits.OfflineEarningsChanged -= OnOfflineEarningsChanged;
+            GameEntry.Fruits.CollectionUnlocksChanged -= OnCollectionUnlocksChanged;
+            GameEntry.Fruits.CosmeticUnlocksChanged -= OnCosmeticUnlocksChanged;
             GameEntry.Fruits.SelectedHeadPortraitChanged -= OnSelectedHeadPortraitChanged;
             GameEntry.Fruits.SelectedHeadPortraitFrameChanged -= OnSelectedHeadPortraitFrameChanged;
         }
@@ -872,7 +1011,7 @@ public sealed class CloudSaveModule
     /// <param name="gold">最新金币数量。</param>
     private void OnPlayerGoldChanged(int gold)
     {
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.PlayerProgress);
     }
 
     /// <summary>
@@ -881,7 +1020,7 @@ public sealed class CloudSaveModule
     /// <param name="stars">最新星星数量。</param>
     private void OnPlayerStarsChanged(int stars)
     {
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.PlayerProgress);
     }
 
     /// <summary>
@@ -891,7 +1030,7 @@ public sealed class CloudSaveModule
     /// <param name="count">最新库存数量。</param>
     private void OnPlayerProduceChanged(string produceCode, int count)
     {
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.PlayerProgress | CloudSaveDirtyModule.CollectionUnlocks | CloudSaveDirtyModule.ProduceInventory);
     }
 
     /// <summary>
@@ -899,7 +1038,7 @@ public sealed class CloudSaveModule
     /// </summary>
     private void OnPlayerArchitectureStateChanged()
     {
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.PlayerProgress | CloudSaveDirtyModule.Architectures | CloudSaveDirtyModule.EggHatch | CloudSaveDirtyModule.Pets);
     }
 
     /// <summary>
@@ -909,7 +1048,7 @@ public sealed class CloudSaveModule
     /// <param name="orchardSlotCount">最新果树位数量。</param>
     private void OnPlayerPlayfieldCapacityChanged(int diningSeatCount, int orchardSlotCount)
     {
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.Architectures | CloudSaveDirtyModule.EggHatch | CloudSaveDirtyModule.Pets);
     }
 
     /// <summary>
@@ -917,7 +1056,7 @@ public sealed class CloudSaveModule
     /// </summary>
     private void OnPetPlacementChanged()
     {
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.CollectionUnlocks | CloudSaveDirtyModule.Pets);
     }
 
     /// <summary>
@@ -925,7 +1064,7 @@ public sealed class CloudSaveModule
     /// </summary>
     private void OnNewcomerPackageClaimStateChanged()
     {
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.PlayerProgress);
     }
 
     /// <summary>
@@ -933,7 +1072,23 @@ public sealed class CloudSaveModule
     /// </summary>
     private void OnOfflineEarningsChanged()
     {
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.PlayerProgress);
+    }
+
+    /// <summary>
+    /// 图鉴解锁集合变化事件回调。
+    /// </summary>
+    private void OnCollectionUnlocksChanged()
+    {
+        MarkDirty(CloudSaveDirtyModule.CollectionUnlocks);
+    }
+
+    /// <summary>
+    /// 外观解锁集合变化事件回调。
+    /// </summary>
+    private void OnCosmeticUnlocksChanged()
+    {
+        MarkDirty(CloudSaveDirtyModule.IdentityAndCosmetic);
     }
 
     /// <summary>
@@ -942,7 +1097,7 @@ public sealed class CloudSaveModule
     /// <param name="headPortraitCode">最新头像 Code。</param>
     private void OnSelectedHeadPortraitChanged(string headPortraitCode)
     {
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.IdentityAndCosmetic);
     }
 
     /// <summary>
@@ -951,7 +1106,7 @@ public sealed class CloudSaveModule
     /// <param name="headPortraitFrameCode">最新头像框 Code。</param>
     private void OnSelectedHeadPortraitFrameChanged(string headPortraitFrameCode)
     {
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.IdentityAndCosmetic);
     }
 
     /// <summary>
@@ -959,7 +1114,7 @@ public sealed class CloudSaveModule
     /// </summary>
     private void OnEggHatchStateChanged()
     {
-        MarkDirty();
+        MarkDirty(CloudSaveDirtyModule.EggHatch | CloudSaveDirtyModule.Pets | CloudSaveDirtyModule.CollectionUnlocks);
     }
 
     /// <summary>
@@ -975,7 +1130,10 @@ public sealed class CloudSaveModule
             PlayerCloudSaveSnapshot snapshot = envelope.snapshot;
             ApplySnapshotToRuntime(snapshot);
             bool hasOfflineSettlementChanged = !envelope.created && ApplyInitialOfflineSettlement(snapshot);
-            _isDirty = hasOfflineSettlementChanged;
+            _dirtyModules = hasOfflineSettlementChanged
+                ? CloudSaveDirtyModule.PlayerProgress | CloudSaveDirtyModule.EggHatch | CloudSaveDirtyModule.Pets | CloudSaveDirtyModule.CollectionUnlocks
+                : CloudSaveDirtyModule.None;
+            _modulesInFlight = CloudSaveDirtyModule.None;
             _isPreGameplaySaveAllowed = hasOfflineSettlementChanged;
             _isReady = true;
             _retryCountdownSeconds = 0f;
@@ -1016,14 +1174,16 @@ public sealed class CloudSaveModule
             if (_pendingSaveAfterCurrentCloudCall)
             {
                 _pendingSaveAfterCurrentCloudCall = false;
-                _isDirty = true;
+                _modulesInFlight = CloudSaveDirtyModule.None;
                 _retryCountdownSeconds = 0f;
                 _autoSaveCountdownSeconds = 0f;
-                SaveNow(false);
-                return;
+                if (_dirtyModules != CloudSaveDirtyModule.None && SaveNow(false))
+                {
+                    return;
+                }
             }
 
-            _isDirty = false;
+            _modulesInFlight = CloudSaveDirtyModule.None;
             _isPreGameplaySaveAllowed = false;
             _retryCountdownSeconds = 0f;
             _autoSaveCountdownSeconds = _autoSaveIntervalSeconds;
@@ -1032,6 +1192,8 @@ public sealed class CloudSaveModule
         }
 
         _pendingSaveAfterCurrentCloudCall = false;
+        _dirtyModules |= _modulesInFlight;
+        _modulesInFlight = CloudSaveDirtyModule.None;
         Log.Warning("CloudSaveModule 云存档保存失败：{0}", envelope != null ? envelope.errMsg : responseJson);
         SaveFailed?.Invoke(envelope != null ? envelope.errMsg : responseJson);
         ScheduleSaveRetry();
@@ -1045,6 +1207,8 @@ public sealed class CloudSaveModule
     {
         _isCallingCloud = false;
         _pendingSaveAfterCurrentCloudCall = false;
+        _dirtyModules |= _modulesInFlight;
+        _modulesInFlight = CloudSaveDirtyModule.None;
         Log.Warning("CloudSaveModule 云存档保存请求失败：{0}", errorMessage);
         SaveFailed?.Invoke(errorMessage);
         ScheduleSaveRetry();
@@ -1057,7 +1221,8 @@ public sealed class CloudSaveModule
     private void CompleteInitialLoadWithFallback()
     {
         _isReady = true;
-        _isDirty = true;
+        _dirtyModules = CloudSaveDirtyModule.All;
+        _modulesInFlight = CloudSaveDirtyModule.None;
         _isPreGameplaySaveAllowed = false;
         _retryCountdownSeconds = RetryDelaySeconds;
     }
@@ -1067,7 +1232,6 @@ public sealed class CloudSaveModule
     /// </summary>
     private void ScheduleSaveRetry()
     {
-        _isDirty = true;
         _retryCountdownSeconds = RetryDelaySeconds;
         _autoSaveCountdownSeconds = _autoSaveIntervalSeconds;
     }
@@ -1101,11 +1265,13 @@ public sealed class CloudSaveModule
     /// </summary>
     /// <param name="action">云函数业务动作。</param>
     /// <param name="snapshot">需要提交的玩家快照；读取动作可为空。</param>
+    /// <param name="patchModules">saveSnapshot 补丁模块掩码；0 表示旧协议全量快照。</param>
     /// <param name="onSuccess">业务成功回调，参数为云函数 result JSON。</param>
     /// <param name="onFailure">失败回调，参数为错误信息。</param>
     private void CallCloudFunction(
         string action,
         PlayerCloudSaveSnapshot snapshot,
+        int patchModules,
         Action<string> onSuccess,
         Action<string> onFailure)
     {
@@ -1113,7 +1279,7 @@ public sealed class CloudSaveModule
 #if (UNITY_WEBGL || WEIXINMINIGAME) && !UNITY_EDITOR
         try
         {
-            Dictionary<string, object> requestData = CreateCloudFunctionRequestData(action, snapshot);
+            Dictionary<string, object> requestData = CreateCloudFunctionRequestData(action, snapshot, patchModules);
             EnsureWechatCloudInitialized(
                 () => ExecuteWechatCloudFunction(requestData, onSuccess, onFailure),
                 onFailure);
@@ -1142,12 +1308,13 @@ public sealed class CloudSaveModule
     /// </summary>
     /// <param name="action">云函数业务动作。</param>
     /// <param name="snapshot">需要提交的玩家快照；读取动作可为空。</param>
+    /// <param name="patchModules">saveSnapshot 补丁模块掩码；0 表示旧协议全量快照。</param>
     /// <returns>可直接作为 CallFunctionParam.data 传入的根级参数对象。</returns>
-    private static Dictionary<string, object> CreateCloudFunctionRequestData(string action, PlayerCloudSaveSnapshot snapshot)
+    private static Dictionary<string, object> CreateCloudFunctionRequestData(string action, PlayerCloudSaveSnapshot snapshot, int patchModules)
     {
         return new Dictionary<string, object>
         {
-            { "data", CreateCloudFunctionRequestJson(action, snapshot) }
+            { "data", CreateCloudFunctionRequestJson(action, snapshot, patchModules) }
         };
     }
 
@@ -1157,13 +1324,15 @@ public sealed class CloudSaveModule
     /// </summary>
     /// <param name="action">云函数业务动作。</param>
     /// <param name="snapshot">需要提交的玩家快照；读取动作可为空。</param>
+    /// <param name="patchModules">saveSnapshot 补丁模块掩码；0 表示旧协议全量快照。</param>
     /// <returns>包含 action 与 snapshot 的业务 JSON 字符串。</returns>
-    private static string CreateCloudFunctionRequestJson(string action, PlayerCloudSaveSnapshot snapshot)
+    private static string CreateCloudFunctionRequestJson(string action, PlayerCloudSaveSnapshot snapshot, int patchModules)
     {
         CloudFunctionRequestData requestData = new CloudFunctionRequestData
         {
             action = action ?? string.Empty,
-            snapshot = snapshot
+            snapshot = snapshot,
+            patchModules = patchModules
         };
         return JsonUtility.ToJson(requestData);
     }

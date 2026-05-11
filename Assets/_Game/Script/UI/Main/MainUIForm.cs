@@ -259,7 +259,7 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     protected override void OnClose(bool isShutdown, object userData)
     {
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
         GameEntry.CloudSave?.SaveNow(true);
         _isWaitingManualCloudSaveResult = false;
         UnsubscribeAvatarDisplayEvents();
@@ -449,7 +449,7 @@ public partial class MainUIForm : UIFormLogic
             return;
         }
 
-        GameEntry.CloudSave.MarkDirty();
+        GameEntry.CloudSave.MarkDirty(CloudSaveDirtyModule.PendingDrops);
         if (GameEntry.CloudSave.SaveNow(true))
         {
             _isWaitingManualCloudSaveResult = true;

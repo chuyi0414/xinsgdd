@@ -169,6 +169,18 @@ public sealed partial class PlayerRuntimeModule
     /// </summary>
     public event Action OfflineEarningsChanged;
 
+    /// <summary>
+    /// 图鉴解锁集合发生变化时触发。
+    /// 云存档模块用它标记水果、宠物、产出物解锁列表为脏。
+    /// </summary>
+    public event Action CollectionUnlocksChanged;
+
+    /// <summary>
+    /// 头像或头像框解锁集合发生变化时触发。
+    /// 云存档模块用它标记外观解锁列表为脏。
+    /// </summary>
+    public event Action CosmeticUnlocksChanged;
+
     // ───────────── 建筑属性 ─────────────
 
     /// <summary>

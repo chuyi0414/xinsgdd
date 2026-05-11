@@ -93,6 +93,7 @@ public sealed partial class PlayerRuntimeModule
             return true;
         }
 
+        CollectionUnlocksChanged?.Invoke();
         return true;
     }
 
@@ -145,6 +146,7 @@ public sealed partial class PlayerRuntimeModule
             return true;
         }
 
+        CosmeticUnlocksChanged?.Invoke();
         return true;
     }
 
@@ -229,6 +231,7 @@ public sealed partial class PlayerRuntimeModule
             return true;
         }
 
+        CosmeticUnlocksChanged?.Invoke();
         return true;
     }
 

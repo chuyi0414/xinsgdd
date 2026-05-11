@@ -116,7 +116,7 @@ public sealed class NewcomerPackageUIForm : UIFormLogic
         }
 
         GameEntry.Fruits.AddGold(RewardGoldAmount);
-        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PlayerProgress);
         GameEntry.CloudSave?.SaveNow(true);
 
         CloseSelf();

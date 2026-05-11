@@ -27,6 +27,29 @@ const leaderboardTopLimit = 100
 // 今日榜前 100 再额外补当前玩家记录时，理论上可能出现 101 个 openid，因此需要拆批查询。
 const playerProfileQueryBatchSize = 100
 
+// 云存档模块级补丁位。
+// 必须与客户端 CloudSaveDirtyModule 枚举保持一致；patchModules 为 0 时代表旧协议全量保存。
+const snapshotPatchModules = {
+    PlayerProgress: 1 << 0,
+    IdentityAndCosmetic: 1 << 1,
+    CollectionUnlocks: 1 << 2,
+    ProduceInventory: 1 << 3,
+    Architectures: 1 << 4,
+    EggHatch: 1 << 5,
+    Pets: 1 << 6,
+    PendingDrops: 1 << 7,
+    DailyChallengeBest: 1 << 8,
+}
+snapshotPatchModules.All = snapshotPatchModules.PlayerProgress
+    | snapshotPatchModules.IdentityAndCosmetic
+    | snapshotPatchModules.CollectionUnlocks
+    | snapshotPatchModules.ProduceInventory
+    | snapshotPatchModules.Architectures
+    | snapshotPatchModules.EggHatch
+    | snapshotPatchModules.Pets
+    | snapshotPatchModules.PendingDrops
+    | snapshotPatchModules.DailyChallengeBest
+
 // 服务端初始存档模板。
 // 新账号首次建档时只使用这里的数据，不再信任客户端传来的编辑器快照，方便在云函数内直接改数值测试。
 const initialSnapshotTemplate = {
@@ -141,7 +164,7 @@ exports.main = async (event, context) => {
                 return await loadSnapshot(openid)
 
             case 'saveSnapshot':
-                return await saveSnapshot(openid, requestEvent.snapshot)
+                return await saveSnapshot(openid, requestEvent.snapshot, requestEvent.patchModules)
 
             case 'loadDailyChallengeLeaderboard':
                 return await loadDailyChallengeLeaderboard(openid)
@@ -239,9 +262,9 @@ async function loadSnapshot(openid) {
     }
 }
 
-// 保存客户端提交的完整玩家快照。
-// 同一个 openid 始终覆盖为最新快照，不做多设备冲突合并。
-async function saveSnapshot(openid, snapshot) {
+// 保存客户端提交的玩家快照。
+// patchModules 为 0 时兼容旧版全量覆盖；非 0 时只把声明的业务模块合并进云端现有快照。
+async function saveSnapshot(openid, snapshot, patchModules) {
     if (!snapshot) {
         return {
             ok: false,
@@ -250,13 +273,26 @@ async function saveSnapshot(openid, snapshot) {
         }
     }
 
-    const normalizedSnapshot = normalizeSnapshot(snapshot)
     const existing = await getSaveDocument(openid)
+    const normalizedPatchModules = normalizePatchModules(patchModules)
     const now = db.serverDate()
-    if (existing) {
-        const existingSnapshot = normalizeSnapshot(existing.snapshot || null)
+    let normalizedSnapshot = null
+    if (normalizedPatchModules > 0) {
+        const existingSnapshot = existing ? normalizeSnapshot(existing.snapshot || null) : await createInitialSnapshot()
+        normalizedSnapshot = mergeSnapshotPatch(existingSnapshot, snapshot, normalizedPatchModules)
         preservePlayerIdentity(normalizedSnapshot, existingSnapshot)
         preserveDailyChallengeHistoricalBest(normalizedSnapshot, existingSnapshot)
+    } else {
+        normalizedSnapshot = normalizeSnapshot(snapshot)
+    }
+
+    if (existing) {
+        const existingSnapshot = normalizeSnapshot(existing.snapshot || null)
+        if (normalizedPatchModules <= 0) {
+            preservePlayerIdentity(normalizedSnapshot, existingSnapshot)
+            preserveDailyChallengeHistoricalBest(normalizedSnapshot, existingSnapshot)
+        }
+
         await playerSaves.doc(existing._id).update({
             data: {
                 snapshot: normalizedSnapshot,
@@ -280,6 +316,99 @@ async function saveSnapshot(openid, snapshot) {
         openid,
         snapshot: normalizedSnapshot
     }
+}
+
+// 标准化客户端提交的模块掩码。
+// 只保留服务端已知位，避免异常客户端传入负数或未知位破坏 merge 行为。
+function normalizePatchModules(value) {
+    const numberValue = Number(value)
+    if (!Number.isFinite(numberValue) || numberValue <= 0) {
+        return 0
+    }
+
+    return Math.floor(numberValue) & snapshotPatchModules.All
+}
+
+// 把客户端补丁快照合并进云端现有快照。
+// 未被 patchModules 声明的字段必须保持云端原值，避免客户端默认空数组误清空未变化模块。
+function mergeSnapshotPatch(existingSnapshot, patchSnapshot, patchModules) {
+    const mergedSnapshot = JSON.parse(JSON.stringify(existingSnapshot || initialSnapshotTemplate))
+    const normalizedPatch = normalizeSnapshot(patchSnapshot)
+    if (!normalizedPatch) {
+        return normalizeSnapshot(mergedSnapshot)
+    }
+
+    mergedSnapshot.clientSaveTime = normalizeString(normalizedPatch.clientSaveTime)
+
+    if ((patchModules & snapshotPatchModules.PlayerProgress) !== 0) {
+        mergedSnapshot.currentGold = normalizedPatch.currentGold
+        mergedSnapshot.pendingOfflineEarningGold = normalizedPatch.pendingOfflineEarningGold
+        mergedSnapshot.currentStars = normalizedPatch.currentStars
+        mergedSnapshot.hasClaimedNewcomerPackage = normalizedPatch.hasClaimedNewcomerPackage
+    }
+
+    if ((patchModules & snapshotPatchModules.IdentityAndCosmetic) !== 0) {
+        mergedSnapshot.playerName = normalizedPatch.playerName
+        mergedSnapshot.playerCode = normalizedPatch.playerCode
+        mergedSnapshot.selectedHeadPortraitCode = normalizedPatch.selectedHeadPortraitCode
+        mergedSnapshot.selectedHeadPortraitFrameCode = normalizedPatch.selectedHeadPortraitFrameCode
+        mergedSnapshot.unlockedHeadPortraitCodes = Array.isArray(normalizedPatch.unlockedHeadPortraitCodes)
+            ? normalizedPatch.unlockedHeadPortraitCodes
+            : []
+        mergedSnapshot.unlockedHeadPortraitFrameCodes = Array.isArray(normalizedPatch.unlockedHeadPortraitFrameCodes)
+            ? normalizedPatch.unlockedHeadPortraitFrameCodes
+            : []
+    }
+
+    if ((patchModules & snapshotPatchModules.CollectionUnlocks) !== 0) {
+        mergedSnapshot.unlockedFruitCodes = Array.isArray(normalizedPatch.unlockedFruitCodes)
+            ? normalizedPatch.unlockedFruitCodes
+            : []
+        mergedSnapshot.unlockedPetCodes = Array.isArray(normalizedPatch.unlockedPetCodes)
+            ? normalizedPatch.unlockedPetCodes
+            : []
+        mergedSnapshot.unlockedProduceCodes = Array.isArray(normalizedPatch.unlockedProduceCodes)
+            ? normalizedPatch.unlockedProduceCodes
+            : []
+    }
+
+    if ((patchModules & snapshotPatchModules.ProduceInventory) !== 0) {
+        mergedSnapshot.produceCounts = Array.isArray(normalizedPatch.produceCounts)
+            ? normalizedPatch.produceCounts
+            : []
+    }
+
+    if ((patchModules & snapshotPatchModules.Architectures) !== 0) {
+        mergedSnapshot.architectures = Array.isArray(normalizedPatch.architectures)
+            ? normalizedPatch.architectures
+            : []
+    }
+
+    if ((patchModules & snapshotPatchModules.EggHatch) !== 0) {
+        mergedSnapshot.eggHatch = normalizedPatch.eggHatch
+    }
+
+    if ((patchModules & snapshotPatchModules.Pets) !== 0) {
+        mergedSnapshot.pets = Array.isArray(normalizedPatch.pets)
+            ? normalizedPatch.pets
+            : []
+    }
+
+    if ((patchModules & snapshotPatchModules.PendingDrops) !== 0) {
+        mergedSnapshot.pendingGoldDrops = Array.isArray(normalizedPatch.pendingGoldDrops)
+            ? normalizedPatch.pendingGoldDrops
+            : []
+        mergedSnapshot.pendingProduceDrops = Array.isArray(normalizedPatch.pendingProduceDrops)
+            ? normalizedPatch.pendingProduceDrops
+            : []
+    }
+
+    if ((patchModules & snapshotPatchModules.DailyChallengeBest) !== 0) {
+        mergedSnapshot.dailyChallengeHistoricalBestScore = normalizedPatch.dailyChallengeHistoricalBestScore
+        mergedSnapshot.dailyChallengeHistoricalBestTime = normalizedPatch.dailyChallengeHistoricalBestTime
+    }
+
+    return normalizeSnapshot(mergedSnapshot)
 }
 
 // 保存完整快照时保护历史最高分。

@@ -116,6 +116,7 @@ public sealed partial class PlayerRuntimeModule
             AddStars(fruitRow.RewardStars);
         }
 
+        CollectionUnlocksChanged?.Invoke();
         return true;
     }
 

@@ -164,6 +164,8 @@ public sealed partial class PlayerRuntimeModule
             {
                 AddStars(produceRow.RewardStars);
             }
+
+            CollectionUnlocksChanged?.Invoke();
         }
         return true;
     }
