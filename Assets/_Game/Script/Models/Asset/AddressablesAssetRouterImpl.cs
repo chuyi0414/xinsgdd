@@ -30,6 +30,18 @@ public static class AddressablesAssetRouterImpl
     private static bool s_RouterInjected;
 
     /// <summary>
+    /// 通过 version.json 追加加载成功的远程 catalog 定位器。
+    /// 初始状态：null；加载成功后优先用于资源定位，确保远程资源版本覆盖包内默认 catalog。
+    /// </summary>
+    private static IResourceLocator s_RemoteCatalogLocator;
+
+    /// <summary>
+    /// Unity Addressables 内置 Resources 兼容 Provider 的完整标识。
+    /// 初始状态：固定字符串；用于过滤掉会走 Resources.LoadAsync 的伪 Addressables 命中。
+    /// </summary>
+    private const string LegacyResourcesProviderId = "UnityEngine.ResourceManagement.ResourceProviders.LegacyResourcesProvider";
+
+    /// <summary>
     /// catalog 是否已经准备好。
     /// 仅 GameEntry 启动逻辑读取，业务层不应依赖。
     /// </summary>
@@ -68,15 +80,74 @@ public static class AddressablesAssetRouterImpl
         initHandle.Completed += op =>
         {
             // 即使初始化失败也要继续：失败时 IsAddressablesReady 保持 false，所有请求走 GF 主链路兜底，避免业务卡死。
-            s_IsAddressablesReady = op.Status == AsyncOperationStatus.Succeeded;
-            if (!s_IsAddressablesReady)
+            if (op.Status != AsyncOperationStatus.Succeeded)
             {
+                s_IsAddressablesReady = false;
                 Log.Error("[AddressablesRouter] Addressables.InitializeAsync 失败，所有请求将退回到 Resources.LoadAsync 兜底。Error: "
                     + (op.OperationException != null ? op.OperationException.Message : "unknown"));
+                onComplete?.Invoke();
+                return;
             }
 
-            onComplete?.Invoke();
+            BeginLoadRemoteVersionCatalog(onComplete);
         };
+    }
+
+    /// <summary>
+    /// 尝试按 CDN 上的 version.json 追加加载远程 catalog。
+    /// </summary>
+    /// <param name="onComplete">Addressables 完整初始化完成回调；无论远程 catalog 是否成功都会触发。</param>
+    private static void BeginLoadRemoteVersionCatalog(Action onComplete)
+    {
+        AddressablesRemoteVersionResolver.BeginResolve(result =>
+        {
+            if (!result.HasRemoteCatalog)
+            {
+                CompleteSuccessfulInitialize(onComplete);
+                return;
+            }
+
+            AsyncOperationHandle<IResourceLocator> remoteCatalogHandle;
+            try
+            {
+                remoteCatalogHandle = Addressables.LoadContentCatalogAsync(result.CatalogUrl, true);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("[AddressablesRouter] LoadContentCatalogAsync 启动异常，将继续使用包内默认 catalog。catalogUrl='"
+                    + result.CatalogUrl + "'，error='" + ex + "'。");
+                CompleteSuccessfulInitialize(onComplete);
+                return;
+            }
+
+            remoteCatalogHandle.Completed += op =>
+            {
+                if (op.Status == AsyncOperationStatus.Succeeded && op.Result != null)
+                {
+                    s_RemoteCatalogLocator = op.Result;
+                    Log.Info("[AddressablesRouter] 远程 Addressables catalog 加载成功，resourceVersion='"
+                        + result.ResourceVersion + "'，catalogUrl='" + result.CatalogUrl + "'。");
+                }
+                else
+                {
+                    Log.Error("[AddressablesRouter] 远程 Addressables catalog 加载失败，将继续使用包内默认 catalog。catalogUrl='"
+                        + result.CatalogUrl + "'，error='"
+                        + (op.OperationException != null ? op.OperationException.ToString() : "unknown") + "'。");
+                }
+
+                CompleteSuccessfulInitialize(onComplete);
+            };
+        });
+    }
+
+    /// <summary>
+    /// 完成 Addressables 初始化并放行业务启动流程。
+    /// </summary>
+    /// <param name="onComplete">外部传入的初始化完成回调；可空。</param>
+    private static void CompleteSuccessfulInitialize(Action onComplete)
+    {
+        s_IsAddressablesReady = true;
+        onComplete?.Invoke();
     }
 
     /// <summary>
@@ -128,14 +199,14 @@ public static class AddressablesAssetRouterImpl
             return false;
         }
 
-        // 同步判定 key 是否在 catalog 中：遍历每个 Locator 调 Locate（同步、零 IO、零分配）。
-        if (!TryLocate(assetName, assetType, out _, out int locatorCount))
+        // 同步判定 key 是否在 catalog 中：遍历每个 Locator 调 Locate，并过滤掉本质走 Resources.LoadAsync 的 LegacyResourcesProvider。
+        if (!TryLocate(assetName, assetType, out IList<IResourceLocation> locations, out IResourceLocation selectedLocation, out int locatorCount))
         {
-            string assetTypeName = assetType != null ? assetType.FullName : "null";
+            string assetTypeName = GetAssetTypeName(assetType);
             AddressablesFallbackDiagnostic.SetReason(
                 assetName,
                 Utility.Text.Format(
-                    "Addressables catalog 已就绪，但没有任何 ResourceLocator 命中该 key。asset='{0}', assetType='{1}', locatorCount={2}。请检查 Addressables Address 是否与 GF 路径完全一致，以及资源是否已加入 Addressables Group。",
+                    "Addressables catalog 已就绪，但没有任何非 LegacyResourcesProvider 的 ResourceLocator 命中该 key。asset='{0}', assetType='{1}', locatorCount={2}。请检查 Addressables Address 是否与 GF 路径完全一致，以及资源是否已加入 Addressables Group。",
                     assetName,
                     assetTypeName,
                     locatorCount));
@@ -152,14 +223,19 @@ public static class AddressablesAssetRouterImpl
         AsyncOperationHandle handle;
         try
         {
-            handle = LoadAddressablesAsset(assetName, assetType);
+            handle = LoadAddressablesAsset(selectedLocation, assetType);
         }
         catch (Exception ex)
         {
-            Log.Error("[AddressablesRouter] LoadAssetAsync 同步抛异常，asset='" + assetName + "'，error: " + ex.Message);
+            string errorMessage = ex.ToString();
+            Log.Error(Utility.Text.Format(
+                "[AddressablesRouter] LoadAssetAsync 同步抛异常，asset='{0}'，assetType='{1}'，error='{2}'。",
+                assetName,
+                GetAssetTypeName(assetType),
+                errorMessage));
             if (loadAssetCallbacks.LoadAssetFailureCallback != null)
             {
-                loadAssetCallbacks.LoadAssetFailureCallback(assetName, LoadResourceStatus.NotExist, ex.Message, userData);
+                loadAssetCallbacks.LoadAssetFailureCallback(assetName, LoadResourceStatus.NotExist, errorMessage, userData);
             }
             return true; // 路由已声明接管（失败路径），不再走 GF 主链路。
         }
@@ -181,9 +257,17 @@ public static class AddressablesAssetRouterImpl
             else
             {
                 // 加载失败：立即 Release 防止 Addressables 内部句柄泄漏。
-                string errorMessage = op.OperationException != null
-                    ? op.OperationException.Message
+                string rawErrorMessage = op.OperationException != null
+                    ? op.OperationException.ToString()
                     : "Addressables 加载失败：句柄状态非 Succeeded。";
+                string errorMessage = Utility.Text.Format(
+                    "[AddressablesRouter] Addressables 加载失败，asset='{0}'，assetType='{1}'，status='{2}'，locations='{3}'，error='{4}'。",
+                    assetName,
+                    GetAssetTypeName(assetType),
+                    op.Status.ToString(),
+                    BuildLocationsSummary(locations),
+                    rawErrorMessage);
+                Log.Error(errorMessage);
                 if (op.IsValid())
                 {
                     Addressables.Release(op);
@@ -199,49 +283,143 @@ public static class AddressablesAssetRouterImpl
     }
 
     /// <summary>
+    /// 获取 GF 本次资源请求传入的运行时资源类型名称。
+    /// </summary>
+    /// <param name="assetType">GF 调用方期望加载的资源类型；为空时表示 GF 未显式传入类型。</param>
+    /// <returns>用于日志输出的完整类型名；为空时返回 null 字符串，避免日志拼接时丢失诊断信息。</returns>
+    private static string GetAssetTypeName(Type assetType)
+    {
+        return assetType != null ? assetType.FullName : "null";
+    }
+
+    /// <summary>
+    /// 构造 Addressables 已命中的资源位置摘要。
+    /// </summary>
+    /// <param name="locations">Addressables ResourceLocator 命中的资源位置列表。</param>
+    /// <returns>包含 PrimaryKey、InternalId、ProviderId、ResourceType 与依赖摘要的诊断字符串。</returns>
+    private static string BuildLocationsSummary(IList<IResourceLocation> locations)
+    {
+        if (locations == null || locations.Count == 0)
+        {
+            return "empty";
+        }
+
+        int count = locations.Count;
+        int limit = count > 3 ? 3 : count;
+        string summary = string.Empty;
+        for (int i = 0; i < limit; i++)
+        {
+            IResourceLocation location = locations[i];
+            if (location == null)
+            {
+                summary += Utility.Text.Format("#{0}[null]", i);
+                continue;
+            }
+
+            string resourceTypeName = location.ResourceType != null ? location.ResourceType.FullName : "null";
+            string dependencySummary = BuildDependencySummary(location.Dependencies);
+            summary += Utility.Text.Format(
+                "#{0}[PrimaryKey='{1}', InternalId='{2}', ProviderId='{3}', ResourceType='{4}', Dependencies='{5}']",
+                i,
+                location.PrimaryKey,
+                location.InternalId,
+                location.ProviderId,
+                resourceTypeName,
+                dependencySummary);
+        }
+
+        if (count > limit)
+        {
+            summary += Utility.Text.Format("...total={0}", count);
+        }
+
+        return summary;
+    }
+
+    /// <summary>
+    /// 构造 Addressables 资源位置的直接依赖摘要。
+    /// </summary>
+    /// <param name="dependencies">资源位置上登记的直接依赖列表，通常能暴露缺失或下载失败的 bundle。</param>
+    /// <returns>包含依赖数量、PrimaryKey、InternalId 与 ProviderId 的诊断字符串。</returns>
+    private static string BuildDependencySummary(IList<IResourceLocation> dependencies)
+    {
+        if (dependencies == null || dependencies.Count == 0)
+        {
+            return "empty";
+        }
+
+        int count = dependencies.Count;
+        int limit = count > 5 ? 5 : count;
+        string summary = Utility.Text.Format("count={0};", count);
+        for (int i = 0; i < limit; i++)
+        {
+            IResourceLocation dependency = dependencies[i];
+            if (dependency == null)
+            {
+                summary += Utility.Text.Format("#{0}[null]", i);
+                continue;
+            }
+
+            summary += Utility.Text.Format(
+                "#{0}[PrimaryKey='{1}', InternalId='{2}', ProviderId='{3}']",
+                i,
+                dependency.PrimaryKey,
+                dependency.InternalId,
+                dependency.ProviderId);
+        }
+
+        if (count > limit)
+        {
+            summary += Utility.Text.Format("...total={0}", count);
+        }
+
+        return summary;
+    }
+
+    /// <summary>
     /// 按运行时 Type 发起 Addressables 泛型加载。
     /// </summary>
-    /// <param name="assetName">Addressables key / GF 资源名。</param>
+    /// <param name="location">已经由 TryLocate 选定的非 LegacyResourcesProvider 资源位置。</param>
     /// <param name="assetType">GF 调用方期望的资源类型；为空时回退到 UnityEngine.Object。</param>
     /// <returns>非泛型句柄，便于统一注册 Completed 回调和释放。</returns>
-    private static AsyncOperationHandle LoadAddressablesAsset(string assetName, Type assetType)
+    private static AsyncOperationHandle LoadAddressablesAsset(IResourceLocation location, Type assetType)
     {
         if (assetType == typeof(UnityEngine.Sprite))
         {
-            return Addressables.LoadAssetAsync<UnityEngine.Sprite>(assetName);
+            return Addressables.LoadAssetAsync<UnityEngine.Sprite>(location);
         }
 
         if (assetType == typeof(UnityEngine.GameObject))
         {
-            return Addressables.LoadAssetAsync<UnityEngine.GameObject>(assetName);
+            return Addressables.LoadAssetAsync<UnityEngine.GameObject>(location);
         }
 
         if (assetType == typeof(UnityEngine.TextAsset))
         {
-            return Addressables.LoadAssetAsync<UnityEngine.TextAsset>(assetName);
+            return Addressables.LoadAssetAsync<UnityEngine.TextAsset>(location);
         }
 
         if (assetType == typeof(Spine.Unity.SkeletonDataAsset))
         {
-            return Addressables.LoadAssetAsync<Spine.Unity.SkeletonDataAsset>(assetName);
+            return Addressables.LoadAssetAsync<Spine.Unity.SkeletonDataAsset>(location);
         }
 
         if (assetType == typeof(UnityEngine.AudioClip))
         {
-            return Addressables.LoadAssetAsync<UnityEngine.AudioClip>(assetName);
+            return Addressables.LoadAssetAsync<UnityEngine.AudioClip>(location);
         }
 
         if (assetType == typeof(UnityEngine.Material))
         {
-            return Addressables.LoadAssetAsync<UnityEngine.Material>(assetName);
+            return Addressables.LoadAssetAsync<UnityEngine.Material>(location);
         }
 
         if (assetType == typeof(UnityEngine.Texture2D))
         {
-            return Addressables.LoadAssetAsync<UnityEngine.Texture2D>(assetName);
+            return Addressables.LoadAssetAsync<UnityEngine.Texture2D>(location);
         }
 
-        return Addressables.LoadAssetAsync<UnityEngine.Object>(assetName);
+        return Addressables.LoadAssetAsync<UnityEngine.Object>(location);
     }
 
     /// <summary>
@@ -264,32 +442,98 @@ public static class AddressablesAssetRouterImpl
 
     /// <summary>
     /// 同步判定 Addressables key 是否注册。
-    /// 遍历 Addressables.ResourceLocators 调 Locate；任一 Locator 命中即返回 true。
-    /// 此方法在 catalog 已初始化的情况下保证零 IO 零分配（locations 输出复用 Locator 内部缓存）。
+    /// 遍历 Addressables.ResourceLocators 调 Locate；只有命中非 LegacyResourcesProvider 时才返回 true。
+    /// 此方法在 catalog 已初始化的情况下保证零 IO，locations 输出复用 Locator 内部缓存。
     /// </summary>
     private static bool TryLocate(string assetName, Type assetType, out IList<IResourceLocation> locations)
     {
-        return TryLocate(assetName, assetType, out locations, out _);
+        return TryLocate(assetName, assetType, out locations, out _, out _);
     }
 
     /// <summary>
     /// 同步判定 Addressables key 是否注册，并输出参与判定的 Locator 数量。
     /// locatorCount 专门用于兜底错误诊断：当 Resources 也加载失败时，最终日志能看出是 catalog 空、Address 不匹配，还是类型过滤不匹配。
+    /// 如果多个 catalog 同时命中同一个 key，会保留最后一个非 LegacyResourcesProvider 命中，确保启动阶段追加加载的远程 catalog 优先级更高。
     /// </summary>
-    private static bool TryLocate(string assetName, Type assetType, out IList<IResourceLocation> locations, out int locatorCount)
+    private static bool TryLocate(string assetName, Type assetType, out IList<IResourceLocation> locations, out IResourceLocation selectedLocation, out int locatorCount)
     {
         locations = null;
+        selectedLocation = null;
         locatorCount = 0;
+        if (s_RemoteCatalogLocator != null)
+        {
+            locatorCount++;
+            if (s_RemoteCatalogLocator.Locate(assetName, assetType, out IList<IResourceLocation> remoteLocations))
+            {
+                IResourceLocation remoteLocation = FindFirstNonLegacyLocation(remoteLocations);
+                if (remoteLocation != null)
+                {
+                    locations = remoteLocations;
+                    selectedLocation = remoteLocation;
+                    return true;
+                }
+            }
+        }
+
         // ⚠️ Addressables.ResourceLocators 是 IEnumerable<IResourceLocator>，遍历会产生迭代器对象（少量 GC）；
         //     如果未来需要严格零 GC，可缓存 ResourceLocators 列表的 ToArray 副本，但项目当前频次较低不必优化。
         foreach (IResourceLocator locator in Addressables.ResourceLocators)
         {
-            locatorCount++;
-            if (locator.Locate(assetName, assetType, out locations))
+            if (ReferenceEquals(locator, s_RemoteCatalogLocator))
             {
-                return true;
+                continue;
+            }
+
+            locatorCount++;
+            if (!locator.Locate(assetName, assetType, out IList<IResourceLocation> candidateLocations))
+            {
+                continue;
+            }
+
+            IResourceLocation candidateLocation = FindFirstNonLegacyLocation(candidateLocations);
+            if (candidateLocation == null)
+            {
+                continue;
+            }
+
+            locations = candidateLocations;
+            selectedLocation = candidateLocation;
+        }
+
+        return selectedLocation != null;
+    }
+
+    /// <summary>
+    /// 从命中的 Addressables 资源位置列表里选择第一个真正的非 Resources Provider 位置。
+    /// </summary>
+    /// <param name="locations">ResourceLocator 命中的资源位置列表。</param>
+    /// <returns>第一个非 LegacyResourcesProvider 位置；没有可用位置时返回 null。</returns>
+    private static IResourceLocation FindFirstNonLegacyLocation(IList<IResourceLocation> locations)
+    {
+        if (locations == null || locations.Count == 0)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < locations.Count; i++)
+        {
+            IResourceLocation location = locations[i];
+            if (location != null && !IsLegacyResourcesLocation(location))
+            {
+                return location;
             }
         }
-        return false;
+
+        return null;
+    }
+
+    /// <summary>
+    /// 判断指定 Addressables 资源位置是否来自 Unity 内置 Resources 兼容 Provider。
+    /// </summary>
+    /// <param name="location">需要检查的 Addressables 资源位置。</param>
+    /// <returns>如果该位置最终会走 Resources.LoadAsync，则返回 true；否则返回 false。</returns>
+    private static bool IsLegacyResourcesLocation(IResourceLocation location)
+    {
+        return location != null && string.Equals(location.ProviderId, LegacyResourcesProviderId, StringComparison.Ordinal);
     }
 }

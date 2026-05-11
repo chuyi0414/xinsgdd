@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityGameFramework.Runtime;
 
@@ -71,6 +72,12 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     /// 当前累计的补蛋进度秒数。
     /// </summary>
     private float _refillElapsedSeconds;
+
+    /// <summary>
+    /// 孵化运行时状态发生离散变化时触发。
+    /// 仅在库存数量、库存内容、孵化槽占用、孵化完成、读档覆盖等低频节点派发，不在每帧倒计时里派发。
+    /// </summary>
+    public event Action HatchStateChanged;
 
     /// <summary>
     /// 当前组件是否已完成首次初始化。
@@ -351,6 +358,7 @@ public sealed class EggHatchComponent : GameFrameworkComponent
             return false;
         }
 
+        NotifyHatchStateChanged();
         failure = EggPurchaseFailure.None;
         return true;
     }
@@ -371,6 +379,7 @@ public sealed class EggHatchComponent : GameFrameworkComponent
             if (TryDequeueFrontEgg(out string eggCode, out float hatchSeconds))
             {
                 OccupySlot(emptySlotIndex, eggCode, hatchSeconds);
+                NotifyHatchStateChanged();
             }
 
             return;
@@ -378,7 +387,10 @@ public sealed class EggHatchComponent : GameFrameworkComponent
 
         if (_gameplayRuleDataRow != null && _manualEggCount < _gameplayRuleDataRow.MaxManualEggCount)
         {
-            AccelerateRefill(_gameplayRuleDataRow.ManualReduceSeconds);
+            if (AccelerateRefill(_gameplayRuleDataRow.ManualReduceSeconds))
+            {
+                NotifyHatchStateChanged();
+            }
         }
     }
 
@@ -393,6 +405,7 @@ public sealed class EggHatchComponent : GameFrameworkComponent
             return;
         }
 
+        int previousManualEggCount = _manualEggCount;
         for (int i = 0; i < amount; i++)
         {
             if (!TryAppendEggToBack(_manualEggDataRow.Code, _manualEggDataRow.Quality))
@@ -405,6 +418,59 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         {
             _refillElapsedSeconds = 0f;
         }
+
+        if (_manualEggCount != previousManualEggCount)
+        {
+            NotifyHatchStateChanged();
+        }
+    }
+
+    /// <summary>
+    /// 导出当前孵化运行时状态到云存档。
+    /// </summary>
+    /// <returns>可序列化的孵化存档数据；组件不可用时返回空存档对象，避免微信云函数入参出现 null。</returns>
+    public EggHatchSaveData ExportCloudSaveData()
+    {
+        EnsureInitialized();
+        if (!_isInitialized || !_isAvailable)
+        {
+            return new EggHatchSaveData();
+        }
+
+        EggHatchSaveData saveData = new EggHatchSaveData
+        {
+            manualEggCodes = ExportManualEggCodes(),
+            refillElapsedSeconds = Mathf.Max(0f, _refillElapsedSeconds),
+            slots = ExportSlotSaveData()
+        };
+
+        return saveData;
+    }
+
+    /// <summary>
+    /// 从云存档恢复孵化运行时状态。
+    /// </summary>
+    /// <param name="saveData">云端保存的孵化状态；为空时保持本地默认初始化状态。</param>
+    public void ApplyCloudSaveData(EggHatchSaveData saveData)
+    {
+        EnsureInitialized();
+        if (!_isInitialized || !_isAvailable)
+        {
+            return;
+        }
+
+        if (saveData == null)
+        {
+            NotifyEggSlotsChanged();
+            return;
+        }
+
+        ClearManualEggInventory();
+        RestoreManualEggInventory(saveData.manualEggCodes);
+        RestoreRefillElapsedSeconds(saveData.refillElapsedSeconds);
+        RestoreHatchSlots(saveData.slots);
+        NotifyEggSlotsChanged();
+        NotifyHatchStateChanged();
     }
 
     /// <summary>
@@ -427,6 +493,14 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         for (int i = 0; i < _slotStates.Length; i++)
         {
             _slotStates[i].Clear();
+        }
+
+        for (int i = 0; i < _gameplayRuleDataRow.InitialManualEggCount; i++)
+        {
+            if (!TryAppendEggToBack(_manualEggDataRow.Code, _manualEggDataRow.Quality))
+            {
+                break;
+            }
         }
 
         NotifyEggSlotsChanged();
@@ -465,6 +539,7 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         if (hasSlotChanged)
         {
             NotifyEggSlotsChanged();
+            NotifyHatchStateChanged();
         }
     }
 
@@ -486,33 +561,37 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         }
 
         _refillElapsedSeconds += deltaTime;
-        ApplyCompletedRefill();
+        if (ApplyCompletedRefill())
+        {
+            NotifyHatchStateChanged();
+        }
     }
 
     /// <summary>
     /// 手动加速补蛋进度。
     /// </summary>
-    private void AccelerateRefill(float seconds)
+    private bool AccelerateRefill(float seconds)
     {
         if (_gameplayRuleDataRow == null || _manualEggCount >= _gameplayRuleDataRow.MaxManualEggCount || seconds <= 0f)
         {
-            return;
+            return false;
         }
 
         _refillElapsedSeconds += seconds;
-        ApplyCompletedRefill();
+        return ApplyCompletedRefill();
     }
 
     /// <summary>
     /// 处理补蛋完成结果。
     /// </summary>
-    private void ApplyCompletedRefill()
+    private bool ApplyCompletedRefill()
     {
         if (_gameplayRuleDataRow == null)
         {
-            return;
+            return false;
         }
 
+        bool hasInventoryChanged = false;
         // 允许一次跨过多个 30 秒区间，避免加速时丢失进度余量。
         while (_manualEggCount < _gameplayRuleDataRow.MaxManualEggCount
             && _refillElapsedSeconds >= _gameplayRuleDataRow.RefillDurationSeconds)
@@ -522,12 +601,16 @@ public sealed class EggHatchComponent : GameFrameworkComponent
             {
                 break;
             }
+
+            hasInventoryChanged = true;
         }
 
         if (_manualEggCount >= _gameplayRuleDataRow.MaxManualEggCount)
         {
             _refillElapsedSeconds = 0f;
         }
+
+        return hasInventoryChanged;
     }
 
     /// <summary>
@@ -749,5 +832,201 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     private static void NotifyEggSlotsChanged()
     {
         GameEntry.PlayfieldEntities?.NotifyEggStateChanged();
+    }
+
+    /// <summary>
+    /// 导出手动蛋库存队列。
+    /// </summary>
+    /// <returns>手动蛋 Code 数组。</returns>
+    private string[] ExportManualEggCodes()
+    {
+        if (_manualEggCount <= 0 || _manualEggCodes == null)
+        {
+            return Array.Empty<string>();
+        }
+
+        string[] results = new string[_manualEggCount];
+        for (int i = 0; i < _manualEggCount; i++)
+        {
+            results[i] = _manualEggCodes[i] ?? string.Empty;
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// 导出固定孵化槽状态。
+    /// </summary>
+    /// <returns>孵化槽存档数组。</returns>
+    private EggHatchSlotSaveData[] ExportSlotSaveData()
+    {
+        EggHatchSlotSaveData[] results = new EggHatchSlotSaveData[_slotStates.Length];
+        for (int i = 0; i < _slotStates.Length; i++)
+        {
+            EggHatchSlotState slotState = _slotStates[i];
+            if (slotState == null || !slotState.IsOccupied || string.IsNullOrWhiteSpace(slotState.EggCode))
+            {
+                results[i] = new EggHatchSlotSaveData
+                {
+                    eggCode = string.Empty,
+                    totalSeconds = 0f,
+                    remainingSeconds = 0f
+                };
+                continue;
+            }
+
+            results[i] = new EggHatchSlotSaveData
+            {
+                eggCode = slotState.EggCode ?? string.Empty,
+                totalSeconds = Mathf.Max(0.1f, slotState.TotalSeconds),
+                remainingSeconds = Mathf.Clamp(slotState.RemainingSeconds, 0.1f, Mathf.Max(0.1f, slotState.TotalSeconds))
+            };
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// 清空当前手动蛋库存。
+    /// </summary>
+    private void ClearManualEggInventory()
+    {
+        _manualEggCount = 0;
+        if (_manualEggCodes == null || _manualEggQualities == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _manualEggCodes.Length; i++)
+        {
+            _manualEggCodes[i] = null;
+            _manualEggQualities[i] = QualityType.Universal;
+        }
+    }
+
+    /// <summary>
+    /// 恢复手动蛋库存队列。
+    /// </summary>
+    /// <param name="manualEggCodes">云端保存的手动蛋 Code 队列。</param>
+    private void RestoreManualEggInventory(string[] manualEggCodes)
+    {
+        if (manualEggCodes == null || manualEggCodes.Length <= 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < manualEggCodes.Length && _manualEggCount < MaxManualEggCount; i++)
+        {
+            string eggCode = manualEggCodes[i];
+            EggDataRow eggDataRow = ResolveValidEggDataRow(eggCode);
+            if (eggDataRow == null)
+            {
+                Log.Warning("EggHatchComponent 读取云存档时跳过无效库存蛋 '{0}'。", eggCode);
+                continue;
+            }
+
+            TryAppendEggToBack(eggDataRow.Code, eggDataRow.Quality);
+        }
+    }
+
+    /// <summary>
+    /// 恢复自动补蛋累计秒数。
+    /// </summary>
+    /// <param name="refillElapsedSeconds">云端保存的累计秒数。</param>
+    private void RestoreRefillElapsedSeconds(float refillElapsedSeconds)
+    {
+        if (_gameplayRuleDataRow == null || _manualEggCount >= _gameplayRuleDataRow.MaxManualEggCount)
+        {
+            _refillElapsedSeconds = 0f;
+            return;
+        }
+
+        _refillElapsedSeconds = Mathf.Clamp(refillElapsedSeconds, 0f, Mathf.Max(0f, _gameplayRuleDataRow.RefillDurationSeconds - 0.01f));
+    }
+
+    /// <summary>
+    /// 恢复所有孵化槽状态。
+    /// </summary>
+    /// <param name="slots">云端保存的孵化槽状态数组。</param>
+    private void RestoreHatchSlots(EggHatchSlotSaveData[] slots)
+    {
+        for (int i = 0; i < _slotStates.Length; i++)
+        {
+            _slotStates[i].Clear();
+        }
+
+        if (slots == null || slots.Length <= 0)
+        {
+            return;
+        }
+
+        int unlockedSlotCount = UnlockedSlotCount;
+        for (int i = 0; i < slots.Length && i < _slotStates.Length && i < unlockedSlotCount; i++)
+        {
+            if (GameEntry.Fruits != null && !GameEntry.Fruits.IsArchitectureSlotUnlocked(PlayerRuntimeModule.ArchitectureCategory.Hatch, i + 1))
+            {
+                continue;
+            }
+
+            EggHatchSlotSaveData slotSaveData = slots[i];
+            if (slotSaveData == null || string.IsNullOrWhiteSpace(slotSaveData.eggCode))
+            {
+                continue;
+            }
+
+            EggDataRow eggDataRow = ResolveValidEggDataRow(slotSaveData.eggCode);
+            if (eggDataRow == null)
+            {
+                Log.Warning("EggHatchComponent 读取云存档时跳过无效孵化蛋 '{0}'。", slotSaveData.eggCode);
+                continue;
+            }
+
+            float fallbackTotalSeconds = ResolveScaledHatchSeconds(i, eggDataRow.HatchSeconds);
+            float totalSeconds = slotSaveData.totalSeconds > 0f ? slotSaveData.totalSeconds : fallbackTotalSeconds;
+            totalSeconds = Mathf.Max(0.1f, totalSeconds);
+            float remainingSeconds = Mathf.Clamp(slotSaveData.remainingSeconds, 0.1f, totalSeconds);
+            _slotStates[i].Restore(eggDataRow.Code, totalSeconds, remainingSeconds);
+        }
+    }
+
+    /// <summary>
+    /// 解析并校验蛋配置。
+    /// </summary>
+    /// <param name="eggCode">蛋 Code。</param>
+    /// <returns>合法蛋配置；无效时返回 null。</returns>
+    private static EggDataRow ResolveValidEggDataRow(string eggCode)
+    {
+        if (GameEntry.DataTables == null || string.IsNullOrWhiteSpace(eggCode))
+        {
+            return null;
+        }
+
+        EggDataRow eggDataRow = GameEntry.DataTables.GetDataRowByCode<EggDataRow>(eggCode);
+        return eggDataRow != null && eggDataRow.HatchSeconds > 0 ? eggDataRow : null;
+    }
+
+    /// <summary>
+    /// 计算指定槽位受建筑加速影响后的孵化秒数。
+    /// </summary>
+    /// <param name="slotIndex">0 基孵化槽索引。</param>
+    /// <param name="baseHatchSeconds">蛋表基础孵化秒数。</param>
+    /// <returns>最终孵化秒数。</returns>
+    private static float ResolveScaledHatchSeconds(int slotIndex, float baseHatchSeconds)
+    {
+        float hatchSeconds = Mathf.Max(0.1f, baseHatchSeconds);
+        if (GameEntry.Fruits != null)
+        {
+            hatchSeconds = Mathf.Max(0.1f, hatchSeconds * GameEntry.Fruits.GetHatchDurationScale(slotIndex + 1));
+        }
+
+        return hatchSeconds;
+    }
+
+    /// <summary>
+    /// 派发孵化运行时离散状态变化事件。
+    /// </summary>
+    private void NotifyHatchStateChanged()
+    {
+        HatchStateChanged?.Invoke();
     }
 }

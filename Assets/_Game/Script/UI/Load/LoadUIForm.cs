@@ -111,9 +111,25 @@ public class LoadUIForm : UIFormLogic
 
     private static bool CanEnterMain()
     {
-        return GameEntry.DataTables != null
+        bool isBaseReady = GameEntry.DataTables != null
             && GameEntry.DataTables.IsReady
             && GameEntry.GameAssets != null
             && GameEntry.GameAssets.IsReady;
+        if (!isBaseReady)
+        {
+            return false;
+        }
+
+        if (GameEntry.CloudSave == null)
+        {
+            return true;
+        }
+
+        if (!GameEntry.CloudSave.HasBegunInitialize)
+        {
+            GameEntry.CloudSave.BeginInitialize();
+        }
+
+        return GameEntry.CloudSave.IsReady;
     }
 }

@@ -44,4 +44,18 @@ public sealed class EggHatchSlotState
         TotalSeconds = totalSeconds;
         RemainingSeconds = totalSeconds;
     }
+
+    /// <summary>
+    /// 从云存档恢复当前槽位。
+    /// </summary>
+    /// <param name="eggCode">正在孵化的蛋 Code。</param>
+    /// <param name="totalSeconds">本次孵化总时长。</param>
+    /// <param name="remainingSeconds">剩余孵化时长。</param>
+    internal void Restore(string eggCode, float totalSeconds, float remainingSeconds)
+    {
+        IsOccupied = true;
+        EggCode = eggCode;
+        TotalSeconds = totalSeconds;
+        RemainingSeconds = remainingSeconds;
+    }
 }

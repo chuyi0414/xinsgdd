@@ -254,6 +254,8 @@ public partial class MainUIForm
         {
             EnqueuePendingGoldDropRequest(startWorldPos, endWorldPos, coinAmount);
         }
+
+        GameEntry.CloudSave?.MarkDirty();
     }
 
     /// <summary>
@@ -284,6 +286,7 @@ public partial class MainUIForm
         // 将 TxtJB 的屏幕坐标转到金币容器下的局部坐标
         Vector2 targetLocalPos = GetGoldTextLocalPosInCoinRoot();
         coinItem.PlayFlyToTarget(targetLocalPos);
+        GameEntry.CloudSave?.MarkDirty();
     }
 
     /// <summary>
@@ -304,6 +307,7 @@ public partial class MainUIForm
         }
 
         ReleaseGoldCoinItem(coinItem);
+        GameEntry.CloudSave?.MarkDirty();
     }
 
     /// <summary>
@@ -384,6 +388,7 @@ public partial class MainUIForm
         coinItem.Bind(coinAmount, OnGoldCoinFlyComplete, OnGoldCoinClicked);
         coinItem.PlaySpawnAnimation(startLocalPos, endLocalPos);
         _activeGoldCoins.Add(coinItem);
+        GameEntry.CloudSave?.MarkDirty();
         return true;
     }
 
@@ -407,6 +412,7 @@ public partial class MainUIForm
             CoinAmount = coinAmount,
         };
         _pendingGoldDropRequests.Add(pendingRequest);
+        GameEntry.CloudSave?.MarkDirty();
     }
 
     /// <summary>
@@ -439,6 +445,148 @@ public partial class MainUIForm
     private void ClearPendingGoldDropRequests()
     {
         _pendingGoldDropRequests.Clear();
+    }
+
+    /// <summary>
+    /// 将当前未点击金币掉落物追加到云存档列表。
+    /// 这里会同时采集已经显示在 UI 上的金币，以及还在等待回放的金币请求。
+    /// </summary>
+    /// <param name="results">调用方复用的金币掉落物存档列表。</param>
+    public void AppendPendingGoldDropsForCloudSave(List<PendingGoldDropSaveData> results)
+    {
+        if (results == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _activeGoldCoins.Count; i++)
+        {
+            GoldCoinItem coinItem = _activeGoldCoins[i];
+            if (coinItem == null || coinItem.CoinAmount <= 0)
+            {
+                continue;
+            }
+
+            RectTransform coinRectTransform = coinItem.CachedRectTransform;
+            if (coinRectTransform == null)
+            {
+                continue;
+            }
+
+            results.Add(new PendingGoldDropSaveData
+            {
+                amount = coinItem.CoinAmount,
+                localPosition = coinRectTransform.anchoredPosition
+            });
+        }
+
+        for (int i = 0; i < _pendingGoldDropRequests.Count; i++)
+        {
+            PendingGoldDropRequest pendingRequest = _pendingGoldDropRequests[i];
+            if (pendingRequest.CoinAmount <= 0 || !TryConvertGoldWorldPositionToLocal(pendingRequest.EndWorldPos, out Vector2 localPosition))
+            {
+                continue;
+            }
+
+            results.Add(new PendingGoldDropSaveData
+            {
+                amount = pendingRequest.CoinAmount,
+                localPosition = localPosition
+            });
+        }
+    }
+
+    /// <summary>
+    /// 从云存档恢复未点击金币掉落物。
+    /// 恢复出来的金币仍需要玩家点击后才会真正写入金币总额。
+    /// </summary>
+    /// <param name="drops">云端保存的未点击金币掉落物数组。</param>
+    public void RestorePendingGoldDropsFromCloudSave(PendingGoldDropSaveData[] drops)
+    {
+        ReleaseAllActiveGoldCoinToasts();
+        ReleaseAllActiveGoldCoins();
+        ClearPendingGoldDropRequests();
+        if (drops == null || drops.Length <= 0)
+        {
+            return;
+        }
+
+        EnsureGoldCoinRoot();
+        if (_goldCoinRoot == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < drops.Length; i++)
+        {
+            PendingGoldDropSaveData drop = drops[i];
+            if (drop == null || drop.amount <= 0)
+            {
+                continue;
+            }
+
+            TryPresentGoldDropAtLocalPosition(drop.localPosition, drop.amount);
+        }
+
+        UpdateGoldRewardUiVisibility(CanPresentPetRewardDropsNow());
+        GameEntry.CloudSave?.MarkDirty();
+    }
+
+    /// <summary>
+    /// 将金币世界坐标投影到金币容器局部坐标。
+    /// 该方法专供云存档保存待回放金币请求时使用。
+    /// </summary>
+    /// <param name="worldPosition">金币世界坐标。</param>
+    /// <param name="localPosition">输出的金币容器局部坐标。</param>
+    /// <returns>转换成功返回 true。</returns>
+    private bool TryConvertGoldWorldPositionToLocal(Vector3 worldPosition, out Vector2 localPosition)
+    {
+        localPosition = Vector2.zero;
+        Camera worldCamera = GetPlayfieldWorldCamera();
+        if (worldCamera == null)
+        {
+            return false;
+        }
+
+        EnsureGoldCoinRoot();
+        if (_goldCoinRoot == null)
+        {
+            return false;
+        }
+
+        localPosition = WorldToGoldCoinLocalPos(worldPosition, worldCamera, GetGoldCoinUICamera());
+        return true;
+    }
+
+    /// <summary>
+    /// 在金币容器局部坐标处恢复一个可点击金币。
+    /// 恢复路径不播放出生位移动画，避免重进游戏后金币从旧宠物位置再次飞出。
+    /// </summary>
+    /// <param name="localPosition">金币容器局部坐标。</param>
+    /// <param name="coinAmount">金币数量。</param>
+    /// <returns>成功恢复返回 true。</returns>
+    private bool TryPresentGoldDropAtLocalPosition(Vector2 localPosition, int coinAmount)
+    {
+        if (coinAmount <= 0)
+        {
+            return true;
+        }
+
+        GoldCoinItem coinItem = AcquireGoldCoinItem();
+        if (coinItem == null)
+        {
+            return false;
+        }
+
+        coinItem.Bind(coinAmount, OnGoldCoinFlyComplete, OnGoldCoinClicked);
+        RectTransform coinRectTransform = coinItem.CachedRectTransform;
+        if (coinRectTransform != null)
+        {
+            coinRectTransform.anchoredPosition = localPosition;
+        }
+
+        _activeGoldCoins.Add(coinItem);
+        return true;
     }
 
     /// <summary>

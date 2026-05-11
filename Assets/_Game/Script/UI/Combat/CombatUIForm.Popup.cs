@@ -44,6 +44,12 @@ public sealed partial class CombatUIForm
     private int _victoryFailUIFormId;
 
     /// <summary>
+    /// 当前战斗是否已经向每日一关排行榜提交过结算分数。
+    /// 同一局只允许提交一次，避免胜负事件和退出结算重复写榜。
+    /// </summary>
+    private bool _hasSubmittedDailyChallengeScore;
+
+    /// <summary>
     /// 规则按钮 Punch 回弹动画 Tween 句柄。
     /// EliminateRulesUIForm 关闭动画完成后触发，强调规则按钮位置。
     /// </summary>
@@ -127,9 +133,39 @@ public sealed partial class CombatUIForm
             openData = new VictoryFailUIData(isVictory, finalScore);
         }
 
+        SubmitDailyChallengeScoreOnce(openData.FinalScore);
+
         // 发起打开结果窗，并记录最新实例的序列号，供 CombatUIForm 后续统一管理与关闭。
         _victoryFailUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.VictoryFailUIForm, UIFormDefine.PopupGroup, openData);
         return _victoryFailUIFormId;
+    }
+
+    /// <summary>
+    /// 向每日一关排行榜提交本局结算分数。
+    /// </summary>
+    /// <param name="finalScore">本局最终结算分数。</param>
+    private void SubmitDailyChallengeScoreOnce(int finalScore)
+    {
+        if (_hasSubmittedDailyChallengeScore)
+        {
+            return;
+        }
+
+        _hasSubmittedDailyChallengeScore = true;
+        if (GameEntry.DailyChallengeLeaderboard == null)
+        {
+            return;
+        }
+
+        GameEntry.DailyChallengeLeaderboard.SubmitScore(
+            finalScore,
+            response =>
+            {
+            },
+            errorMessage =>
+            {
+                Log.Warning("CombatUIForm 提交每日一关排行榜分数失败：{0}", errorMessage);
+            });
     }
 
     /// <summary>
@@ -168,6 +204,7 @@ public sealed partial class CombatUIForm
         // 重建成功后，把当前 CombatUIForm 的局内显示状态重置成"新开一局"的口径。
         _victoryFailUIFormId = 0;
         _resurgenceUIFormId = 0;
+        _hasSubmittedDailyChallengeScore = false;
         UpdateScoreText(0);
         ResetPropState();
         _hasPropKit = hasPropKit;

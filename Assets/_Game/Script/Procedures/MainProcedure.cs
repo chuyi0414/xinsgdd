@@ -134,7 +134,12 @@ public class MainProcedure : ProcedureBase
     /// </summary>
     private void TryOpenNewcomerPackageUI()
     {
-        if (s_hasOpenedNewcomerPackageThisSession || GameEntry.UI == null)
+        if (s_hasOpenedNewcomerPackageThisSession || GameEntry.UI == null || GameEntry.Fruits == null)
+        {
+            return;
+        }
+
+        if (!GameEntry.Fruits.EnsureInitialized() || GameEntry.Fruits.HasClaimedNewcomerPackage)
         {
             return;
         }

@@ -64,6 +64,18 @@ public partial class GameEntry
     public static AdvertisementModule Advertisement { get; private set; }
 
     /// <summary>
+    /// 玩家云存档模块。
+    /// 负责启动期读取云端快照、运行期自动保存和主界面未点击掉落物持久化。
+    /// </summary>
+    public static CloudSaveModule CloudSave { get; private set; }
+
+    /// <summary>
+    /// 每日一关排行榜模块。
+    /// 负责今日榜读取、本局分数提交和历史最高分同步。
+    /// </summary>
+    public static DailyChallengeLeaderboardModule DailyChallengeLeaderboard { get; private set; }
+
+    /// <summary>
     /// 初始化自定义组件。
     /// 与框架组件保持统一获取方式，方便业务层通过 GameEntry 静态入口访问。
     /// </summary>
@@ -80,6 +92,8 @@ public partial class GameEntry
         Orchards = new OrchardModule();
         PlayfieldEntities = new PlayfieldEntityModule();
         Advertisement = new AdvertisementModule();
+        CloudSave = new CloudSaveModule();
+        DailyChallengeLeaderboard = new DailyChallengeLeaderboardModule();
         Advertisement.PreloadRewardedVideoAd();
 
         // 从 PlayerRuntimeModule 读取运行时数量，驱动各模块延迟初始化数组

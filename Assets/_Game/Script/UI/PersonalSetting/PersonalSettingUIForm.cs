@@ -74,6 +74,20 @@ public sealed class PersonalSettingUIForm : UIFormLogic
     private TextMeshProUGUI _txtGrade;
 
     /// <summary>
+    /// 玩家昵称文本。
+    /// 显示云端分配的玩家昵称，用户在 Inspector 中手动拖入。
+    /// </summary>
+    [SerializeField]
+    private TextMeshProUGUI _txtPlayerName;
+
+    /// <summary>
+    /// 玩家唯一编号文本。
+    /// 显示云端分配的 10 位玩家编号，用户在 Inspector 中手动拖入。
+    /// </summary>
+    [SerializeField]
+    private TextMeshProUGUI _txtPlayerCode;
+
+    /// <summary>
     /// 当前是否已订阅 PlayerRuntimeModule.StarsChanged 事件。
     /// 防止 OnInit 后再次手动调用造成重复 += 导致多次刷新。
     /// </summary>
@@ -361,6 +375,8 @@ public sealed class PersonalSettingUIForm : UIFormLogic
         BindSoundToggleListeners();
         EnsureStarsEventSubscription();
         RefreshStarsText();
+        RefreshPlayerNameText();
+        RefreshPlayerCodeText();
     }
 
     /// <summary>
@@ -378,6 +394,8 @@ public sealed class PersonalSettingUIForm : UIFormLogic
         RefreshCurrentAvatar();
         RefreshCurrentAvatarFrame();
         RefreshStarsText();
+        RefreshPlayerNameText();
+        RefreshPlayerCodeText();
     }
 
     /// <summary>
@@ -447,6 +465,46 @@ public sealed class PersonalSettingUIForm : UIFormLogic
         {
             Log.Warning("PersonalSettingUIForm 缺少音效开关 Toggle 引用，请在 Inspector 中把对应 Toggle 拖入 _toggleSoundEffect。");
         }
+
+        if (_txtPlayerCode == null)
+        {
+            Log.Warning("PersonalSettingUIForm 缺少玩家唯一编号文本引用，请在 Inspector 中把编号文本拖入 _txtPlayerCode。");
+        }
+
+        if (_txtPlayerName == null)
+        {
+            Log.Warning("PersonalSettingUIForm 缺少玩家昵称文本引用，请在 Inspector 中把昵称文本拖入 _txtPlayerName。");
+        }
+    }
+
+    /// <summary>
+    /// 刷新玩家昵称文本。
+    /// 玩家昵称由云端创建账号时分配，正常情况下不会频繁变化，因此只在界面初始化和打开时刷新。
+    /// </summary>
+    private void RefreshPlayerNameText()
+    {
+        if (_txtPlayerName == null)
+        {
+            return;
+        }
+
+        string playerName = GameEntry.Fruits != null ? GameEntry.Fruits.PlayerName : string.Empty;
+        _txtPlayerName.text = string.IsNullOrWhiteSpace(playerName) ? "玩家" : playerName;
+    }
+
+    /// <summary>
+    /// 刷新玩家唯一编号文本。
+    /// 玩家编号由云端创建账号时分配，正常情况下不会频繁变化，因此只在界面初始化和打开时刷新。
+    /// </summary>
+    private void RefreshPlayerCodeText()
+    {
+        if (_txtPlayerCode == null)
+        {
+            return;
+        }
+
+        string playerCode = GameEntry.Fruits != null ? GameEntry.Fruits.PlayerCode : string.Empty;
+        _txtPlayerCode.text = string.IsNullOrWhiteSpace(playerCode) ? string.Empty : playerCode;
     }
 
     /// <summary>

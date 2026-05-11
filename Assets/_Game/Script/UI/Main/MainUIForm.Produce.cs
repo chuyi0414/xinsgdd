@@ -213,6 +213,8 @@ public partial class MainUIForm
         {
             EnqueuePendingProduceDropRequest(startWorldPos, endWorldPos, produceCode);
         }
+
+        GameEntry.CloudSave?.MarkDirty();
     }
 
     /// <summary>
@@ -233,6 +235,7 @@ public partial class MainUIForm
         }
 
         ReleaseOutputProduceItem(produceItem);
+        GameEntry.CloudSave?.MarkDirty();
     }
 
     // ──────────────────────────────────────────────────────────
@@ -329,6 +332,7 @@ public partial class MainUIForm
         produceItem.Bind(produceCode, OnOutputProduceItemCollected);
         produceItem.PlaySpawnAnimation(startLocalPos, endLocalPos);
         _activeProduceItems.Add(produceItem);
+        GameEntry.CloudSave?.MarkDirty();
         return true;
     }
 
@@ -352,6 +356,7 @@ public partial class MainUIForm
             ProduceCode = produceCode,
         };
         _pendingProduceDropRequests.Add(pendingRequest);
+        GameEntry.CloudSave?.MarkDirty();
     }
 
     /// <summary>
@@ -382,6 +387,148 @@ public partial class MainUIForm
     private void ClearPendingProduceDropRequests()
     {
         _pendingProduceDropRequests.Clear();
+    }
+
+    /// <summary>
+    /// 将当前未点击产出物掉落按钮追加到云存档列表。
+    /// 这里会同时采集已经显示在 UI 上的按钮，以及还在等待回放的产出物请求。
+    /// </summary>
+    /// <param name="results">调用方复用的产出物掉落按钮存档列表。</param>
+    public void AppendPendingProduceDropsForCloudSave(List<PendingProduceDropSaveData> results)
+    {
+        if (results == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _activeProduceItems.Count; i++)
+        {
+            OutputProduceItem produceItem = _activeProduceItems[i];
+            if (produceItem == null || string.IsNullOrWhiteSpace(produceItem.ProduceCode))
+            {
+                continue;
+            }
+
+            RectTransform produceRectTransform = produceItem.CachedRectTransform;
+            if (produceRectTransform == null)
+            {
+                continue;
+            }
+
+            results.Add(new PendingProduceDropSaveData
+            {
+                code = produceItem.ProduceCode ?? string.Empty,
+                localPosition = produceRectTransform.anchoredPosition
+            });
+        }
+
+        for (int i = 0; i < _pendingProduceDropRequests.Count; i++)
+        {
+            PendingProduceDropRequest pendingRequest = _pendingProduceDropRequests[i];
+            if (string.IsNullOrWhiteSpace(pendingRequest.ProduceCode)
+                || !TryConvertProduceWorldPositionToLocal(pendingRequest.EndWorldPos, out Vector2 localPosition))
+            {
+                continue;
+            }
+
+            results.Add(new PendingProduceDropSaveData
+            {
+                code = pendingRequest.ProduceCode ?? string.Empty,
+                localPosition = localPosition
+            });
+        }
+    }
+
+    /// <summary>
+    /// 从云存档恢复未点击产出物掉落按钮。
+    /// 恢复出来的按钮仍需要玩家点击后才会真正写入产出物库存。
+    /// </summary>
+    /// <param name="drops">云端保存的未点击产出物掉落按钮数组。</param>
+    public void RestorePendingProduceDropsFromCloudSave(PendingProduceDropSaveData[] drops)
+    {
+        ReleaseAllActiveProduceItems();
+        ClearPendingProduceDropRequests();
+        if (drops == null || drops.Length <= 0)
+        {
+            return;
+        }
+
+        EnsureProduceDropRoot();
+        if (_produceDropRoot == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < drops.Length; i++)
+        {
+            PendingProduceDropSaveData drop = drops[i];
+            if (drop == null || string.IsNullOrWhiteSpace(drop.code))
+            {
+                continue;
+            }
+
+            TryPresentProduceDropAtLocalPosition(drop.localPosition, drop.code);
+        }
+
+        UpdateProduceRewardUiVisibility(CanPresentPetRewardDropsNow());
+        GameEntry.CloudSave?.MarkDirty();
+    }
+
+    /// <summary>
+    /// 将产出物世界坐标投影到产出物容器局部坐标。
+    /// 该方法专供云存档保存待回放产出物请求时使用。
+    /// </summary>
+    /// <param name="worldPosition">产出物世界坐标。</param>
+    /// <param name="localPosition">输出的产出物容器局部坐标。</param>
+    /// <returns>转换成功返回 true。</returns>
+    private bool TryConvertProduceWorldPositionToLocal(Vector3 worldPosition, out Vector2 localPosition)
+    {
+        localPosition = Vector2.zero;
+        Camera worldCamera = GetPlayfieldWorldCamera();
+        if (worldCamera == null)
+        {
+            return false;
+        }
+
+        EnsureProduceDropRoot();
+        if (_produceDropRoot == null)
+        {
+            return false;
+        }
+
+        localPosition = WorldToProduceLocalPos(worldPosition, worldCamera, GetProduceUICamera());
+        return true;
+    }
+
+    /// <summary>
+    /// 在产出物容器局部坐标处恢复一个可点击产出物按钮。
+    /// 恢复路径不播放出生位移动画，避免重进游戏后按钮从旧宠物位置再次飞出。
+    /// </summary>
+    /// <param name="localPosition">产出物容器局部坐标。</param>
+    /// <param name="produceCode">产出物 Code。</param>
+    /// <returns>成功恢复返回 true。</returns>
+    private bool TryPresentProduceDropAtLocalPosition(Vector2 localPosition, string produceCode)
+    {
+        if (string.IsNullOrWhiteSpace(produceCode))
+        {
+            return true;
+        }
+
+        OutputProduceItem produceItem = AcquireOutputProduceItem();
+        if (produceItem == null)
+        {
+            return false;
+        }
+
+        produceItem.Bind(produceCode, OnOutputProduceItemCollected);
+        RectTransform produceRectTransform = produceItem.CachedRectTransform;
+        if (produceRectTransform != null)
+        {
+            produceRectTransform.anchoredPosition = localPosition;
+        }
+
+        _activeProduceItems.Add(produceItem);
+        return true;
     }
 
     // ──────────────────────────────────────────────────────────

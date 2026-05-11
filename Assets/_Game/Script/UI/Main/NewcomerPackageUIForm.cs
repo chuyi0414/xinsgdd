@@ -16,7 +16,7 @@ public sealed class NewcomerPackageUIForm : UIFormLogic
     /// <summary>
     /// 新人礼包发放的金币数量。
     /// </summary>
-    private const int RewardGoldAmount = 9999999;
+    private const int RewardGoldAmount = 10000;
 
     /// <summary>
     /// 确认领取按钮。
@@ -56,6 +56,10 @@ public sealed class NewcomerPackageUIForm : UIFormLogic
     {
         base.OnOpen(userData);
         _hasClaimedReward = false;
+        if (GameEntry.Fruits != null && GameEntry.Fruits.HasClaimedNewcomerPackage)
+        {
+            CloseSelf();
+        }
     }
 
     /// <summary>
@@ -97,18 +101,33 @@ public sealed class NewcomerPackageUIForm : UIFormLogic
             return;
         }
 
+        if (GameEntry.Fruits == null || !GameEntry.Fruits.TryMarkNewcomerPackageClaimed())
+        {
+            CloseSelf();
+            return;
+        }
+
         _hasClaimedReward = true;
 
         if (GameEntry.EggHatch != null)
         {
+            GameEntry.EggHatch.EnsureInitialized();
             GameEntry.EggHatch.AddManualEggs(RewardManualEggCount);
         }
 
-        if (GameEntry.Fruits != null)
-        {
-            GameEntry.Fruits.AddGold(RewardGoldAmount);
-        }
+        GameEntry.Fruits.AddGold(RewardGoldAmount);
+        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.SaveNow(true);
 
+        CloseSelf();
+    }
+
+    /// <summary>
+    /// 关闭当前新人礼包界面。
+    /// 统一封装关闭逻辑，避免多个分支重复访问 UIForm.SerialId。
+    /// </summary>
+    private void CloseSelf()
+    {
         if (UIForm == null || GameEntry.UI == null)
         {
             return;

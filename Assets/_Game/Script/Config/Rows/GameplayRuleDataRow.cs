@@ -16,9 +16,9 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 数据表固定列数。
-    /// 三档产出概率已迁移到 PetDataRow.ProduceProbability + PetProduce 随机抽取，这里删除三列后为 17。
+    /// 三档产出概率已迁移到 PetDataRow.ProduceProbability + PetProduce 随机抽取，这里删除三列并新增云存档自动保存间隔后为 18。
     /// </summary>
-    private const int ColumnCount = 17;
+    private const int ColumnCount = 18;
 
     /// <summary>
     /// 合法规则 Code 的前缀。
@@ -118,6 +118,11 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
     public int InitialStars { get; private set; }
 
     /// <summary>
+    /// 云存档静默自动保存间隔，单位分钟。
+    /// </summary>
+    public int CloudAutoSaveIntervalMinutes { get; private set; }
+
+    /// <summary>
     /// 备注描述。
     /// </summary>
     public string Description { get; private set; }
@@ -163,7 +168,7 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        if (!int.TryParse(columns[3], out int initialManualEggCount) || initialManualEggCount <= 0)
+        if (!int.TryParse(columns[3], out int initialManualEggCount) || initialManualEggCount < 0)
         {
             Log.Warning("GameplayRuleDataRow parse failed because InitialManualEggCount '{0}' is invalid, code '{1}'.", columns[3], code);
             return false;
@@ -253,6 +258,12 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
+        if (!int.TryParse(columns[16], out int cloudAutoSaveIntervalMinutes) || cloudAutoSaveIntervalMinutes <= 0)
+        {
+            Log.Warning("GameplayRuleDataRow parse failed because CloudAutoSaveIntervalMinutes '{0}' is invalid, code '{1}'.", columns[16], code);
+            return false;
+        }
+
         _id = id;
         Code = code;
         Name = name;
@@ -269,7 +280,8 @@ public sealed class GameplayRuleDataRow : DataRowBase, ICodeDataRow
         DiningOtherUnlockedFruitProbability = diningOtherUnlockedFruitProbability;
         DiningLockedFruitProbability = diningLockedFruitProbability;
         InitialStars = initialStars;
-        Description = columns[16].Trim();
+        CloudAutoSaveIntervalMinutes = cloudAutoSaveIntervalMinutes;
+        Description = columns[17].Trim();
         return true;
     }
 

@@ -112,6 +112,12 @@ public sealed partial class PlayerRuntimeModule
     /// </summary>
     private int _currentStars;
 
+    /// <summary>
+    /// 新人礼包是否已经领取。
+    /// 初始为 false；成功领取新人礼包后置为 true，并随云存档持久化，防止跨会话重复领取。
+    /// </summary>
+    private bool _hasClaimedNewcomerPackage;
+
     // ───────────── 建筑事件 ─────────────
 
     /// <summary>
@@ -138,6 +144,12 @@ public sealed partial class PlayerRuntimeModule
     /// UI 层收到后需要重采样 marker，并把新快照同步给全局实体模块。
     /// </summary>
     public event Action<int, int> PlayfieldCapacityChanged;
+
+    /// <summary>
+    /// 新人礼包领取状态发生变化时触发。
+    /// 云存档模块监听该事件后会标记快照为脏，确保领取状态尽快同步到云端。
+    /// </summary>
+    public event Action NewcomerPackageClaimStateChanged;
 
     // ───────────── 建筑属性 ─────────────
 
@@ -180,6 +192,12 @@ public sealed partial class PlayerRuntimeModule
     /// UI 可以随时查询，不会被消耗。
     /// </summary>
     public int CurrentStars => _currentStars;
+
+    /// <summary>
+    /// 新人礼包是否已经领取。
+    /// MainProcedure 用它决定是否还需要弹出新人礼包界面。
+    /// </summary>
+    public bool HasClaimedNewcomerPackage => _hasClaimedNewcomerPackage;
 
     // ───────────── 建筑/金币公共接口 ─────────────
 
@@ -504,6 +522,23 @@ public sealed partial class PlayerRuntimeModule
 
         _currentGold += amount;
         GoldChanged?.Invoke(_currentGold);
+    }
+
+    /// <summary>
+    /// 尝试把新人礼包标记为已领取。
+    /// 该方法只负责修改领取状态，不直接发放奖励，避免存档状态和奖励逻辑互相耦合。
+    /// </summary>
+    /// <returns>本次成功从未领取切换为已领取时返回 true；已经领取或初始化失败时返回 false。</returns>
+    public bool TryMarkNewcomerPackageClaimed()
+    {
+        if (!EnsureInitialized() || _hasClaimedNewcomerPackage)
+        {
+            return false;
+        }
+
+        _hasClaimedNewcomerPackage = true;
+        NewcomerPackageClaimStateChanged?.Invoke();
+        return true;
     }
 
     /// <summary>

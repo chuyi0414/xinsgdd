@@ -80,6 +80,8 @@ public sealed partial class CombatUIForm : UIFormLogic
         // 初始化得分显示
         UpdateScoreText(0);
 
+        _hasSubmittedDailyChallengeScore = false;
+
         // 重置道具状态
         ResetPropState();
 

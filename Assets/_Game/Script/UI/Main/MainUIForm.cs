@@ -1,4 +1,5 @@
 using DG.Tweening;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityGameFramework.Runtime;
@@ -55,6 +56,10 @@ public partial class MainUIForm : UIFormLogic
     // 宠物图鉴按钮。用户在 Inspector 中自行拖入 GOCWTJ 上的 Button 组件。
     [SerializeField]
     private Button _btnPetTJ;
+    // 手动云存档按钮。
+    // 用户在 Inspector 中自行拖入对应 Button 组件，不做运行时路径查找。
+    [SerializeField]
+    private Button _btnManualCloudSave;
     // 每日一关附属 UI：GoTX 根节点。进入每日一关时隐藏，返回中页动画结束后恢复。
     [SerializeField]
     private GameObject _goTX;
@@ -70,6 +75,10 @@ public partial class MainUIForm : UIFormLogic
     // 用户在 Inspector 中自行拖入 GoTX 上的头像框 Image 组件。
     [SerializeField]
     private Image _imageAvatarFrame;
+    // 当前玩家昵称文本。
+    // 用户在 Inspector 中自行拖入 GoTX 或主界面上的昵称 TextMeshProUGUI。
+    [SerializeField]
+    private TextMeshProUGUI _txtPlayerName;
     // 每日一关附属 UI：GoJB 根节点。进入每日一关时隐藏，返回中页动画结束后恢复。
     [SerializeField]
     private GameObject _goJB;
@@ -87,6 +96,9 @@ public partial class MainUIForm : UIFormLogic
     // 点击 BtnUp 后，是否需要在回中页动画结束后恢复附属 UI。
     // 这个标记跨越切页动画期间，确保恢复时机在动画完成而不是点击瞬间。
     private bool _pendingRestoreDailyChallengeAuxiliaryUi;
+    // 当前是否正在等待手动云存档的保存结果。
+    // 自动保存也会触发 CloudSaveModule 的保存事件，使用该标记避免自动保存弹出保存提示。
+    private bool _isWaitingManualCloudSaveResult;
     // 分页可视区域，未手动绑定时默认取 GoYiDong 的父节点。
     [SerializeField]
     private RectTransform _pageViewport;
@@ -145,6 +157,7 @@ public partial class MainUIForm : UIFormLogic
         CacheReferences();
         _isDailyChallengeAuxiliaryUiHidden = false;
         _pendingRestoreDailyChallengeAuxiliaryUi = false;
+        _isWaitingManualCloudSaveResult = false;
         if (_btnLeft != null)
         {
             _btnLeft.onClick.AddListener(OnBtnLeft);
@@ -195,6 +208,11 @@ public partial class MainUIForm : UIFormLogic
             Log.Warning("MainUIForm 缺少宠物图鉴按钮引用，请在 Inspector 中把 GOCWTJ 上的 Button 组件拖入 _btnPetTJ。");
         }
 
+        if (_btnManualCloudSave != null)
+        {
+            _btnManualCloudSave.onClick.AddListener(OnBtnManualCloudSave);
+        }
+
         base.OnInit(userData);
         RefreshPageLayout(true);
         UpdateButtonState();
@@ -218,6 +236,7 @@ public partial class MainUIForm : UIFormLogic
         base.OnOpen(userData);
         _isDailyChallengeAuxiliaryUiHidden = false;
         _pendingRestoreDailyChallengeAuxiliaryUi = false;
+        _isWaitingManualCloudSaveResult = false;
         RefreshPageLayout(true);
         UpdateButtonState();
         OpenHatchView();
@@ -228,7 +247,11 @@ public partial class MainUIForm : UIFormLogic
         OpenArchitectureView();
         OpenDailyChallengeView();
         TryFlushPendingPetRewardDrops();
+        RefreshPlayerNameDisplay();
         RefreshAvatarDisplay();
+        SubscribeAvatarDisplayEvents();
+        GameEntry.CloudSave?.RegisterMainUIForm(this);
+        SubscribeManualCloudSaveResultEvents();
     }
 
     /// <summary>
@@ -236,6 +259,12 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     protected override void OnClose(bool isShutdown, object userData)
     {
+        GameEntry.CloudSave?.MarkDirty();
+        GameEntry.CloudSave?.SaveNow(true);
+        _isWaitingManualCloudSaveResult = false;
+        UnsubscribeAvatarDisplayEvents();
+        UnsubscribeManualCloudSaveResultEvents();
+        GameEntry.CloudSave?.UnregisterMainUIForm(this);
         StopSwitchTween();
         CloseHatchView();
         ClosePetPlacementView();
@@ -255,6 +284,7 @@ public partial class MainUIForm : UIFormLogic
     protected override void OnReveal()
     {
         base.OnReveal();
+        RefreshPlayerNameDisplay();
         RefreshAvatarDisplay();
     }
 
@@ -275,6 +305,10 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     private void OnDestroy()
     {
+        _isWaitingManualCloudSaveResult = false;
+        UnsubscribeAvatarDisplayEvents();
+        UnsubscribeManualCloudSaveResultEvents();
+        GameEntry.CloudSave?.UnregisterMainUIForm(this);
         StopSwitchTween();
 
         if (_btnLeft != null)
@@ -305,6 +339,11 @@ public partial class MainUIForm : UIFormLogic
         if (_btnPetTJ != null)
         {
             _btnPetTJ.onClick.RemoveListener(OnBtnPetTJ);
+        }
+
+        if (_btnManualCloudSave != null)
+        {
+            _btnManualCloudSave.onClick.RemoveListener(OnBtnManualCloudSave);
         }
 
         DestroyHatchView();
@@ -393,6 +432,92 @@ public partial class MainUIForm : UIFormLogic
             SwitchToPage(MainPageSlot.Below);
             ScheduleDailyChallengeUIFormOpenAfterSwitch();
         }
+    }
+
+    /// <summary>
+    /// 手动云存档按钮点击逻辑。
+    /// 点击后立即标记当前主界面快照为脏，并请求 CloudSaveModule 执行一次保存。
+    /// </summary>
+    private void OnBtnManualCloudSave()
+    {
+        // 播放点击音效
+        UIInteractionSound.PlayClick();
+
+        if (GameEntry.CloudSave == null)
+        {
+            ToastUtility.Show("云存档未初始化");
+            return;
+        }
+
+        GameEntry.CloudSave.MarkDirty();
+        if (GameEntry.CloudSave.SaveNow(true))
+        {
+            _isWaitingManualCloudSaveResult = true;
+            ToastUtility.Show("云存档正在保存");
+            return;
+        }
+
+        ToastUtility.Show("保存已加入队列");
+    }
+
+    /// <summary>
+    /// 订阅云存档保存结果事件。
+    /// 事件本身也会被自动保存触发，实际弹提示时还会用 _isWaitingManualCloudSaveResult 做二次过滤。
+    /// </summary>
+    private void SubscribeManualCloudSaveResultEvents()
+    {
+        if (GameEntry.CloudSave == null)
+        {
+            return;
+        }
+
+        GameEntry.CloudSave.SaveSucceeded -= OnManualCloudSaveSucceeded;
+        GameEntry.CloudSave.SaveFailed -= OnManualCloudSaveFailed;
+        GameEntry.CloudSave.SaveSucceeded += OnManualCloudSaveSucceeded;
+        GameEntry.CloudSave.SaveFailed += OnManualCloudSaveFailed;
+    }
+
+    /// <summary>
+    /// 取消订阅云存档保存结果事件。
+    /// </summary>
+    private void UnsubscribeManualCloudSaveResultEvents()
+    {
+        if (GameEntry.CloudSave == null)
+        {
+            return;
+        }
+
+        GameEntry.CloudSave.SaveSucceeded -= OnManualCloudSaveSucceeded;
+        GameEntry.CloudSave.SaveFailed -= OnManualCloudSaveFailed;
+    }
+
+    /// <summary>
+    /// 手动云存档成功回调。
+    /// </summary>
+    private void OnManualCloudSaveSucceeded()
+    {
+        if (!_isWaitingManualCloudSaveResult)
+        {
+            return;
+        }
+
+        _isWaitingManualCloudSaveResult = false;
+        ToastUtility.Show("云存档保存成功");
+    }
+
+    /// <summary>
+    /// 手动云存档失败回调。
+    /// </summary>
+    /// <param name="errorMessage">失败原因。</param>
+    private void OnManualCloudSaveFailed(string errorMessage)
+    {
+        if (!_isWaitingManualCloudSaveResult)
+        {
+            return;
+        }
+
+        _isWaitingManualCloudSaveResult = false;
+        ToastUtility.Show("保存失败");
     }
 
     /// <summary>
@@ -628,6 +753,7 @@ public partial class MainUIForm : UIFormLogic
         SetNodeActive(_btnRight != null ? _btnRight.gameObject : null, isVisible);
         SetNodeActive(_goTX, isVisible);
         SetNodeActive(_btnFruitTJ != null ? _btnFruitTJ.gameObject : null, isVisible);
+        SetNodeActive(_btnManualCloudSave != null ? _btnManualCloudSave.gameObject : null, isVisible);
         SetNodeActive(_goCWTJ, isVisible);
         SetNodeActive(_goJB, isVisible);
     }
@@ -960,6 +1086,70 @@ public partial class MainUIForm : UIFormLogic
         }
 
         GameEntry.UI.OpenUIForm(UIFormDefine.PersonalSettingUIForm, UIFormDefine.PopupGroup);
+    }
+
+    /// <summary>
+    /// 订阅玩家头像与头像框选中变化事件。
+    /// 个人设置和购买弹窗同属 Popup 组时，PurchaseUIForm 关闭不一定会 reveal MainUIForm，因此主界面必须监听运行时数据变化。
+    /// </summary>
+    private void SubscribeAvatarDisplayEvents()
+    {
+        if (GameEntry.Fruits == null)
+        {
+            return;
+        }
+
+        GameEntry.Fruits.SelectedHeadPortraitChanged -= OnSelectedHeadPortraitChanged;
+        GameEntry.Fruits.SelectedHeadPortraitFrameChanged -= OnSelectedHeadPortraitFrameChanged;
+        GameEntry.Fruits.SelectedHeadPortraitChanged += OnSelectedHeadPortraitChanged;
+        GameEntry.Fruits.SelectedHeadPortraitFrameChanged += OnSelectedHeadPortraitFrameChanged;
+    }
+
+    /// <summary>
+    /// 取消订阅玩家头像与头像框选中变化事件。
+    /// </summary>
+    private void UnsubscribeAvatarDisplayEvents()
+    {
+        if (GameEntry.Fruits == null)
+        {
+            return;
+        }
+
+        GameEntry.Fruits.SelectedHeadPortraitChanged -= OnSelectedHeadPortraitChanged;
+        GameEntry.Fruits.SelectedHeadPortraitFrameChanged -= OnSelectedHeadPortraitFrameChanged;
+    }
+
+    /// <summary>
+    /// 当前选中头像变化回调。
+    /// </summary>
+    /// <param name="headPortraitCode">最新头像 Code。</param>
+    private void OnSelectedHeadPortraitChanged(string headPortraitCode)
+    {
+        RefreshAvatarDisplay();
+    }
+
+    /// <summary>
+    /// 当前选中头像框变化回调。
+    /// </summary>
+    /// <param name="headPortraitFrameCode">最新头像框 Code。</param>
+    private void OnSelectedHeadPortraitFrameChanged(string headPortraitFrameCode)
+    {
+        RefreshAvatarDisplay();
+    }
+
+    /// <summary>
+    /// 刷新主界面玩家昵称文本。
+    /// 昵称由云存档中的 PlayerName 提供，界面只负责显示当前运行时缓存。
+    /// </summary>
+    public void RefreshPlayerNameDisplay()
+    {
+        if (_txtPlayerName == null)
+        {
+            return;
+        }
+
+        string playerName = GameEntry.Fruits != null ? GameEntry.Fruits.PlayerName : string.Empty;
+        _txtPlayerName.text = string.IsNullOrWhiteSpace(playerName) ? "玩家" : playerName;
     }
 
     /// <summary>

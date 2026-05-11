@@ -714,6 +714,8 @@ MonoBehaviour:
   _goAvatarFrame: {fileID: 5582869374431959623}
   _goSettings: {fileID: 4770167232748587006}
   _txtGrade: {fileID: 8034347793362963639}
+  _txtPlayerName: {fileID: 3424277694747546901}
+  _txtPlayerCode: {fileID: 448498612955600841}
   _toggleBgm: {fileID: 2593309846660628848}
   _toggleSoundEffect: {fileID: 5743697568734017806}
   _txtOwnedCount: {fileID: 4455677079411576241}

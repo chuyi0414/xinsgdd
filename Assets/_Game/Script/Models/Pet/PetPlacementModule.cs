@@ -7,7 +7,7 @@ using UnityGameFramework.Runtime;
 /// 宠物站位运行时模块。
 /// 负责孵化结果抽取以及饮食区、排队区的占位管理。
 /// </summary>
-public sealed class PetPlacementModule
+public sealed partial class PetPlacementModule
 {
     /// <summary>
     /// 餐桌位数量默认值。

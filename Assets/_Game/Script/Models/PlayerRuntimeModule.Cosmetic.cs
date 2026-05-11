@@ -40,6 +40,18 @@ public sealed partial class PlayerRuntimeModule
     /// </summary>
     private string _selectedHeadPortraitFrameCode;
 
+    /// <summary>
+    /// 当前选中头像变化事件。
+    /// 参数为最新头像 Code，用于主界面头像展示和云存档脏标记同步。
+    /// </summary>
+    public event Action<string> SelectedHeadPortraitChanged;
+
+    /// <summary>
+    /// 当前选中头像框变化事件。
+    /// 参数为最新头像框 Code，用于主界面头像框展示和云存档脏标记同步。
+    /// </summary>
+    public event Action<string> SelectedHeadPortraitFrameChanged;
+
     // ───────────── 宠物解锁 ─────────────
 
     /// <summary>
@@ -159,7 +171,13 @@ public sealed partial class PlayerRuntimeModule
             return false;
         }
 
+        if (string.Equals(_selectedHeadPortraitCode, headPortraitCode, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
         _selectedHeadPortraitCode = headPortraitCode;
+        SelectedHeadPortraitChanged?.Invoke(_selectedHeadPortraitCode);
         return true;
     }
 
@@ -237,7 +255,13 @@ public sealed partial class PlayerRuntimeModule
             return false;
         }
 
+        if (string.Equals(_selectedHeadPortraitFrameCode, headPortraitFrameCode, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
         _selectedHeadPortraitFrameCode = headPortraitFrameCode;
+        SelectedHeadPortraitFrameChanged?.Invoke(_selectedHeadPortraitFrameCode);
         return true;
     }
 

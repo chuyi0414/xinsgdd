@@ -62,11 +62,21 @@ public partial class GameEntry : MonoBehaviour
     }
 
     /// <summary>
+    /// 每帧推进自定义低频运行时模块。
+    /// 当前只驱动云存档自动保存计时，使用 Time.unscaledDeltaTime 避免时间缩放影响保存间隔。
+    /// </summary>
+    private void Update()
+    {
+        CloudSave?.Update(Time.unscaledDeltaTime);
+    }
+
+    /// <summary>
     /// 游戏入口销毁时释放 Addressables 大资源句柄。
     /// 这里统一清理 GameAddressableAssetModule 中仍被缓存的 Arts、Audio 资源，避免退出场景后句柄泄漏。
     /// </summary>
     private void OnDestroy()
     {
+        CloudSave?.Shutdown();
         AddressableAssets?.ReleaseAll();
     }
 }

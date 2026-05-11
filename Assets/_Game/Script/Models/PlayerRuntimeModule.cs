@@ -262,6 +262,50 @@ public sealed partial class PlayerRuntimeModule
     private GameplayRuleDataRow _gameplayRuleDataRow;
 
     /// <summary>
+    /// 云端分配的玩家显示名。
+    /// 当前用于每日一关排行榜展示，由云函数在创建账号时生成。
+    /// </summary>
+    private string _playerName = string.Empty;
+
+    /// <summary>
+    /// 云端分配的玩家唯一编号。
+    /// 固定为玩家昵称后 10 位数字，创建账号后通常不会变化。
+    /// </summary>
+    private string _playerCode = string.Empty;
+
+    /// <summary>
+    /// 每日一关历史最高分缓存。
+    /// 由云存档读取和排行榜提交响应同步，供每日关入口展示。
+    /// </summary>
+    private int _dailyChallengeHistoricalBestScore;
+
+    /// <summary>
+    /// 每日一关历史最高分达成时间。
+    /// 使用服务端返回的字符串，仅作为低频展示/排查字段。
+    /// </summary>
+    private string _dailyChallengeHistoricalBestTime = string.Empty;
+
+    /// <summary>
+    /// 云端分配的玩家显示名。
+    /// </summary>
+    public string PlayerName => _playerName;
+
+    /// <summary>
+    /// 云端分配的玩家唯一编号。
+    /// </summary>
+    public string PlayerCode => _playerCode;
+
+    /// <summary>
+    /// 每日一关历史最高分。
+    /// </summary>
+    public int DailyChallengeHistoricalBestScore => _dailyChallengeHistoricalBestScore;
+
+    /// <summary>
+    /// 每日一关历史最高分达成时间。
+    /// </summary>
+    public string DailyChallengeHistoricalBestTime => _dailyChallengeHistoricalBestTime;
+
+    /// <summary>
     /// 构造玩家运行时模块，并初始化建筑默认状态。
     /// </summary>
     public PlayerRuntimeModule()
@@ -349,6 +393,23 @@ public sealed partial class PlayerRuntimeModule
         _isCandidateCacheDirty = true;
         RebuildCandidateCachesIfNeeded();
         return true;
+    }
+
+    /// <summary>
+    /// 根据排行榜云函数响应刷新每日一关历史最高分缓存。
+    /// </summary>
+    /// <param name="score">服务端确认后的历史最高分。</param>
+    /// <param name="achievedTime">历史最高分达成时间。</param>
+    public void ApplyDailyChallengeHistoricalBestScore(int score, string achievedTime)
+    {
+        int normalizedScore = Mathf.Max(0, score);
+        if (normalizedScore < _dailyChallengeHistoricalBestScore)
+        {
+            return;
+        }
+
+        _dailyChallengeHistoricalBestScore = normalizedScore;
+        _dailyChallengeHistoricalBestTime = achievedTime ?? string.Empty;
     }
 
     /// <summary>

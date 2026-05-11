@@ -1,0 +1,1105 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using UnityEngine;
+using UnityGameFramework.Runtime;
+#if (UNITY_WEBGL || WEIXINMINIGAME) && !UNITY_EDITOR
+using WeChatWASM;
+#endif
+
+/// <summary>
+/// 玩家云存档运行时模块。
+/// 负责启动期读取云端快照、组装完整存档、静默自动保存以及失败重试。
+/// </summary>
+public sealed class CloudSaveModule
+{
+    /// <summary>
+    /// 云函数名称。
+    /// 需要与云开发中部署的函数名保持一致。
+    /// </summary>
+    private const string CloudFunctionName = "sgdd_server";
+
+    /// <summary>
+    /// 云开发环境 Id。
+    /// 如果项目已经在微信侧全局初始化云环境，可保持为空；否则请填写真实 env，例如 cloud1-xxxx。
+    /// </summary>
+    private const string CloudEnvironmentId = "tianxing-001-2g9lrxwh45e5182d";
+
+    /// <summary>
+    /// 初始化失败后允许自动继续进入游戏的兜底等待秒数。
+    /// 当前云函数失败会直接兜底，不额外阻塞加载界面。
+    /// </summary>
+    private const float RetryDelaySeconds = 10f;
+
+    /// <summary>
+    /// 默认自动保存间隔秒数。
+    /// 当 GameplayRule 表不可用或字段非法时使用。
+    /// </summary>
+    private const float DefaultAutoSaveIntervalSeconds = 180f;
+
+    /// <summary>
+    /// 当前是否已经开始过启动期云存档初始化。
+    /// </summary>
+    private bool _hasBegunInitialize;
+
+    /// <summary>
+    /// 当前启动期云存档流程是否已经结束。
+    /// LoadUIForm 会用它决定是否允许进入主界面。
+    /// </summary>
+    private bool _isReady;
+
+    /// <summary>
+    /// 当前是否正在请求云函数。
+    /// 防止同一时间发起多次保存覆盖请求。
+    /// </summary>
+    private bool _isCallingCloud;
+
+#if (UNITY_WEBGL || WEIXINMINIGAME) && !UNITY_EDITOR
+    /// <summary>
+    /// 微信小游戏运行时云能力是否已经完成初始化。
+    /// 初始值为 false，首次真实调用云函数前会通过 WX.InitSDK 和 WX.cloud.Init 完成初始化。
+    /// </summary>
+    private bool _isWechatCloudInitialized;
+
+    /// <summary>
+    /// 当前是否已经订阅微信小游戏隐藏到后台事件。
+    /// 初始值为 false；订阅成功后置为 true，用于避免重复绑定 WX.OnHide 导致一次切后台触发多次保存。
+    /// </summary>
+    private bool _isWechatHideEventSubscribed;
+#endif
+
+    /// <summary>
+    /// 当前是否已经订阅运行时脏标记事件。
+    /// </summary>
+    private bool _isDirtyEventSubscribed;
+
+    /// <summary>
+    /// 当前存档是否存在未同步到云端的变化。
+    /// </summary>
+    private bool _isDirty;
+
+    /// <summary>
+    /// 当前云函数请求结束后是否需要立刻再保存一次。
+    /// 初始值为 false；当保存请求进行中又发生强制保存需求时置 true，避免旧请求成功后误清掉新脏数据。
+    /// </summary>
+    private bool _pendingSaveAfterCurrentCloudCall;
+
+    /// <summary>
+    /// 自动保存间隔秒数。
+    /// 初始化时从 GameplayRule.CloudAutoSaveIntervalMinutes 换算得到。
+    /// </summary>
+    private float _autoSaveIntervalSeconds = DefaultAutoSaveIntervalSeconds;
+
+    /// <summary>
+    /// 下一次自动保存前的倒计时。
+    /// 只有 _isDirty 为 true 时才会持续扣减。
+    /// </summary>
+    private float _autoSaveCountdownSeconds = DefaultAutoSaveIntervalSeconds;
+
+    /// <summary>
+    /// 保存失败后的重试倒计时。
+    /// 大于 0 时优先等待重试，不触发常规自动保存倒计时。
+    /// </summary>
+    private float _retryCountdownSeconds;
+
+    /// <summary>
+    /// 当前打开中的主界面引用。
+    /// 用于采集或恢复未点击金币和产出物掉落物。
+    /// </summary>
+    private MainUIForm _mainUIForm;
+
+    /// <summary>
+    /// 云端读取到、等待 MainUIForm 打开后恢复的金币掉落物。
+    /// </summary>
+    private PendingGoldDropSaveData[] _loadedPendingGoldDrops;
+
+    /// <summary>
+    /// 云端读取到、等待 MainUIForm 打开后恢复的产出物掉落按钮。
+    /// </summary>
+    private PendingProduceDropSaveData[] _loadedPendingProduceDrops;
+
+    /// <summary>
+    /// 启动期云存档流程是否已经完成。
+    /// </summary>
+    public bool IsReady => _isReady;
+
+    /// <summary>
+    /// 启动期云存档流程是否已经开始。
+    /// </summary>
+    public bool HasBegunInitialize => _hasBegunInitialize;
+
+    /// <summary>
+    /// 当前存档是否存在尚未同步到云端的变化。
+    /// 排行榜提交新纪录前会读取该状态，决定是否需要先保存头像、头像框等展示资料。
+    /// </summary>
+    public bool HasDirtyChanges => _isDirty;
+
+    /// <summary>
+    /// 云存档保存成功事件。
+    /// 仅在 saveSnapshot 动作被云端确认成功后触发，自动保存和手动保存都会触发。
+    /// </summary>
+    public event Action SaveSucceeded;
+
+    /// <summary>
+    /// 云存档保存失败事件。
+    /// 参数为失败原因文本；自动保存和手动保存都会触发。
+    /// </summary>
+    public event Action<string> SaveFailed;
+
+    /// <summary>
+    /// 尝试开始启动期云存档初始化。
+    /// 必须在数据表和必要资源都完成加载后调用，确保默认快照可以完整构建。
+    /// </summary>
+    /// <returns>成功发起或已经完成返回 true；前置条件未满足返回 false。</returns>
+    public bool BeginInitialize()
+    {
+        if (_hasBegunInitialize)
+        {
+            return true;
+        }
+
+        if (!PrepareRuntimeForCloudSave())
+        {
+            return false;
+        }
+
+        _hasBegunInitialize = true;
+        RefreshAutoSaveInterval();
+        SubscribeDirtyEvents();
+        SubscribeWechatLifecycleEvents();
+        if (!TryBuildCurrentSnapshot(out PlayerCloudSaveSnapshot initialSnapshot))
+        {
+            Log.Warning("CloudSaveModule 无法构建初始云存档快照，将使用本地初始进度进入游戏。");
+            CompleteInitialLoadWithFallback();
+            return true;
+        }
+
+        CallCloudFunction("initOrLoadSave", initialSnapshot, OnInitialLoadCloudSuccess, OnInitialLoadCloudFailure);
+        return true;
+    }
+
+    /// <summary>
+    /// 每帧推进自动保存计时。
+    /// 调用方应传入真实时间，避免游戏内时间缩放影响云存档。
+    /// </summary>
+    /// <param name="realElapseSeconds">真实流逝秒数。</param>
+    public void Update(float realElapseSeconds)
+    {
+        if (!_isReady || _isCallingCloud || realElapseSeconds <= 0f)
+        {
+            return;
+        }
+
+        if (_retryCountdownSeconds > 0f)
+        {
+            _retryCountdownSeconds -= realElapseSeconds;
+            if (_retryCountdownSeconds <= 0f)
+            {
+                SaveNow(false);
+            }
+
+            return;
+        }
+
+        _autoSaveCountdownSeconds -= realElapseSeconds;
+        if (_autoSaveCountdownSeconds > 0f)
+        {
+            return;
+        }
+
+        if (_isDirty)
+        {
+            SaveNow(false);
+            return;
+        }
+
+        _autoSaveCountdownSeconds = _autoSaveIntervalSeconds;
+    }
+
+    /// <summary>
+    /// 标记当前快照已经变脏，需要在下一次自动保存或强制保存时同步云端。
+    /// </summary>
+    public void MarkDirty()
+    {
+        if (!_isReady)
+        {
+            return;
+        }
+
+        _isDirty = true;
+    }
+
+    /// <summary>
+    /// 立即请求保存当前快照。
+    /// </summary>
+    /// <param name="markDirtyIfBusy">当前已有云函数请求时，是否只标脏等待下次保存。</param>
+    /// <returns>成功发起保存请求返回 true。</returns>
+    public bool SaveNow(bool markDirtyIfBusy)
+    {
+        if (!_isReady)
+        {
+            return false;
+        }
+
+        if (_isCallingCloud)
+        {
+            if (markDirtyIfBusy)
+            {
+                _isDirty = true;
+                _pendingSaveAfterCurrentCloudCall = true;
+            }
+
+            return false;
+        }
+
+        if (!TryBuildCurrentSnapshot(out PlayerCloudSaveSnapshot snapshot))
+        {
+            Log.Warning("CloudSaveModule 保存失败：无法构建当前快照。");
+            ScheduleSaveRetry();
+            return false;
+        }
+
+        CallCloudFunction("saveSnapshot", snapshot, OnSaveCloudSuccess, OnSaveCloudFailure);
+        return true;
+    }
+
+    /// <summary>
+    /// 注册当前打开的主界面。
+    /// 主界面打开后，如果启动期已经读取到未点击掉落物，则在这里恢复成可点击 UI。
+    /// </summary>
+    /// <param name="mainUIForm">当前打开的 MainUIForm。</param>
+    public void RegisterMainUIForm(MainUIForm mainUIForm)
+    {
+        _mainUIForm = mainUIForm;
+        _mainUIForm?.RefreshPlayerNameDisplay();
+        RestoreLoadedDropsIfPossible();
+    }
+
+    /// <summary>
+    /// 反注册主界面引用。
+    /// 只有传入实例与当前缓存实例一致时才清空，避免旧界面覆盖新界面。
+    /// </summary>
+    /// <param name="mainUIForm">即将关闭的 MainUIForm。</param>
+    public void UnregisterMainUIForm(MainUIForm mainUIForm)
+    {
+        if (ReferenceEquals(_mainUIForm, mainUIForm))
+        {
+            _mainUIForm = null;
+        }
+    }
+
+    /// <summary>
+    /// 释放云存档模块持有的事件订阅。
+    /// </summary>
+    public void Shutdown()
+    {
+        UnsubscribeWechatLifecycleEvents();
+        UnsubscribeDirtyEvents();
+        _mainUIForm = null;
+    }
+
+    /// <summary>
+    /// 确保云存档依赖的运行时模块已经根据数据表完成初始化。
+    /// </summary>
+    /// <returns>全部准备完成返回 true。</returns>
+    private static bool PrepareRuntimeForCloudSave()
+    {
+        if (GameEntry.DataTables == null
+            || !GameEntry.DataTables.IsReady
+            || GameEntry.GameAssets == null
+            || !GameEntry.GameAssets.IsReady
+            || GameEntry.Fruits == null)
+        {
+            return false;
+        }
+
+        if (!GameEntry.Fruits.EnsureInitialized())
+        {
+            return false;
+        }
+
+        GameEntry.PetPlacement?.Initialize(GameEntry.Fruits.DiningSeatCount);
+        GameEntry.PetPlacement?.WarmupPetSelectionCatalog();
+        GameEntry.PetPlacement?.WarmupGameplayRuleCache();
+        GameEntry.EggHatch?.EnsureInitialized();
+        GameEntry.PetDiningOrders?.EnsureInitialized();
+        GameEntry.Orchards?.Initialize(GameEntry.Fruits.OrchardSlotCount);
+        GameEntry.PlayfieldEntities?.EnsureCapacity(GameEntry.Fruits.DiningSeatCount, GameEntry.Fruits.OrchardSlotCount);
+        return true;
+    }
+
+    /// <summary>
+    /// 从玩法规则表刷新自动保存间隔。
+    /// </summary>
+    private void RefreshAutoSaveInterval()
+    {
+        GameplayRuleDataRow gameplayRuleDataRow = GameEntry.DataTables != null
+            ? GameEntry.DataTables.GetDataRowByCode<GameplayRuleDataRow>(GameplayRuleDataRow.DefaultCode)
+            : null;
+        int intervalMinutes = gameplayRuleDataRow != null ? gameplayRuleDataRow.CloudAutoSaveIntervalMinutes : 0;
+        _autoSaveIntervalSeconds = intervalMinutes > 0
+            ? intervalMinutes * 60f
+            : DefaultAutoSaveIntervalSeconds;
+        _autoSaveCountdownSeconds = _autoSaveIntervalSeconds;
+    }
+
+    /// <summary>
+    /// 组装当前完整玩家快照。
+    /// 包括玩家长期进度、宠物轻量数据和当前 MainUIForm 中尚未点击的掉落物。
+    /// </summary>
+    /// <param name="snapshot">输出的完整玩家云存档快照。</param>
+    /// <returns>成功构建返回 true。</returns>
+    private bool TryBuildCurrentSnapshot(out PlayerCloudSaveSnapshot snapshot)
+    {
+        snapshot = new PlayerCloudSaveSnapshot
+        {
+            clientSaveTime = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)
+        };
+
+        if (GameEntry.Fruits == null || !GameEntry.Fruits.ExportPlayerCloudSaveSnapshot(snapshot))
+        {
+            snapshot = null;
+            return false;
+        }
+
+        snapshot.pets = GameEntry.PetPlacement != null
+            ? GameEntry.PetPlacement.ExportPetLiteSaveData()
+            : Array.Empty<PetLiteSaveData>();
+        snapshot.eggHatch = GameEntry.EggHatch != null
+            ? GameEntry.EggHatch.ExportCloudSaveData()
+            : new EggHatchSaveData();
+
+        List<PendingGoldDropSaveData> goldDrops = new List<PendingGoldDropSaveData>(8);
+        List<PendingProduceDropSaveData> produceDrops = new List<PendingProduceDropSaveData>(8);
+        if (_mainUIForm != null)
+        {
+            _mainUIForm.AppendPendingGoldDropsForCloudSave(goldDrops);
+            _mainUIForm.AppendPendingProduceDropsForCloudSave(produceDrops);
+        }
+
+        snapshot.pendingGoldDrops = goldDrops.ToArray();
+        snapshot.pendingProduceDrops = produceDrops.ToArray();
+        NormalizeSnapshotForWechatCloudCall(snapshot);
+        return true;
+    }
+
+    /// <summary>
+    /// 发送给微信云函数前净化快照，确保对象树中不会出现 null 字符串、null 数组或 null 子对象。
+    /// 微信小游戏 SDK 的 fixCallFunctionData 会对 typeof object 的值递归 Object.keys，null 会直接触发 TypeError。
+    /// </summary>
+    /// <param name="snapshot">待净化的玩家快照。</param>
+    private static void NormalizeSnapshotForWechatCloudCall(PlayerCloudSaveSnapshot snapshot)
+    {
+        if (snapshot == null)
+        {
+            return;
+        }
+
+        snapshot.playerName = snapshot.playerName ?? string.Empty;
+        snapshot.playerCode = snapshot.playerCode ?? string.Empty;
+        snapshot.dailyChallengeHistoricalBestTime = snapshot.dailyChallengeHistoricalBestTime ?? string.Empty;
+        snapshot.selectedHeadPortraitCode = snapshot.selectedHeadPortraitCode ?? string.Empty;
+        snapshot.selectedHeadPortraitFrameCode = snapshot.selectedHeadPortraitFrameCode ?? string.Empty;
+        snapshot.clientSaveTime = snapshot.clientSaveTime ?? string.Empty;
+        snapshot.unlockedFruitCodes = NormalizeStringArray(snapshot.unlockedFruitCodes);
+        snapshot.unlockedPetCodes = NormalizeStringArray(snapshot.unlockedPetCodes);
+        snapshot.unlockedProduceCodes = NormalizeStringArray(snapshot.unlockedProduceCodes);
+        snapshot.unlockedHeadPortraitCodes = NormalizeStringArray(snapshot.unlockedHeadPortraitCodes);
+        snapshot.unlockedHeadPortraitFrameCodes = NormalizeStringArray(snapshot.unlockedHeadPortraitFrameCodes);
+        snapshot.produceCounts = NormalizeProduceCounts(snapshot.produceCounts);
+        snapshot.architectures = NormalizeArchitectures(snapshot.architectures);
+        snapshot.eggHatch = NormalizeEggHatch(snapshot.eggHatch);
+        snapshot.pets = NormalizePets(snapshot.pets);
+        snapshot.pendingGoldDrops = NormalizePendingGoldDrops(snapshot.pendingGoldDrops);
+        snapshot.pendingProduceDrops = NormalizePendingProduceDrops(snapshot.pendingProduceDrops);
+    }
+
+    /// <summary>
+    /// 净化字符串数组，保证数组本体和每个元素都非 null。
+    /// </summary>
+    /// <param name="values">原数组。</param>
+    /// <returns>净化后的数组。</returns>
+    private static string[] NormalizeStringArray(string[] values)
+    {
+        if (values == null || values.Length <= 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            values[i] = values[i] ?? string.Empty;
+        }
+
+        return values;
+    }
+
+    /// <summary>
+    /// 净化产出物库存数组。
+    /// </summary>
+    /// <param name="values">原产出物库存数组。</param>
+    /// <returns>净化后的数组。</returns>
+    private static ProduceCountSaveData[] NormalizeProduceCounts(ProduceCountSaveData[] values)
+    {
+        if (values == null || values.Length <= 0)
+        {
+            return Array.Empty<ProduceCountSaveData>();
+        }
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (values[i] == null)
+            {
+                values[i] = new ProduceCountSaveData();
+            }
+
+            values[i].code = values[i].code ?? string.Empty;
+        }
+
+        return values;
+    }
+
+    /// <summary>
+    /// 净化建筑存档数组。
+    /// </summary>
+    /// <param name="values">原建筑存档数组。</param>
+    /// <returns>净化后的数组。</returns>
+    private static ArchitectureCategorySaveData[] NormalizeArchitectures(ArchitectureCategorySaveData[] values)
+    {
+        if (values == null || values.Length <= 0)
+        {
+            return Array.Empty<ArchitectureCategorySaveData>();
+        }
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (values[i] == null)
+            {
+                values[i] = new ArchitectureCategorySaveData();
+            }
+
+            values[i].category = values[i].category ?? string.Empty;
+            values[i].slots = values[i].slots ?? Array.Empty<ArchitectureSlotSaveData>();
+            for (int slotIndex = 0; slotIndex < values[i].slots.Length; slotIndex++)
+            {
+                if (values[i].slots[slotIndex] == null)
+                {
+                    values[i].slots[slotIndex] = new ArchitectureSlotSaveData();
+                }
+            }
+        }
+
+        return values;
+    }
+
+    /// <summary>
+    /// 净化孵化存档。
+    /// </summary>
+    /// <param name="value">原孵化存档。</param>
+    /// <returns>净化后的孵化存档。</returns>
+    private static EggHatchSaveData NormalizeEggHatch(EggHatchSaveData value)
+    {
+        if (value == null)
+        {
+            value = new EggHatchSaveData();
+        }
+
+        value.manualEggCodes = NormalizeStringArray(value.manualEggCodes);
+        value.slots = value.slots ?? Array.Empty<EggHatchSlotSaveData>();
+        for (int i = 0; i < value.slots.Length; i++)
+        {
+            if (value.slots[i] == null)
+            {
+                value.slots[i] = new EggHatchSlotSaveData();
+            }
+
+            value.slots[i].eggCode = value.slots[i].eggCode ?? string.Empty;
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// 净化宠物轻量存档数组。
+    /// </summary>
+    /// <param name="values">原宠物存档数组。</param>
+    /// <returns>净化后的数组。</returns>
+    private static PetLiteSaveData[] NormalizePets(PetLiteSaveData[] values)
+    {
+        if (values == null || values.Length <= 0)
+        {
+            return Array.Empty<PetLiteSaveData>();
+        }
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (values[i] == null)
+            {
+                values[i] = new PetLiteSaveData();
+            }
+
+            values[i].petCode = values[i].petCode ?? string.Empty;
+        }
+
+        return values;
+    }
+
+    /// <summary>
+    /// 净化未点击金币掉落存档数组。
+    /// </summary>
+    /// <param name="values">原金币掉落数组。</param>
+    /// <returns>净化后的数组。</returns>
+    private static PendingGoldDropSaveData[] NormalizePendingGoldDrops(PendingGoldDropSaveData[] values)
+    {
+        if (values == null || values.Length <= 0)
+        {
+            return Array.Empty<PendingGoldDropSaveData>();
+        }
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (values[i] == null)
+            {
+                values[i] = new PendingGoldDropSaveData();
+            }
+        }
+
+        return values;
+    }
+
+    /// <summary>
+    /// 净化未点击产出物掉落存档数组。
+    /// </summary>
+    /// <param name="values">原产出物掉落数组。</param>
+    /// <returns>净化后的数组。</returns>
+    private static PendingProduceDropSaveData[] NormalizePendingProduceDrops(PendingProduceDropSaveData[] values)
+    {
+        if (values == null || values.Length <= 0)
+        {
+            return Array.Empty<PendingProduceDropSaveData>();
+        }
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (values[i] == null)
+            {
+                values[i] = new PendingProduceDropSaveData();
+            }
+
+            values[i].code = values[i].code ?? string.Empty;
+        }
+
+        return values;
+    }
+
+    /// <summary>
+    /// 将云端快照应用到当前运行时。
+    /// 未点击掉落物不入账，只缓存到 MainUIForm 打开后恢复成可点击物体。
+    /// </summary>
+    /// <param name="snapshot">云端玩家快照。</param>
+    private void ApplySnapshotToRuntime(PlayerCloudSaveSnapshot snapshot)
+    {
+        if (snapshot == null)
+        {
+            return;
+        }
+
+        GameEntry.Fruits?.ApplyPlayerCloudSaveSnapshot(snapshot);
+        GameEntry.EggHatch?.ApplyCloudSaveData(snapshot.eggHatch);
+        GameEntry.PetPlacement?.ApplyPetLiteSaveData(snapshot.pets);
+        _loadedPendingGoldDrops = snapshot.pendingGoldDrops;
+        _loadedPendingProduceDrops = snapshot.pendingProduceDrops;
+        _mainUIForm?.RefreshPlayerNameDisplay();
+        RestoreLoadedDropsIfPossible();
+    }
+
+    /// <summary>
+    /// 如果主界面已经打开，则把启动期读取到的掉落物恢复到 UI。
+    /// </summary>
+    private void RestoreLoadedDropsIfPossible()
+    {
+        if (_mainUIForm == null)
+        {
+            return;
+        }
+
+        if (_loadedPendingGoldDrops != null)
+        {
+            _mainUIForm.RestorePendingGoldDropsFromCloudSave(_loadedPendingGoldDrops);
+            _loadedPendingGoldDrops = null;
+        }
+
+        if (_loadedPendingProduceDrops != null)
+        {
+            _mainUIForm.RestorePendingProduceDropsFromCloudSave(_loadedPendingProduceDrops);
+            _loadedPendingProduceDrops = null;
+        }
+    }
+
+    /// <summary>
+    /// 订阅微信小游戏生命周期事件。
+    /// 当前只监听隐藏到后台事件，用于用户锁屏、按 Home、切后台或离开小游戏时尽快触发一次云存档保存。
+    /// </summary>
+    private void SubscribeWechatLifecycleEvents()
+    {
+#if (UNITY_WEBGL || WEIXINMINIGAME) && !UNITY_EDITOR
+        if (_isWechatHideEventSubscribed)
+        {
+            return;
+        }
+
+        WX.OnHide(OnWechatGameHidden);
+        _isWechatHideEventSubscribed = true;
+#endif
+    }
+
+    /// <summary>
+    /// 取消订阅微信小游戏生命周期事件。
+    /// 该方法在 GameEntry 销毁时执行，避免模块释放后仍被 WX.OnHide 回调访问。
+    /// </summary>
+    private void UnsubscribeWechatLifecycleEvents()
+    {
+#if (UNITY_WEBGL || WEIXINMINIGAME) && !UNITY_EDITOR
+        if (!_isWechatHideEventSubscribed)
+        {
+            return;
+        }
+
+        WX.OffHide(OnWechatGameHidden);
+        _isWechatHideEventSubscribed = false;
+#endif
+    }
+
+#if (UNITY_WEBGL || WEIXINMINIGAME) && !UNITY_EDITOR
+    /// <summary>
+    /// 微信小游戏隐藏到后台回调。
+    /// 用户锁屏、按 Home、切后台、从聊天顶部隐藏或离开小游戏时会触发该事件。
+    /// </summary>
+    /// <param name="result">微信隐藏事件结果；当前保存逻辑不依赖其中字段。</param>
+    private void OnWechatGameHidden(GeneralCallbackResult result)
+    {
+        if (!_isReady)
+        {
+            return;
+        }
+
+        MarkDirty();
+        SaveNow(true);
+    }
+#endif
+
+    /// <summary>
+    /// 订阅运行时状态变化事件，用于自动设置云存档脏标记。
+    /// </summary>
+    private void SubscribeDirtyEvents()
+    {
+        if (_isDirtyEventSubscribed)
+        {
+            return;
+        }
+
+        if (GameEntry.Fruits != null)
+        {
+            GameEntry.Fruits.GoldChanged += OnPlayerGoldChanged;
+            GameEntry.Fruits.StarsChanged += OnPlayerStarsChanged;
+            GameEntry.Fruits.ProduceChanged += OnPlayerProduceChanged;
+            GameEntry.Fruits.ArchitectureStateChanged += OnPlayerArchitectureStateChanged;
+            GameEntry.Fruits.PlayfieldCapacityChanged += OnPlayerPlayfieldCapacityChanged;
+            GameEntry.Fruits.NewcomerPackageClaimStateChanged += OnNewcomerPackageClaimStateChanged;
+            GameEntry.Fruits.SelectedHeadPortraitChanged += OnSelectedHeadPortraitChanged;
+            GameEntry.Fruits.SelectedHeadPortraitFrameChanged += OnSelectedHeadPortraitFrameChanged;
+        }
+
+        if (GameEntry.PetPlacement != null)
+        {
+            GameEntry.PetPlacement.PlacementChanged += OnPetPlacementChanged;
+        }
+
+        if (GameEntry.EggHatch != null)
+        {
+            GameEntry.EggHatch.HatchStateChanged += OnEggHatchStateChanged;
+        }
+
+        _isDirtyEventSubscribed = true;
+    }
+
+    /// <summary>
+    /// 取消订阅运行时状态变化事件。
+    /// </summary>
+    private void UnsubscribeDirtyEvents()
+    {
+        if (!_isDirtyEventSubscribed)
+        {
+            return;
+        }
+
+        if (GameEntry.Fruits != null)
+        {
+            GameEntry.Fruits.GoldChanged -= OnPlayerGoldChanged;
+            GameEntry.Fruits.StarsChanged -= OnPlayerStarsChanged;
+            GameEntry.Fruits.ProduceChanged -= OnPlayerProduceChanged;
+            GameEntry.Fruits.ArchitectureStateChanged -= OnPlayerArchitectureStateChanged;
+            GameEntry.Fruits.PlayfieldCapacityChanged -= OnPlayerPlayfieldCapacityChanged;
+            GameEntry.Fruits.NewcomerPackageClaimStateChanged -= OnNewcomerPackageClaimStateChanged;
+            GameEntry.Fruits.SelectedHeadPortraitChanged -= OnSelectedHeadPortraitChanged;
+            GameEntry.Fruits.SelectedHeadPortraitFrameChanged -= OnSelectedHeadPortraitFrameChanged;
+        }
+
+        if (GameEntry.PetPlacement != null)
+        {
+            GameEntry.PetPlacement.PlacementChanged -= OnPetPlacementChanged;
+        }
+
+        if (GameEntry.EggHatch != null)
+        {
+            GameEntry.EggHatch.HatchStateChanged -= OnEggHatchStateChanged;
+        }
+
+        _isDirtyEventSubscribed = false;
+    }
+
+    /// <summary>
+    /// 玩家金币变化事件回调。
+    /// </summary>
+    /// <param name="gold">最新金币数量。</param>
+    private void OnPlayerGoldChanged(int gold)
+    {
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// 玩家星星变化事件回调。
+    /// </summary>
+    /// <param name="stars">最新星星数量。</param>
+    private void OnPlayerStarsChanged(int stars)
+    {
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// 产出物库存变化事件回调。
+    /// </summary>
+    /// <param name="produceCode">产出物 Code。</param>
+    /// <param name="count">最新库存数量。</param>
+    private void OnPlayerProduceChanged(string produceCode, int count)
+    {
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// 建筑状态变化事件回调。
+    /// </summary>
+    private void OnPlayerArchitectureStateChanged()
+    {
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// 场地容量变化事件回调。
+    /// </summary>
+    /// <param name="diningSeatCount">最新餐桌位数量。</param>
+    /// <param name="orchardSlotCount">最新果树位数量。</param>
+    private void OnPlayerPlayfieldCapacityChanged(int diningSeatCount, int orchardSlotCount)
+    {
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// 宠物站位变化事件回调。
+    /// </summary>
+    private void OnPetPlacementChanged()
+    {
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// 新人礼包领取状态变化事件回调。
+    /// </summary>
+    private void OnNewcomerPackageClaimStateChanged()
+    {
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// 玩家选中头像变化事件回调。
+    /// </summary>
+    /// <param name="headPortraitCode">最新头像 Code。</param>
+    private void OnSelectedHeadPortraitChanged(string headPortraitCode)
+    {
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// 玩家选中头像框变化事件回调。
+    /// </summary>
+    /// <param name="headPortraitFrameCode">最新头像框 Code。</param>
+    private void OnSelectedHeadPortraitFrameChanged(string headPortraitFrameCode)
+    {
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// 孵化运行时状态变化事件回调。
+    /// </summary>
+    private void OnEggHatchStateChanged()
+    {
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// 启动期读取成功回调。
+    /// </summary>
+    /// <param name="responseJson">云函数业务响应 JSON。</param>
+    private void OnInitialLoadCloudSuccess(string responseJson)
+    {
+        _isCallingCloud = false;
+        PlayerCloudSaveEnvelope envelope = ParseCloudSaveEnvelope(responseJson);
+        if (envelope != null && envelope.ok)
+        {
+            ApplySnapshotToRuntime(envelope.snapshot);
+            _isDirty = false;
+            _isReady = true;
+            return;
+        }
+
+        Log.Warning("CloudSaveModule 启动期云存档读取失败：{0}", envelope != null ? envelope.errMsg : responseJson);
+        CompleteInitialLoadWithFallback();
+    }
+
+    /// <summary>
+    /// 启动期读取失败回调。
+    /// </summary>
+    /// <param name="errorMessage">错误信息。</param>
+    private void OnInitialLoadCloudFailure(string errorMessage)
+    {
+        _isCallingCloud = false;
+        Log.Warning("CloudSaveModule 启动期云存档请求失败，将使用本地初始进度进入游戏：{0}", errorMessage);
+        CompleteInitialLoadWithFallback();
+    }
+
+    /// <summary>
+    /// 保存成功回调。
+    /// </summary>
+    /// <param name="responseJson">云函数业务响应 JSON。</param>
+    private void OnSaveCloudSuccess(string responseJson)
+    {
+        _isCallingCloud = false;
+        PlayerCloudSaveEnvelope envelope = ParseCloudSaveEnvelope(responseJson);
+        if (envelope != null && envelope.ok)
+        {
+            if (_pendingSaveAfterCurrentCloudCall)
+            {
+                _pendingSaveAfterCurrentCloudCall = false;
+                _isDirty = true;
+                _retryCountdownSeconds = 0f;
+                _autoSaveCountdownSeconds = 0f;
+                SaveNow(false);
+                return;
+            }
+
+            _isDirty = false;
+            _retryCountdownSeconds = 0f;
+            _autoSaveCountdownSeconds = _autoSaveIntervalSeconds;
+            SaveSucceeded?.Invoke();
+            return;
+        }
+
+        _pendingSaveAfterCurrentCloudCall = false;
+        Log.Warning("CloudSaveModule 云存档保存失败：{0}", envelope != null ? envelope.errMsg : responseJson);
+        SaveFailed?.Invoke(envelope != null ? envelope.errMsg : responseJson);
+        ScheduleSaveRetry();
+    }
+
+    /// <summary>
+    /// 保存失败回调。
+    /// </summary>
+    /// <param name="errorMessage">错误信息。</param>
+    private void OnSaveCloudFailure(string errorMessage)
+    {
+        _isCallingCloud = false;
+        _pendingSaveAfterCurrentCloudCall = false;
+        Log.Warning("CloudSaveModule 云存档保存请求失败：{0}", errorMessage);
+        SaveFailed?.Invoke(errorMessage);
+        ScheduleSaveRetry();
+    }
+
+    /// <summary>
+    /// 使用本地初始进度完成启动期流程。
+    /// 该兜底保证云服务不可用时不会卡死加载界面。
+    /// </summary>
+    private void CompleteInitialLoadWithFallback()
+    {
+        _isReady = true;
+        _isDirty = true;
+        _retryCountdownSeconds = RetryDelaySeconds;
+    }
+
+    /// <summary>
+    /// 安排下一次保存重试。
+    /// </summary>
+    private void ScheduleSaveRetry()
+    {
+        _isDirty = true;
+        _retryCountdownSeconds = RetryDelaySeconds;
+        _autoSaveCountdownSeconds = _autoSaveIntervalSeconds;
+    }
+
+    /// <summary>
+    /// 解析云函数业务响应外壳。
+    /// </summary>
+    /// <param name="responseJson">云函数返回的业务 JSON。</param>
+    /// <returns>解析后的响应外壳；解析失败返回 null。</returns>
+    private static PlayerCloudSaveEnvelope ParseCloudSaveEnvelope(string responseJson)
+    {
+        if (string.IsNullOrWhiteSpace(responseJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonUtility.FromJson<PlayerCloudSaveEnvelope>(responseJson);
+        }
+        catch (Exception exception)
+        {
+            Log.Warning("CloudSaveModule 解析云函数响应失败：{0}", exception.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 调用微信云函数。
+    /// 非微信 WebGL 环境下直接构造本地成功响应，避免编辑器触发 WXCallFunction 入口缺失异常。
+    /// </summary>
+    /// <param name="action">云函数业务动作。</param>
+    /// <param name="snapshot">需要提交的玩家快照；读取动作可为空。</param>
+    /// <param name="onSuccess">业务成功回调，参数为云函数 result JSON。</param>
+    /// <param name="onFailure">失败回调，参数为错误信息。</param>
+    private void CallCloudFunction(
+        string action,
+        PlayerCloudSaveSnapshot snapshot,
+        Action<string> onSuccess,
+        Action<string> onFailure)
+    {
+        _isCallingCloud = true;
+#if (UNITY_WEBGL || WEIXINMINIGAME) && !UNITY_EDITOR
+        try
+        {
+            Dictionary<string, object> requestData = CreateCloudFunctionRequestData(action, snapshot);
+            EnsureWechatCloudInitialized(
+                () => ExecuteWechatCloudFunction(requestData, onSuccess, onFailure),
+                onFailure);
+        }
+        catch (Exception exception)
+        {
+            onFailure?.Invoke(exception.Message);
+        }
+#else
+        PlayerCloudSaveEnvelope localEnvelope = new PlayerCloudSaveEnvelope
+        {
+            ok = true,
+            created = action == "initOrLoadSave",
+            openid = "local_editor",
+            snapshot = snapshot
+        };
+        onSuccess?.Invoke(JsonUtility.ToJson(localEnvelope));
+#endif
+    }
+
+    /// <summary>
+    /// 构建发送给微信云函数的根级参数对象。
+    /// 微信小游戏 SDK 要求 CallFunctionParam.data 必须是对象，不能直接传字符串；但如果对象内直接放 PlayerCloudSaveSnapshot，
+    /// 快照中的 UnityEngine.Vector2 会被继续反射到 System.Single 等内部结构，最终触发最大对象深度错误。
+    /// 这里使用 { data: "业务 JSON" } 的桥接形态，让 SDK 只递归一个字符串字段，再由云函数 normalizeEvent 解析 event.data。
+    /// </summary>
+    /// <param name="action">云函数业务动作。</param>
+    /// <param name="snapshot">需要提交的玩家快照；读取动作可为空。</param>
+    /// <returns>可直接作为 CallFunctionParam.data 传入的根级参数对象。</returns>
+    private static Dictionary<string, object> CreateCloudFunctionRequestData(string action, PlayerCloudSaveSnapshot snapshot)
+    {
+        return new Dictionary<string, object>
+        {
+            { "data", CreateCloudFunctionRequestJson(action, snapshot) }
+        };
+    }
+
+    /// <summary>
+    /// 构建云函数真正消费的业务 JSON。
+    /// JsonUtility 会把 UnityEngine.Vector2 序列化为只包含 x/y 的普通 JSON 对象，避免微信 SDK 的 LitJson 反射 Unity 值类型。
+    /// </summary>
+    /// <param name="action">云函数业务动作。</param>
+    /// <param name="snapshot">需要提交的玩家快照；读取动作可为空。</param>
+    /// <returns>包含 action 与 snapshot 的业务 JSON 字符串。</returns>
+    private static string CreateCloudFunctionRequestJson(string action, PlayerCloudSaveSnapshot snapshot)
+    {
+        CloudFunctionRequestData requestData = new CloudFunctionRequestData
+        {
+            action = action ?? string.Empty,
+            snapshot = snapshot
+        };
+        return JsonUtility.ToJson(requestData);
+    }
+
+#if (UNITY_WEBGL || WEIXINMINIGAME) && !UNITY_EDITOR
+    /// <summary>
+    /// 确保微信小游戏 SDK 与云开发能力已经初始化。
+    /// 参考当前项目微信插件的真实类型签名，使用 ICloudConfig 而不是不存在的 CallFunctionInitParam。
+    /// </summary>
+    /// <param name="onReady">云能力可用后的回调。</param>
+    /// <param name="onFailure">初始化失败时的回调。</param>
+    private void EnsureWechatCloudInitialized(Action onReady, Action<string> onFailure)
+    {
+        if (_isWechatCloudInitialized)
+        {
+            onReady?.Invoke();
+            return;
+        }
+
+        WX.InitSDK(code =>
+        {
+            try
+            {
+                ICloudConfig cloudConfig = new ICloudConfig
+                {
+                    env = string.IsNullOrWhiteSpace(CloudEnvironmentId) ? "_default_" : CloudEnvironmentId,
+                    traceUser = false
+                };
+                WX.cloud.Init(cloudConfig);
+                _isWechatCloudInitialized = true;
+                onReady?.Invoke();
+            }
+            catch (Exception exception)
+            {
+                onFailure?.Invoke(exception.Message);
+            }
+        });
+    }
+
+    /// <summary>
+    /// 在微信小游戏环境中执行真实云函数调用。
+    /// data 保持为对象以满足微信 SDK 入参校验，对象内部只携带业务 JSON 字符串。
+    /// </summary>
+    /// <param name="requestData">传给云函数的根级参数对象。</param>
+    /// <param name="onSuccess">云函数成功回调，参数为 result 字符串。</param>
+    /// <param name="onFailure">云函数失败回调，参数为 errMsg。</param>
+    private static void ExecuteWechatCloudFunction(
+        Dictionary<string, object> requestData,
+        Action<string> onSuccess,
+        Action<string> onFailure)
+    {
+        WX.cloud.CallFunction(new CallFunctionParam
+        {
+            name = CloudFunctionName,
+            data = requestData,
+            success = response =>
+            {
+                onSuccess?.Invoke(response != null ? response.result : null);
+            },
+            fail = error =>
+            {
+                onFailure?.Invoke(error != null ? error.errMsg : "wx.cloud.CallFunction fail");
+            }
+        });
+    }
+#endif
+}
