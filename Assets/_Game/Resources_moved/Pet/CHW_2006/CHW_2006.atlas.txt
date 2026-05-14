@@ -1,0 +1,55 @@
+
+CHW_2006.png
+size: 299,218
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+body
+  rotate: false
+  xy: 2, 3
+  size: 245, 213
+  orig: 245, 213
+  offset: 0, 0
+  index: -1
+foot1
+  rotate: false
+  xy: 249, 32
+  size: 34, 34
+  orig: 37, 34
+  offset: 3, 0
+  index: -1
+foot2
+  rotate: true
+  xy: 262, 103
+  size: 33, 34
+  orig: 36, 34
+  offset: 3, 0
+  index: -1
+hat
+  rotate: false
+  xy: 249, 146
+  size: 28, 70
+  orig: 28, 70
+  offset: 0, 0
+  index: -1
+mouth
+  rotate: true
+  xy: 249, 2
+  size: 28, 20
+  orig: 30, 22
+  offset: 1, 1
+  index: -1
+yan
+  rotate: true
+  xy: 249, 68
+  size: 76, 11
+  orig: 77, 12
+  offset: 0, 1
+  index: -1
+yanh
+  rotate: true
+  xy: 279, 138
+  size: 78, 18
+  orig: 78, 19
+  offset: 0, 0
+  index: -1

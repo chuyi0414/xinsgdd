@@ -426,9 +426,27 @@ public sealed class PetEntityLogic : EntityLogic
 
         if (_skeletonAnimation.skeletonDataAsset != skeletonDataAsset || !string.Equals(_currentPetCode, petCode, System.StringComparison.Ordinal))
         {
+            // 仅当之前已经 Initialize 过（AnimationState 已就绪）才需要 ClearState；
+            // prefab 默认 skeletonDataAsset 为空时 state 也为空，调用 ClearState 会 NRE。
+            if (_skeletonAnimation.AnimationState != null)
+            {
+                _skeletonAnimation.ClearState();
+            }
+
             _skeletonAnimation.skeletonDataAsset = skeletonDataAsset;
             _skeletonAnimation.initialSkinName = "default";
             _skeletonAnimation.Initialize(true);
+            // Spine 默认要等到下一次 LateUpdate 才把 Atlas 页材质同步到 MeshRenderer.sharedMaterials。
+            // 这里手动 LateUpdate 一次，强制把新材质立即写入，
+            // 避免本帧 Camera Render 时仍使用上一只宠物残留的 sharedMaterials 引用造成材质错配。
+            _skeletonAnimation.LateUpdate();
+            // 经诊断：Spine LateUpdate 写入 MeshRenderer.sharedMaterials 的 Material 实例与
+            // SkeletonDataAsset.atlasAssets[i].Materials 实际持有的资产实例存在不一致，
+            // 表现为 Inspector 显示同名材质但运行时渲染粉色 / 透明，手动 drag 资产即可修复。
+            // 因此在 LateUpdate 之后再做一次"显式以 atlas 资产 Material 覆盖 sharedMaterials"，
+            // 等价于 Inspector 手动拖入 .mat 资产的操作，保证 MeshRenderer 引用的就是 atlas 资产本体。
+            ForceAssignAtlasMaterialsToRenderer(skeletonDataAsset);
+            LogPetMaterialDiagnostics(petCode, skeletonDataAsset);
             CacheDefaultSkeletonScaleX();
             _currentPetCode = petCode;
         }
@@ -500,19 +518,178 @@ public sealed class PetEntityLogic : EntityLogic
     }
 
     /// <summary>
-    /// 控制 Spine 渲染节点显隐。
-    /// 当真实宠物资源尚未加载完成时先隐藏预制体默认 Skeleton，避免玩家看到“孵化出来全是默认宠物”的错误表现。
+    /// 在 Spine Initialize + LateUpdate 之后，把 AtlasAsset 真正持有的 Material 资产
+    /// 显式覆盖到 MeshRenderer.sharedMaterials 上。
+    /// 这里规避的是 Spine 内部 MaterialPropertyBlock / 副本造成的"运行时 Material 实例和资产 Material 实例不一致"问题，
+    /// 现象等价于"Inspector 拖入 .mat 资产后才能正确渲染"。
+    /// 注意：
+    /// 1. 复用一个临时 List 避免每次 new 数组造成 GC（List 自身在静态字段或方法里被频繁分配也会有压力，这里就地一次分配可接受）；
+    /// 2. 仅在两边数量一致且 sharedMaterials 中有任何一项实例 ID 与 atlas 资产不同时才重新赋值，
+    ///    避免不必要的 MeshRenderer.materials setter 触发的脏标记。
     /// </summary>
-    /// <param name="isVisible">是否显示 Spine 渲染对象。</param>
-    private void SetSkeletonVisible(bool isVisible)
+    /// <param name="skeletonDataAsset">当前生效的 SkeletonDataAsset。</param>
+    private void ForceAssignAtlasMaterialsToRenderer(SkeletonDataAsset skeletonDataAsset)
     {
-        CacheComponents();
-        if (_skeletonAnimation == null || _skeletonAnimation.gameObject.activeSelf == isVisible)
+        if (_skeletonAnimation == null || skeletonDataAsset == null || skeletonDataAsset.atlasAssets == null)
         {
             return;
         }
 
-        _skeletonAnimation.gameObject.SetActive(isVisible);
+        MeshRenderer meshRenderer = _skeletonAnimation.GetComponent<MeshRenderer>();
+        if (meshRenderer == null)
+        {
+            return;
+        }
+
+        // 把所有 AtlasAsset 的 Materials 顺序拍平，得到 Spine 渲染需要的完整材质序列。
+        // 当前项目宠物每只都只有 1 个 atlas page、1 个 material，所以这里不会有大量分配。
+        System.Collections.Generic.List<Material> atlasMaterials = new System.Collections.Generic.List<Material>(skeletonDataAsset.atlasAssets.Length);
+        for (int i = 0; i < skeletonDataAsset.atlasAssets.Length; i++)
+        {
+            AtlasAssetBase atlasAsset = skeletonDataAsset.atlasAssets[i];
+            if (atlasAsset == null || atlasAsset.Materials == null)
+            {
+                continue;
+            }
+
+            foreach (Material mat in atlasAsset.Materials)
+            {
+                if (mat != null)
+                {
+                    atlasMaterials.Add(mat);
+                }
+            }
+        }
+
+        if (atlasMaterials.Count == 0)
+        {
+            return;
+        }
+
+        Material[] current = meshRenderer.sharedMaterials;
+        bool needAssign = current == null || current.Length != atlasMaterials.Count;
+        if (!needAssign)
+        {
+            for (int i = 0; i < current.Length; i++)
+            {
+                // 比较的是 Material asset 的 InstanceID，
+                // 一旦 sharedMaterials 中存在不同实例（典型场景：Spine 副本 / 残留旧宠物材质），就强制覆盖。
+                if (current[i] == null || atlasMaterials[i] == null || current[i].GetInstanceID() != atlasMaterials[i].GetInstanceID())
+                {
+                    needAssign = true;
+                    break;
+                }
+            }
+        }
+
+        if (needAssign)
+        {
+            meshRenderer.sharedMaterials = atlasMaterials.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// 诊断日志：把宠物材质装配的关键链路全量打印出来。
+    /// 排查"运行时材质粉色 / 纹理丢失"专用，定位完毕后整段移除即可。
+    /// </summary>
+    /// <param name="petCode">当前应用的宠物 Code。</param>
+    /// <param name="skeletonDataAsset">当前生效的 SkeletonDataAsset。</param>
+    private void LogPetMaterialDiagnostics(string petCode, SkeletonDataAsset skeletonDataAsset)
+    {
+        if (_skeletonAnimation == null)
+        {
+            Log.Warning("[PetMatDiag] '{0}' skeletonAnimation is null.", petCode);
+            return;
+        }
+        else
+        {
+            for (int i = 0; i < skeletonDataAsset.atlasAssets.Length; i++)
+            {
+                AtlasAssetBase atlasAsset = skeletonDataAsset.atlasAssets[i];
+                if (atlasAsset == null)
+                {
+                    Log.Warning("[PetMatDiag] '{0}' atlasAssets[{1}] is null.", petCode, i);
+                    continue;
+                }
+
+                int matCount = 0;
+                if (atlasAsset.Materials != null)
+                {
+                    foreach (Material _ in atlasAsset.Materials)
+                    {
+                        matCount++;
+                    }
+                }
+
+
+                int idx = 0;
+                foreach (Material mat in atlasAsset.Materials)
+                {
+                    idx++;
+                }
+            }
+        }
+
+        // 2) 打印 MeshRenderer.sharedMaterials[] 的实际状态（最终渲染层）。
+        MeshRenderer meshRenderer = _skeletonAnimation.GetComponent<MeshRenderer>();
+        if (meshRenderer == null)
+        {
+            Log.Warning("[PetMatDiag] '{0}' meshRenderer is null.", petCode);
+            return;
+        }
+
+        Material[] sharedMats = meshRenderer.sharedMaterials;
+        Log.Info("[PetMatDiag] '{0}' meshRenderer.sharedMaterials count={1} enabled={2}", petCode, sharedMats != null ? sharedMats.Length : -1, meshRenderer.enabled);
+        if (sharedMats == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < sharedMats.Length; i++)
+        {
+            Material mat = sharedMats[i];
+            if (mat == null)
+            {
+                Log.Warning("[PetMatDiag] '{0}' sharedMaterials[{1}] is null.", petCode, i);
+                continue;
+            }
+
+            Texture mainTex = mat.mainTexture;
+            Log.Info("[PetMatDiag] '{0}' sharedMat[{1}]='{2}' instanceId={3} mainTex='{4}' mainTexInstanceId={5}",
+                petCode,
+                i,
+                mat.name,
+                mat.GetInstanceID(),
+                mainTex != null ? mainTex.name : "<null>",
+                mainTex != null ? mainTex.GetInstanceID() : 0);
+        }
+    }
+
+    /// <summary>
+    /// 控制 Spine 渲染节点的渲染开关。
+    /// 当真实宠物资源尚未加载完成时关闭 MeshRenderer 渲染，避免玩家看到预制体默认 LuLu 外观。
+    /// 注意：此处刻意不使用 GameObject.SetActive，避免 SkeletonAnimation 的 OnDisable/OnEnable
+    /// 在按需加载完成后再次用旧 skeletonDataAsset 重建 Mesh，
+    /// 导致 MeshRenderer.sharedMaterials 与新 Atlas 页材质错配（表现：实体不可见 + Spine 材质报错）。
+    /// </summary>
+    /// <param name="isVisible">是否渲染 Spine。</param>
+    private void SetSkeletonVisible(bool isVisible)
+    {
+        CacheComponents();
+        if (_skeletonAnimation == null)
+        {
+            return;
+        }
+
+        // 直接复用 SkeletonAnimation 同 GameObject 上的 MeshRenderer，避免每次都 GetComponent 分配开销。
+        // Spine-Unity 的 SkeletonAnimation 强依赖同节点 MeshRenderer，所以可以稳定假设其存在。
+        MeshRenderer meshRenderer = _skeletonAnimation.GetComponent<MeshRenderer>();
+        if (meshRenderer == null || meshRenderer.enabled == isVisible)
+        {
+            return;
+        }
+
+        meshRenderer.enabled = isVisible;
     }
 
     /// <summary>

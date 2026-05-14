@@ -73,6 +73,56 @@ public enum CloudSaveDirtyModule
 }
 
 /// <summary>
+/// 云存档专用二维坐标。
+/// 该结构只保留普通 float 字段，避免微信小游戏 SDK 递归反射 UnityEngine.Vector2 的内部结构。
+/// </summary>
+[Serializable]
+public struct CloudSaveVector2
+{
+    /// <summary>
+    /// UI 局部坐标的 X 分量。
+    /// 默认值为 0，表示位于父节点局部坐标原点的横向位置。
+    /// </summary>
+    public float x;
+
+    /// <summary>
+    /// UI 局部坐标的 Y 分量。
+    /// 默认值为 0，表示位于父节点局部坐标原点的纵向位置。
+    /// </summary>
+    public float y;
+
+    /// <summary>
+    /// 使用两个浮点分量创建云存档坐标。
+    /// </summary>
+    /// <param name="x">UI 局部坐标的 X 分量。</param>
+    /// <param name="y">UI 局部坐标的 Y 分量。</param>
+    public CloudSaveVector2(float x, float y)
+    {
+        this.x = x;
+        this.y = y;
+    }
+
+    /// <summary>
+    /// 从 Unity UI 使用的 Vector2 坐标创建云存档坐标。
+    /// </summary>
+    /// <param name="value">Unity UI 运行时坐标。</param>
+    /// <returns>只包含 x/y 普通字段的云存档坐标。</returns>
+    public static CloudSaveVector2 FromVector2(Vector2 value)
+    {
+        return new CloudSaveVector2(value.x, value.y);
+    }
+
+    /// <summary>
+    /// 将云存档坐标还原为 Unity UI 使用的 Vector2。
+    /// </summary>
+    /// <returns>可直接赋给 RectTransform.anchoredPosition 的坐标。</returns>
+    public Vector2 ToVector2()
+    {
+        return new Vector2(x, y);
+    }
+}
+
+/// <summary>
 /// 玩家云存档的完整快照。
 /// 该对象只承载需要跨会话持久化的数据，不保存宠物动画、点餐流程、果园生产等可重建状态。
 /// </summary>
@@ -383,7 +433,7 @@ public sealed class PendingGoldDropSaveData
     /// 金币在奖励 UI 根节点下的局部坐标。
     /// 使用 UI 局部坐标可以避免重进后依赖已经不存在的宠物世界坐标。
     /// </summary>
-    public Vector2 localPosition;
+    public CloudSaveVector2 localPosition;
 }
 
 /// <summary>
@@ -401,50 +451,7 @@ public sealed class PendingProduceDropSaveData
     /// <summary>
     /// 产出物按钮在奖励 UI 根节点下的局部坐标。
     /// </summary>
-    public Vector2 localPosition;
-}
-
-/// <summary>
-/// 调用云函数时发送给云端的业务数据。
-/// </summary>
-[Serializable]
-public sealed class CloudFunctionRequestData
-{
-    /// <summary>
-    /// 云函数业务动作名。
-    /// 当前支持 initOrLoadSave、loadSnapshot、saveSnapshot。
-    /// </summary>
-    public string action = string.Empty;
-
-    /// <summary>
-    /// 需要提交给云端的玩家快照。
-    /// loadSnapshot 可为空；initOrLoadSave 在新用户创建时使用；saveSnapshot 在全量保存和补丁保存时都必填。
-    /// </summary>
-    public PlayerCloudSaveSnapshot snapshot;
-
-    /// <summary>
-    /// 本次 saveSnapshot 请求中 snapshot 有效的模块掩码。
-    /// 为 0 表示兼容旧协议的全量保存；非 0 表示云函数只合并掩码声明的模块字段。
-    /// </summary>
-    public int patchModules;
-}
-
-/// <summary>
-/// 微信云函数调用配置。
-/// 对应 wx.cloud.callFunction 的 name 与 data 字段。
-/// </summary>
-[Serializable]
-public sealed class CloudFunctionCallConfig
-{
-    /// <summary>
-    /// 云函数名称。
-    /// </summary>
-    public string name = string.Empty;
-
-    /// <summary>
-    /// 传给云函数的业务参数。
-    /// </summary>
-    public CloudFunctionRequestData data;
+    public CloudSaveVector2 localPosition;
 }
 
 /// <summary>

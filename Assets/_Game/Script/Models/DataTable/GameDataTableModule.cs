@@ -1548,7 +1548,7 @@ public sealed class GameDataTableModule
 
     /// <summary>
     /// 校验宠物产出表是否满足“每只宠物至少配 1 条产出物”的运行时约束。
-    /// 三档齐备的旧约束已废弃，运行时抽取改为同 PetId 随机挑 1 条（见 PlayerRuntimeModule.Produce.cs）。
+    /// 三档齐备的旧约束已废弃，运行时抽取改为同 PetId 按 Weight 权重随机挑 1 条（见 PlayerRuntimeModule.Produce.cs）。
     /// </summary>
     /// <param name="petDataTable">宠物表。</param>
     /// <param name="petProduceDataTable">宠物产出表。</param>
@@ -1606,6 +1606,7 @@ public sealed class GameDataTableModule
             }
 
             // Grade 字段依然由 PetProduceDataRow 解析为合法枚举值，这里不再多余校验，允许重复等级。
+            // Weight 已在 PetProduceDataRow.ParseDataRow 中校验为正数；这里只负责跨表 PetId 完整性。
             petIdsWithProduce.Add(produceRow.PetId);
         }
 

@@ -1,0 +1,118 @@
+
+CHW_3005.png
+size: 582,202
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+xianrenzhang1
+  rotate: true
+  xy: 187, 37
+  size: 163, 107
+  orig: 163, 107
+  offset: 0, 0
+  index: -1
+xianrenzhang10
+  rotate: false
+  xy: 278, 5
+  size: 87, 30
+  orig: 97, 35
+  offset: 5, 3
+  index: -1
+xianrenzhang11
+  rotate: false
+  xy: 235, 2
+  size: 41, 33
+  orig: 41, 35
+  offset: 0, 1
+  index: -1
+xianrenzhang12
+  rotate: false
+  xy: 367, 2
+  size: 49, 35
+  orig: 49, 44
+  offset: 0, 2
+  index: -1
+xianrenzhang13
+  rotate: false
+  xy: 2, 14
+  size: 183, 186
+  orig: 185, 189
+  offset: 2, 0
+  index: -1
+xianrenzhang14
+  rotate: false
+  xy: 463, 58
+  size: 37, 37
+  orig: 37, 37
+  offset: 0, 0
+  index: -1
+xianrenzhang15
+  rotate: true
+  xy: 537, 158
+  size: 42, 43
+  orig: 42, 44
+  offset: 0, 0
+  index: -1
+xianrenzhang16
+  rotate: true
+  xy: 377, 40
+  size: 55, 84
+  orig: 55, 84
+  offset: 0, 0
+  index: -1
+xianrenzhang2
+  rotate: true
+  xy: 187, 2
+  size: 33, 46
+  orig: 35, 46
+  offset: 2, 0
+  index: -1
+xianrenzhang3
+  rotate: false
+  xy: 537, 108
+  size: 41, 48
+  orig: 41, 48
+  offset: 0, 0
+  index: -1
+xianrenzhang4
+  rotate: false
+  xy: 518, 17
+  size: 59, 78
+  orig: 59, 78
+  offset: 0, 0
+  index: -1
+xianrenzhang5
+  rotate: false
+  xy: 450, 97
+  size: 85, 103
+  orig: 85, 103
+  offset: 0, 0
+  index: -1
+xianrenzhang6
+  rotate: false
+  xy: 357, 97
+  size: 91, 103
+  orig: 96, 103
+  offset: 5, 0
+  index: -1
+xianrenzhang7
+  rotate: false
+  xy: 296, 91
+  size: 59, 109
+  orig: 59, 109
+  offset: 0, 0
+  index: -1
+xianrenzhang8
+  rotate: true
+  xy: 296, 39
+  size: 50, 79
+  orig: 50, 79
+  offset: 0, 0
+  index: -1
+xianrenzhang9
+  rotate: false
+  xy: 418, 2
+  size: 98, 36
+  orig: 98, 36
+  offset: 0, 0
+  index: -1

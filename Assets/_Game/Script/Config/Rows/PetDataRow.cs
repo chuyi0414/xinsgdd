@@ -104,7 +104,7 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
     /// <summary>
     /// 每次吃完水果时单独掷一次的“是否掉落产出物”概率（0-100 整数）。
     /// 该判定与 FruitDataRow.CoinProbability 完全独立，不再使用旧的“互斥分支”模型。
-    /// 命中后，再从 PetProduce 同 PetId 池中等概率随机挑 1 条产出物。
+    /// 命中后，再从 PetProduce 同 PetId 池中按 PetProduceDataRow.Weight 权重随机挑 1 条产出物。
     /// </summary>
     public int ProduceProbability { get; private set; }
 

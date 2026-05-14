@@ -95,10 +95,23 @@ public static class AddressablesAssetRouterImpl
 
     /// <summary>
     /// 尝试按 CDN 上的 version.json 追加加载远程 catalog。
+    /// Editor Play Mode 默认跳过远程 catalog，让 Addressables Play Mode Script（Fastest / Use Asset Database）真正接管本地资源定位。
     /// </summary>
     /// <param name="onComplete">Addressables 完整初始化完成回调；无论远程 catalog 是否成功都会触发。</param>
     private static void BeginLoadRemoteVersionCatalog(Action onComplete)
     {
+#if UNITY_EDITOR
+        // 编辑器内调试资产时必须避免自动叠加 CDN catalog：
+        // 1. Play Mode Script=Fastest 只影响 Addressables.InitializeAsync 生成的本地 locator；
+        // 2. 如果这里继续 LoadContentCatalogAsync 远程 catalog，TryLocate 会优先命中 s_RemoteCatalogLocator；
+        // 3. 结果就是本地材质 / SkeletonData 修改被远程 bundle 覆盖，表现为编辑器里仍然看到旧资源或粉色材质。
+        // Player 包不走此分支，仍保留线上 version.json 热更新链路。
+        s_RemoteCatalogLocator = null;
+        Log.Info("[AddressablesRouter] Unity Editor Play Mode 跳过远程 Addressables catalog，使用本地 Addressables locator。");
+        CompleteSuccessfulInitialize(onComplete);
+        return;
+#endif
+
         AddressablesRemoteVersionResolver.BeginResolve(result =>
         {
             if (!result.HasRemoteCatalog)

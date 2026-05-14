@@ -15,7 +15,7 @@ MonoBehaviour:
   m_DefaultGroup: b8cc2399154852140b551d5f8e6dcdfa
   m_currentHash:
     serializedVersion: 2
-    Hash: 00000000000000000000000000000000
+    Hash: ada53d512364104c42bacb0f14f33a0c
   m_OptimizeCatalogSize: 0
   m_BuildRemoteCatalog: 1
   m_BundleLocalCatalog: 0
@@ -60,7 +60,7 @@ MonoBehaviour:
       m_ProfileName: Default
       m_Values:
       - m_Id: 0e1dece74add89c46b3f307e555d2162
-        m_Value: https://7469-tianxing-001-2g9lrxwh45e5182d-1385561715.tcb.qcloud.la/ServerData_sgdd/WebGL
+        m_Value: https://7469-tianxing-001-2g9lrxwh45e5182d-1385561715.tcb.qcloud.la/ServerData_sgdd/WebGL/1.1
       - m_Id: 21dc26474b7202d4abcc7300ecc4998d
         m_Value: '[UnityEditor.EditorUserBuildSettings.activeBuildTarget]'
       - m_Id: 7b0c9f11bedb4904a9f6d753c8471ae3
@@ -96,6 +96,23 @@ MonoBehaviour:
     - Pet_PaPaGui
     - Pet_ShuXiaoXiao
     - Pet_TuJian
+    - CHW_1001
+    - CHW_1002
+    - CHW_1003
+    - CHW_1004
+    - CHW_1005
+    - CHW_1006
+    - CHW_2001
+    - pet_lxy
+    - Pet_hxj
+    - CHW_2006
+    - CHW_2005
+    - CHW_3001
+    - CHW_3002
+    - CHW_3003
+    - CHW_3004
+    - CHW_3005
+    - CHW_3006
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: 6bf8a47d9d811a3448188709ffb92cca, type: 2}

@@ -42,6 +42,12 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     private bool _isReady;
 
     /// <summary>
+    /// 当前是否已经监听星星总额变化事件。
+    /// 初始为 false；界面打开后订阅，用于玩家达成某个蛋的星星门槛后立即隐藏“解锁条件”文本。
+    /// </summary>
+    private bool _isListeningStarsChanged;
+
+    /// <summary>
     /// 单个商店蛋条目的界面缓存。
     /// </summary>
     private sealed class EggShopEntryView
@@ -104,7 +110,19 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     protected override void OnOpen(object userData)
     {
         base.OnOpen(userData);
+        EnsureStarsChangedEventSubscription();
         RefreshShopView();
+    }
+
+    /// <summary>
+    /// 界面关闭时释放低频业务事件监听。
+    /// </summary>
+    /// <param name="isShutdown">是否正在关闭界面系统。</param>
+    /// <param name="userData">用户自定义数据。</param>
+    protected override void OnClose(bool isShutdown, object userData)
+    {
+        ReleaseStarsChangedEventSubscription();
+        base.OnClose(isShutdown, userData);
     }
 
     /// <summary>
@@ -118,6 +136,46 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
         }
 
         UnregisterPurchaseListeners();
+        ReleaseStarsChangedEventSubscription();
+    }
+
+    /// <summary>
+    /// 确保已经订阅星星总额变化事件。
+    /// 该界面只在打开期间监听，避免窗体关闭后仍因星星变化反复刷新隐藏节点。
+    /// </summary>
+    private void EnsureStarsChangedEventSubscription()
+    {
+        if (_isListeningStarsChanged || GameEntry.Fruits == null)
+        {
+            return;
+        }
+
+        GameEntry.Fruits.StarsChanged += OnStarsChanged;
+        _isListeningStarsChanged = true;
+    }
+
+    /// <summary>
+    /// 释放星星总额变化事件订阅。
+    /// </summary>
+    private void ReleaseStarsChangedEventSubscription()
+    {
+        if (!_isListeningStarsChanged || GameEntry.Fruits == null)
+        {
+            _isListeningStarsChanged = false;
+            return;
+        }
+
+        GameEntry.Fruits.StarsChanged -= OnStarsChanged;
+        _isListeningStarsChanged = false;
+    }
+
+    /// <summary>
+    /// 星星总额变化回调。
+    /// </summary>
+    /// <param name="newStars">玩家最新累计星星数量，本方法不直接使用该值，而是按当前已绑定数据刷新条件文本。</param>
+    private void OnStarsChanged(int newStars)
+    {
+        RefreshAllRequiredStarsTexts();
     }
 
     /// <summary>
@@ -317,6 +375,30 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     }
 
     /// <summary>
+    /// 只刷新所有已绑定商店蛋条目的“解锁条件”文本。
+    /// 星星变化不会改变蛋图标、价格或概率说明，因此这里只改显隐和文案，避免重新取表、排序和绑定整页视图。
+    /// </summary>
+    private void RefreshAllRequiredStarsTexts()
+    {
+        if (!_isReady)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _entryViews.Length; i++)
+        {
+            EggShopEntryView entryView = _entryViews[i];
+            EggDataRow eggDataRow = _shopEggRows[i];
+            if (entryView == null || eggDataRow == null)
+            {
+                continue;
+            }
+
+            RefreshRequiredStarsText(entryView, eggDataRow.RequiredStars);
+        }
+    }
+
+    /// <summary>
     /// 收集商店蛋数据。
     /// </summary>
     /// <returns>实际收集到的商店蛋数量。</returns>
@@ -412,7 +494,8 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
             return;
         }
 
-        bool shouldShowRequiredStars = requiredStars > 0;
+        int currentStars = GameEntry.Fruits != null ? GameEntry.Fruits.CurrentStars : 0;
+        bool shouldShowRequiredStars = requiredStars > currentStars;
         if (entryView.RequiredStarsText.gameObject.activeSelf != shouldShowRequiredStars)
         {
             entryView.RequiredStarsText.gameObject.SetActive(shouldShowRequiredStars);

@@ -1,0 +1,97 @@
+
+CHW_1005.png
+size: 617,157
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+huoshilaim1
+  rotate: false
+  xy: 348, 4
+  size: 72, 24
+  orig: 72, 24
+  offset: 0, 0
+  index: -1
+huoshilaim10
+  rotate: false
+  xy: 4, 5
+  size: 219, 148
+  orig: 219, 148
+  offset: 0, 0
+  index: -1
+huoshilaim10b
+  rotate: false
+  xy: 318, 32
+  size: 155, 121
+  orig: 155, 121
+  offset: 0, 0
+  index: -1
+huoshilaim12
+  rotate: true
+  xy: 477, 8
+  size: 66, 42
+  orig: 69, 42
+  offset: 1, 0
+  index: -1
+huoshilaim13
+  rotate: false
+  xy: 227, 5
+  size: 75, 19
+  orig: 75, 19
+  offset: 0, 0
+  index: -1
+huoshilaim2
+  rotate: true
+  xy: 306, 5
+  size: 19, 38
+  orig: 19, 38
+  offset: 0, 0
+  index: -1
+huoshilaim3
+  rotate: true
+  xy: 424, 14
+  size: 14, 28
+  orig: 14, 28
+  offset: 0, 0
+  index: -1
+huoshilaim4
+  rotate: true
+  xy: 523, 12
+  size: 62, 43
+  orig: 65, 43
+  offset: 1, 0
+  index: -1
+huoshilaim5
+  rotate: false
+  xy: 575, 92
+  size: 38, 61
+  orig: 40, 61
+  offset: 1, 0
+  index: -1
+huoshilaim6
+  rotate: false
+  xy: 570, 12
+  size: 40, 62
+  orig: 42, 62
+  offset: 1, 0
+  index: -1
+huoshilaim7
+  rotate: false
+  xy: 477, 78
+  size: 56, 75
+  orig: 56, 75
+  offset: 0, 0
+  index: -1
+huoshilaim8
+  rotate: false
+  xy: 227, 28
+  size: 87, 125
+  orig: 87, 125
+  offset: 0, 0
+  index: -1
+huoshilaim9
+  rotate: false
+  xy: 537, 78
+  size: 34, 75
+  orig: 34, 75
+  offset: 0, 0
+  index: -1

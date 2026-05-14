@@ -744,16 +744,21 @@ public partial class MainUIForm : UIFormLogic
 
     /// <summary>
     /// 根据当前隐藏状态，统一刷新每日一关附属 UI 的显隐。
-    /// 控制的节点：BtnLeft、BtnRight、GoTX、GOSGTJ、GOCWTJ、GoJB。
+    /// 控制的节点：BtnLeft、BtnRight、GoTX、GOSGTJ、BtnSave、BtnOfflineEarnings、GOCWTJ、GoJB。
     /// </summary>
     private void UpdateDailyChallengeAuxiliaryUiVisibility()
     {
+        // BtnOfflineEarnings 定义在 MainUIForm.Gold.cs 分部类中。
+        // 这里先走一次低频缓存兜底，保证 Inspector 漏绑时仍能按固定路径参与每日一关附属 UI 显隐。
+        CacheOfflineEarningsReferences();
+
         bool isVisible = !_isDailyChallengeAuxiliaryUiHidden;
         SetNodeActive(_btnLeft != null ? _btnLeft.gameObject : null, isVisible);
         SetNodeActive(_btnRight != null ? _btnRight.gameObject : null, isVisible);
         SetNodeActive(_goTX, isVisible);
         SetNodeActive(_btnFruitTJ != null ? _btnFruitTJ.gameObject : null, isVisible);
         SetNodeActive(_btnManualCloudSave != null ? _btnManualCloudSave.gameObject : null, isVisible);
+        SetNodeActive(_btnOfflineEarnings != null ? _btnOfflineEarnings.gameObject : null, isVisible);
         SetNodeActive(_goCWTJ, isVisible);
         SetNodeActive(_goJB, isVisible);
     }

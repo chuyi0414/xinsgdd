@@ -1265,7 +1265,7 @@ public sealed class CloudSaveModule
     /// </summary>
     /// <param name="action">云函数业务动作。</param>
     /// <param name="snapshot">需要提交的玩家快照；读取动作可为空。</param>
-    /// <param name="patchModules">saveSnapshot 补丁模块掩码；0 表示旧协议全量快照。</param>
+    /// <param name="patchModules">saveSnapshot 补丁模块掩码；0 表示全量快照。</param>
     /// <param name="onSuccess">业务成功回调，参数为云函数 result JSON。</param>
     /// <param name="onFailure">失败回调，参数为错误信息。</param>
     private void CallCloudFunction(
@@ -1302,39 +1302,26 @@ public sealed class CloudSaveModule
 
     /// <summary>
     /// 构建发送给微信云函数的根级参数对象。
-    /// 微信小游戏 SDK 要求 CallFunctionParam.data 必须是对象，不能直接传字符串；但如果对象内直接放 PlayerCloudSaveSnapshot，
-    /// 快照中的 UnityEngine.Vector2 会被继续反射到 System.Single 等内部结构，最终触发最大对象深度错误。
-    /// 这里使用 { data: "业务 JSON" } 的桥接形态，让 SDK 只递归一个字符串字段，再由云函数 normalizeEvent 解析 event.data。
+    /// 当前协议要求 action、snapshot 与 patchModules 全部位于 event 根级，云函数不再解析 data 字符串桥接体。
     /// </summary>
     /// <param name="action">云函数业务动作。</param>
     /// <param name="snapshot">需要提交的玩家快照；读取动作可为空。</param>
-    /// <param name="patchModules">saveSnapshot 补丁模块掩码；0 表示旧协议全量快照。</param>
+    /// <param name="patchModules">saveSnapshot 补丁模块掩码；0 表示全量快照。</param>
     /// <returns>可直接作为 CallFunctionParam.data 传入的根级参数对象。</returns>
     private static Dictionary<string, object> CreateCloudFunctionRequestData(string action, PlayerCloudSaveSnapshot snapshot, int patchModules)
     {
-        return new Dictionary<string, object>
+        Dictionary<string, object> requestData = new Dictionary<string, object>
         {
-            { "data", CreateCloudFunctionRequestJson(action, snapshot, patchModules) }
+            { "action", action ?? string.Empty },
+            { "patchModules", patchModules }
         };
-    }
 
-    /// <summary>
-    /// 构建云函数真正消费的业务 JSON。
-    /// JsonUtility 会把 UnityEngine.Vector2 序列化为只包含 x/y 的普通 JSON 对象，避免微信 SDK 的 LitJson 反射 Unity 值类型。
-    /// </summary>
-    /// <param name="action">云函数业务动作。</param>
-    /// <param name="snapshot">需要提交的玩家快照；读取动作可为空。</param>
-    /// <param name="patchModules">saveSnapshot 补丁模块掩码；0 表示旧协议全量快照。</param>
-    /// <returns>包含 action 与 snapshot 的业务 JSON 字符串。</returns>
-    private static string CreateCloudFunctionRequestJson(string action, PlayerCloudSaveSnapshot snapshot, int patchModules)
-    {
-        CloudFunctionRequestData requestData = new CloudFunctionRequestData
+        if (snapshot != null)
         {
-            action = action ?? string.Empty,
-            snapshot = snapshot,
-            patchModules = patchModules
-        };
-        return JsonUtility.ToJson(requestData);
+            requestData["snapshot"] = snapshot;
+        }
+
+        return requestData;
     }
 
 #if (UNITY_WEBGL || WEIXINMINIGAME) && !UNITY_EDITOR
@@ -1374,7 +1361,7 @@ public sealed class CloudSaveModule
 
     /// <summary>
     /// 在微信小游戏环境中执行真实云函数调用。
-    /// data 保持为对象以满足微信 SDK 入参校验，对象内部只携带业务 JSON 字符串。
+    /// data 保持为根级业务对象以满足当前 sgdd_server 协议。
     /// </summary>
     /// <param name="requestData">传给云函数的根级参数对象。</param>
     /// <param name="onSuccess">云函数成功回调，参数为 result 字符串。</param>

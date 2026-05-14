@@ -28,7 +28,7 @@ const leaderboardTopLimit = 100
 const playerProfileQueryBatchSize = 100
 
 // 云存档模块级补丁位。
-// 必须与客户端 CloudSaveDirtyModule 枚举保持一致；patchModules 为 0 时代表旧协议全量保存。
+// 必须与客户端 CloudSaveDirtyModule 枚举保持一致；patchModules 为 0 时代表全量保存。
 const snapshotPatchModules = {
     PlayerProgress: 1 << 0,
     IdentityAndCosmetic: 1 << 1,
@@ -141,7 +141,7 @@ const initialSnapshotTemplate = {
 }
 
 // 云函数主入口。
-// 客户端通过 event.action 分发到初始化、读取、保存三个业务动作。
+// 当前只接受根级对象协议：客户端必须直接上传 { action, snapshot, patchModules } 或 { action, score }。
 exports.main = async (event, context) => {
     const wxContext = cloud.getWXContext()
     const openid = wxContext.OPENID
@@ -188,31 +188,11 @@ exports.main = async (event, context) => {
     }
 }
 
-// 兼容 Unity SDK 传参差异。
-// 部分 Unity 微信插件示例会把 CallFunctionParam.data 写成 JSON 字符串，这里统一反序列化为对象。
+// 规范化云函数入参。
+// 旧版字符串请求体和 { data: "业务 JSON" } 桥接体不再兼容，必须由客户端直接传根级对象。
 function normalizeEvent(event) {
-    if (!event) {
+    if (!event || typeof event !== 'object' || Array.isArray(event)) {
         return {}
-    }
-
-    if (typeof event === 'string') {
-        try {
-            return JSON.parse(event)
-        } catch (error) {
-            return {}
-        }
-    }
-
-    if (!event.action && typeof event.data === 'string') {
-        try {
-            return JSON.parse(event.data)
-        } catch (error) {
-            return event
-        }
-    }
-
-    if (!event.action && event.data && typeof event.data === 'object') {
-        return event.data
     }
 
     return event

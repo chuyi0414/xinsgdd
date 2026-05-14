@@ -612,7 +612,7 @@ public partial class MainUIForm
             results.Add(new PendingGoldDropSaveData
             {
                 amount = coinItem.CoinAmount,
-                localPosition = coinRectTransform.anchoredPosition
+                localPosition = CloudSaveVector2.FromVector2(coinRectTransform.anchoredPosition)
             });
         }
 
@@ -627,7 +627,7 @@ public partial class MainUIForm
             results.Add(new PendingGoldDropSaveData
             {
                 amount = pendingRequest.CoinAmount,
-                localPosition = localPosition
+                localPosition = CloudSaveVector2.FromVector2(localPosition)
             });
         }
     }
@@ -661,7 +661,7 @@ public partial class MainUIForm
                 continue;
             }
 
-            TryPresentGoldDropAtLocalPosition(drop.localPosition, drop.amount);
+            TryPresentGoldDropAtLocalPosition(drop.localPosition.ToVector2(), drop.amount);
         }
 
         UpdateGoldRewardUiVisibility(CanPresentPetRewardDropsNow());
@@ -765,12 +765,6 @@ public partial class MainUIForm
             return;
         }
 
-        GoldCoinToastItem toastItem = AcquireGoldCoinToastItem();
-        if (toastItem == null)
-        {
-            return;
-        }
-
         Vector2 startLocalPos = Vector2.zero;
         RectTransform coinRectTransform = coinItem.CachedRectTransform;
         if (coinRectTransform != null)
@@ -778,7 +772,54 @@ public partial class MainUIForm
             startLocalPos = coinRectTransform.anchoredPosition;
         }
 
-        toastItem.PlayToast(coinItem.CoinAmount, startLocalPos, OnGoldCoinToastComplete);
+        ShowGoldCoinToastAtLocalPosition(coinItem.CoinAmount, startLocalPos);
+    }
+
+    /// <summary>
+    /// 在指定 UI 物体当前位置显示一次金币点击提示 Toast。
+    /// 产出物按钮和金币按钮挂在不同奖励层下，因此不能直接复用 anchoredPosition；
+    /// 这里先把来源物体的世界坐标转为屏幕坐标，再投影到金币 Toast 容器，确保提示出现在被点击物体附近。
+    /// </summary>
+    /// <param name="coinAmount">本次要展示的金币数量。</param>
+    /// <param name="sourceRectTransform">触发金币收益的 UI 物体 RectTransform。</param>
+    private void ShowGoldCoinToastAtRectTransform(int coinAmount, RectTransform sourceRectTransform)
+    {
+        if (coinAmount <= 0 || sourceRectTransform == null)
+        {
+            return;
+        }
+
+        EnsureGoldCoinRoot();
+        if (_goldCoinRoot == null)
+        {
+            return;
+        }
+
+        Camera uiCamera = GetGoldCoinUICamera();
+        Vector2 screenPos = RectTransformUtility.WorldToScreenPoint(uiCamera, sourceRectTransform.position);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(_goldCoinRoot, screenPos, uiCamera, out Vector2 localPos);
+        ShowGoldCoinToastAtLocalPosition(coinAmount, localPos);
+    }
+
+    /// <summary>
+    /// 在金币 Toast 容器局部坐标处播放一次金币点击提示 Toast。
+    /// </summary>
+    /// <param name="coinAmount">本次要展示的金币数量。</param>
+    /// <param name="startLocalPos">Toast 在金币容器下的起始局部坐标。</param>
+    private void ShowGoldCoinToastAtLocalPosition(int coinAmount, Vector2 startLocalPos)
+    {
+        if (coinAmount <= 0)
+        {
+            return;
+        }
+
+        GoldCoinToastItem toastItem = AcquireGoldCoinToastItem();
+        if (toastItem == null)
+        {
+            return;
+        }
+
+        toastItem.PlayToast(coinAmount, startLocalPos, OnGoldCoinToastComplete);
         _activeGoldCoinToasts.Add(toastItem);
     }
 

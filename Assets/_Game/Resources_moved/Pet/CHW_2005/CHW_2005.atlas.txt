@@ -1,0 +1,48 @@
+
+CHW_2005.png
+size: 380,212
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+body
+  rotate: true
+  xy: 220, 97
+  size: 113, 85
+  orig: 113, 85
+  offset: 0, 0
+  index: -1
+eye1
+  rotate: true
+  xy: 319, 22
+  size: 92, 50
+  orig: 92, 50
+  offset: 0, 0
+  index: -1
+eye2
+  rotate: false
+  xy: 220, 2
+  size: 88, 19
+  orig: 88, 19
+  offset: 0, 0
+  index: -1
+head
+  rotate: false
+  xy: 2, 4
+  size: 216, 206
+  orig: 216, 206
+  offset: 0, 0
+  index: -1
+leg1
+  rotate: false
+  xy: 307, 116
+  size: 71, 94
+  orig: 73, 94
+  offset: 2, 0
+  index: -1
+leg2
+  rotate: true
+  xy: 220, 23
+  size: 72, 97
+  orig: 72, 97
+  offset: 0, 0
+  index: -1

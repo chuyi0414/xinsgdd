@@ -6,7 +6,7 @@ using UnityEngine.UI;
 /// <summary>
 /// 产出物 UI 按钮项。
 /// 挂在 OutputBtn.prefab 上，负责播放出生动画，
-/// 并在点击时通知外层将产出物写入运行时库存。
+/// 并在点击时通知外层执行产出物收取。
 /// </summary>
 public sealed class OutputProduceItem : MonoBehaviour
 {
@@ -145,7 +145,7 @@ public sealed class OutputProduceItem : MonoBehaviour
 
     /// <summary>
     /// 按钮点击回调。
-    /// 点击后立即通知外层写入运行时库存。
+    /// 点击后立即通知外层处理产出物收取结果。
     /// </summary>
     private void OnButtonClicked()
     {

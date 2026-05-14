@@ -1,0 +1,97 @@
+
+CHW_3006.png
+size: 521,193
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+yazi1
+  rotate: false
+  xy: 316, 128
+  size: 104, 63
+  orig: 104, 76
+  offset: 0, 6
+  index: -1
+yazi10
+  rotate: true
+  xy: 2, 2
+  size: 189, 229
+  orig: 191, 232
+  offset: 2, 0
+  index: -1
+yazi11
+  rotate: true
+  xy: 393, 5
+  size: 57, 60
+  orig: 59, 64
+  offset: 0, 4
+  index: -1
+yazi12
+  rotate: true
+  xy: 396, 64
+  size: 61, 65
+  orig: 61, 65
+  offset: 0, 0
+  index: -1
+yazi2
+  rotate: false
+  xy: 463, 59
+  size: 52, 33
+  orig: 52, 36
+  offset: 0, 1
+  index: -1
+yazi3
+  rotate: false
+  xy: 455, 6
+  size: 35, 51
+  orig: 39, 51
+  offset: 0, 0
+  index: -1
+yazi4
+  rotate: false
+  xy: 316, 76
+  size: 78, 50
+  orig: 83, 55
+  offset: 1, 0
+  index: -1
+yazi4b
+  rotate: false
+  xy: 313, 24
+  size: 78, 50
+  orig: 83, 55
+  offset: 1, 0
+  index: -1
+yazi5
+  rotate: true
+  xy: 491, 134
+  size: 57, 27
+  orig: 57, 27
+  offset: 0, 0
+  index: -1
+yazi6
+  rotate: false
+  xy: 463, 94
+  size: 56, 31
+  orig: 56, 31
+  offset: 0, 0
+  index: -1
+yazi7
+  rotate: false
+  xy: 422, 127
+  size: 67, 64
+  orig: 67, 64
+  offset: 0, 0
+  index: -1
+yazi8
+  rotate: false
+  xy: 233, 8
+  size: 78, 86
+  orig: 80, 87
+  offset: 0, 0
+  index: -1
+yazi9
+  rotate: false
+  xy: 233, 96
+  size: 81, 95
+  orig: 81, 95
+  offset: 0, 0
+  index: -1

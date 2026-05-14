@@ -124,7 +124,7 @@ public sealed partial class PlayerRuntimeModule
     /// <summary>
     /// 单只宠物的产出物随机池。
     /// 三档（Primary / Intermediate / Advanced）已废弃；产出物由 Pet.ProduceProbability 决定是否触发，
-    /// 触发后从同 PetId 的池子里等概率随机挑 1 条。Warmup 阶段一次性建池，运行时零 GC。
+    /// 触发后从同 PetId 的池子里按 PetProduce.Weight 权重随机挑 1 条。Warmup 阶段一次性建池，运行时零 GC。
     /// </summary>
     private sealed class PetProducePool
     {
@@ -132,6 +132,12 @@ public sealed partial class PlayerRuntimeModule
         /// 该宠物名下的全部产出物配置（顺序按 PetProduce.txt 出现顺序）。
         /// </summary>
         public readonly List<PetProduceDataRow> Items = new List<PetProduceDataRow>(4);
+
+        /// <summary>
+        /// 该宠物名下全部产出物 Weight 的总和。
+        /// 抽取时先在 [0, TotalWeight) 内掷点，再按列表顺序扣减各行 Weight。
+        /// </summary>
+        public int TotalWeight;
     }
 
     /// <summary>

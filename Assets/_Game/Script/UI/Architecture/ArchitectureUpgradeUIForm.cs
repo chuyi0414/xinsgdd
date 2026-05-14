@@ -90,6 +90,12 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     private bool _isListeningArchitectureStateChanged;
 
     /// <summary>
+    /// 是否已经监听星星总额变化事件。
+    /// 初始为 false；界面打开后订阅，用于玩家刚达到某个星星门槛时立即隐藏对应“解锁条件”文本。
+    /// </summary>
+    private bool _isListeningStarsChanged;
+
+    /// <summary>
     /// 当前正在显示的建筑分区。
     /// 界面每次打开时都会重置到孵化区。
     /// </summary>
@@ -211,6 +217,7 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     {
         base.OnOpen(userData);
         EnsureArchitectureStateEventSubscription();
+        EnsureStarsChangedEventSubscription();
         SwitchVisibleCategory(PlayerRuntimeModule.ArchitectureCategory.Hatch, true);
         RefreshAllEntries();
     }
@@ -223,6 +230,7 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     /// <param name="userData">用户自定义数据。</param>
     protected override void OnClose(bool isShutdown, object userData)
     {
+        ReleaseStarsChangedEventSubscription();
         ReleaseArchitectureStateEventSubscription();
         base.OnClose(isShutdown, userData);
     }
@@ -232,6 +240,7 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     /// </summary>
     private void OnDestroy()
     {
+        ReleaseStarsChangedEventSubscription();
         ReleaseArchitectureStateEventSubscription();
         UnregisterButtonListeners();
     }
@@ -570,11 +579,50 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
     }
 
     /// <summary>
+    /// 确保已经订阅星星总额变化事件。
+    /// 星星变化是低频业务事件；这里只在窗体打开期间监听，用于及时隐藏已达成门槛的“解锁条件”文本。
+    /// </summary>
+    private void EnsureStarsChangedEventSubscription()
+    {
+        if (_isListeningStarsChanged || GameEntry.Fruits == null)
+        {
+            return;
+        }
+
+        GameEntry.Fruits.StarsChanged += OnStarsChanged;
+        _isListeningStarsChanged = true;
+    }
+
+    /// <summary>
+    /// 释放星星总额变化事件订阅。
+    /// </summary>
+    private void ReleaseStarsChangedEventSubscription()
+    {
+        if (!_isListeningStarsChanged || GameEntry.Fruits == null)
+        {
+            _isListeningStarsChanged = false;
+            return;
+        }
+
+        GameEntry.Fruits.StarsChanged -= OnStarsChanged;
+        _isListeningStarsChanged = false;
+    }
+
+    /// <summary>
     /// 建筑状态变化回调。
     /// </summary>
     private void OnArchitectureStateChanged()
     {
         RefreshAllEntries();
+    }
+
+    /// <summary>
+    /// 星星总额变化回调。
+    /// </summary>
+    /// <param name="newStars">玩家最新累计星星数量，本方法不直接使用该值，而是按当前业务快照刷新条件文本。</param>
+    private void OnStarsChanged(int newStars)
+    {
+        RefreshAllRequiredStarsTexts();
     }
 
     /// <summary>
@@ -694,6 +742,24 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
 
         RefreshEntryVisibility();
         ResetVisibleLevelScrollPositions();
+    }
+
+    /// <summary>
+    /// 只刷新所有建筑条目的“解锁条件”文本。
+    /// 星星变化不会改变建筑等级、价格、Sprite 或 ScrollRect 位置，因此这里避免调用 RefreshAllEntries，
+    /// 防止低频星星事件额外触发布局重建和横向滚动复位。
+    /// </summary>
+    private void RefreshAllRequiredStarsTexts()
+    {
+        if (!_isViewReady || _entryViews == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _entryViews.Length; i++)
+        {
+            RefreshRequiredStarsText(_entryViews[i]);
+        }
     }
 
     /// <summary>
@@ -910,7 +976,8 @@ public sealed class ArchitectureUpgradeUIForm : UIFormLogic
         int requiredStars = GameEntry.Fruits != null
             ? GameEntry.Fruits.GetArchitectureActionRequiredStars(entryView.Category, entryView.SlotIndex)
             : 0;
-        bool shouldShowRequiredStars = requiredStars > 0;
+        int currentStars = GameEntry.Fruits != null ? GameEntry.Fruits.CurrentStars : 0;
+        bool shouldShowRequiredStars = requiredStars > currentStars;
         if (entryView.RequiredStarsText.gameObject.activeSelf != shouldShowRequiredStars)
         {
             entryView.RequiredStarsText.gameObject.SetActive(shouldShowRequiredStars);

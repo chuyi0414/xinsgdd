@@ -4,7 +4,7 @@ using UnityGameFramework.Runtime;
 
 /// <summary>
 /// 宠物产出数据表行。
-/// 每行描述一个宠物可以产出的物品，包含等级与金币价值。
+/// 每行描述一个宠物可以产出的物品，包含等级、抽取权重与金币价值。
 /// </summary>
 public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
 {
@@ -14,9 +14,9 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
     private static readonly string[] ColumnSplitSeparator = { "\t" };
 
     /// <summary>
-    /// 数据表固定列数（Id / PetId / Code / Name / Grade / CoinValue / RewardStars / Description）。
+    /// 数据表固定列数（Id / PetId / Code / Name / Grade / Weight / CoinValue / RewardStars / Description）。
     /// </summary>
-    private const int ColumnCount = 8;
+    private const int ColumnCount = 9;
 
     /// <summary>
     /// 合法产出 Code 的前缀。
@@ -52,6 +52,12 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
     /// 产出等级（初级 / 中级 / 高级）。
     /// </summary>
     public ProduceGradeType Grade { get; private set; }
+
+    /// <summary>
+    /// 同一只宠物命中产出物后，本条产出物参与二次抽取的权重。
+    /// 权重不是百分比，不要求同 PetId 下合计为 100；运行时按 Weight / 同 PetId 总 Weight 归一化。
+    /// </summary>
+    public int Weight { get; private set; }
 
     /// <summary>
     /// 产出物品的金币价值。
@@ -132,19 +138,27 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        // [5] CoinValue — 必须为正整数
-        if (!int.TryParse(columns[5], out int coinValue) || coinValue <= 0)
+        // [5] Weight — 必须为正整数；0 会导致该行永远抽不到，容易制造“配置看似存在但实际无效”的隐性错误。
+        if (!int.TryParse(columns[5], out int weight) || weight <= 0)
         {
-            Log.Warning("PetProduceDataRow parse failed because CoinValue '{0}' is invalid, code '{1}'.",
+            Log.Warning("PetProduceDataRow parse failed because Weight '{0}' is invalid, code '{1}'.",
                 columns[5], code);
             return false;
         }
 
-        // [6] RewardStars — 允许为 0（不发星星），但禁止负数；负数会导致 PlayerRuntimeModule 反向扣星
-        if (!int.TryParse(columns[6], out int rewardStars) || rewardStars < 0)
+        // [6] CoinValue — 必须为正整数
+        if (!int.TryParse(columns[6], out int coinValue) || coinValue <= 0)
+        {
+            Log.Warning("PetProduceDataRow parse failed because CoinValue '{0}' is invalid, code '{1}'.",
+                columns[6], code);
+            return false;
+        }
+
+        // [7] RewardStars — 允许为 0（不发星星），但禁止负数；负数会导致 PlayerRuntimeModule 反向扣星
+        if (!int.TryParse(columns[7], out int rewardStars) || rewardStars < 0)
         {
             Log.Warning("PetProduceDataRow parse failed because RewardStars '{0}' is invalid, code '{1}'.",
-                columns[6], code);
+                columns[7], code);
             return false;
         }
 
@@ -154,9 +168,10 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
         Code = code;
         Name = name;
         Grade = grade;
+        Weight = weight;
         CoinValue = coinValue;
         RewardStars = rewardStars;
-        Description = columns[7].Trim();
+        Description = columns[8].Trim();
         return true;
     }
 

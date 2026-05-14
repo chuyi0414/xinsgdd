@@ -1,0 +1,41 @@
+
+CHW_1002.png
+size: 194,296
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+dz
+  rotate: false
+  xy: 112, 20
+  size: 40, 48
+  orig: 40, 48
+  offset: 0, 0
+  index: -1
+st
+  rotate: true
+  xy: 4, 135
+  size: 157, 100
+  orig: 157, 100
+  offset: 0, 0
+  index: -1
+wb
+  rotate: false
+  xy: 112, 72
+  size: 70, 101
+  orig: 71, 102
+  offset: 1, 1
+  index: -1
+ych
+  rotate: true
+  xy: 4, 4
+  size: 127, 104
+  orig: 127, 105
+  offset: 0, 0
+  index: -1
+zcb
+  rotate: false
+  xy: 108, 177
+  size: 82, 115
+  orig: 82, 115
+  offset: 0, 0
+  index: -1

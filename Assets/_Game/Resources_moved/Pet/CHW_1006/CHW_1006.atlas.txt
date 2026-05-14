@@ -1,0 +1,48 @@
+
+CHW_1006.png
+size: 297,185
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+c1
+  rotate: false
+  xy: 193, 141
+  size: 92, 40
+  orig: 95, 40
+  offset: 1, 0
+  index: -1
+c2
+  rotate: false
+  xy: 4, 4
+  size: 185, 177
+  orig: 185, 177
+  offset: 0, 0
+  index: -1
+c4
+  rotate: false
+  xy: 193, 97
+  size: 92, 40
+  orig: 95, 40
+  offset: 1, 0
+  index: -1
+c5
+  rotate: false
+  xy: 193, 77
+  size: 90, 16
+  orig: 92, 16
+  offset: 1, 0
+  index: -1
+c6
+  rotate: false
+  xy: 193, 20
+  size: 48, 53
+  orig: 48, 53
+  offset: 0, 0
+  index: -1
+c7
+  rotate: false
+  xy: 245, 20
+  size: 48, 53
+  orig: 48, 53
+  offset: 0, 0
+  index: -1

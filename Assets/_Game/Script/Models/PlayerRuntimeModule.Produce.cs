@@ -5,7 +5,7 @@ using UnityGameFramework.Runtime;
 
 /// <summary>
 /// 玩家运行时模块 — 产出物库存与抽取部分。
-/// 负责宠物产出物的预热、库存管理和按档位概率抽取。
+/// 负责宠物产出物的预热、库存管理和按权重抽取。
 /// </summary>
 public sealed partial class PlayerRuntimeModule
 {
@@ -19,7 +19,7 @@ public sealed partial class PlayerRuntimeModule
 
     /// <summary>
     /// 宠物 Id 到产出随机池的缓存。
-    /// 三档抽取已废弃，现为在同 PetId 的池子里等概率随机挑 1 条。
+    /// 三档抽取已废弃，现为在同 PetId 的池子里按 PetProduce.Weight 权重随机挑 1 条。
     /// </summary>
     private readonly Dictionary<int, PetProducePool> _producePoolsByPetId = new Dictionary<int, PetProducePool>();
 
@@ -112,7 +112,7 @@ public sealed partial class PlayerRuntimeModule
             }
 
             // 同 PetId 的产出物全部丢进同一个随机池，Grade 运行时不再读取。
-            // 字段仅作策划备注保留在 PetProduceDataRow.Grade。
+            // 字段仅作策划备注保留在 PetProduceDataRow.Grade；真实二次抽取概率由 Weight / TotalWeight 决定。
             if (!_producePoolsByPetId.TryGetValue(produceRow.PetId, out PetProducePool producePool))
             {
                 producePool = new PetProducePool();
@@ -120,6 +120,7 @@ public sealed partial class PlayerRuntimeModule
             }
 
             producePool.Items.Add(produceRow);
+            producePool.TotalWeight += produceRow.Weight;
             _produceCountsByCode[produceRow.Code] = 0;
             // 同时写入反查表，让 AddProduce 发星星走 O(1) 字典路径，满足 Zero GC。
             _produceRowsByCode[produceRow.Code] = produceRow;
@@ -141,32 +142,38 @@ public sealed partial class PlayerRuntimeModule
             return false;
         }
 
-        if (!_produceCountsByCode.TryGetValue(produceCode, out int currentCount))
+        if (!_produceCountsByCode.ContainsKey(produceCode))
         {
             Log.Warning("PlayerRuntimeModule 无法添加产出物，编码 '{0}' 无效。", produceCode);
             return false;
         }
 
-        currentCount++;
-        _produceCountsByCode[produceCode] = currentCount;
-        ProduceChanged?.Invoke(produceCode, currentCount);
+        _produceRowsByCode.TryGetValue(produceCode, out PetProduceDataRow produceRow);
+        UnlockProduceIfNeeded(produceCode, produceRow);
+        return true;
+    }
 
-        // 首解发星：HashSet<T>.Add 返回 true 代表“之前不在集合里”，即本次为首次拾取。
-        // 原子“查+写”合并为一句，避免先 Contains 后 Add 的两次哈表查询。
-        // 后续同 code 拾取 Add 返回 false 直接跳过发星逻辑，仅走库存与 ProduceChanged 广播。
-        if (_unlockedProduceCodes.Add(produceCode))
+    /// <summary>
+    /// 直接卖出指定产出物并把 PetProduce.txt 中配置的金币价值加入玩家金币。
+    /// 该路径不会增加产出物库存，只保留首次拾取解锁与发星逻辑。
+    /// </summary>
+    /// <param name="produceCode">产出物 Code。</param>
+    /// <returns>卖出成功返回 true。</returns>
+    public bool SellProduceForGold(string produceCode)
+    {
+        if (!EnsureProduceCatalogInitialized() || string.IsNullOrWhiteSpace(produceCode))
         {
-            // 表中 RewardStars > 0 才调 AddStars（同为 partial 内部可见，无须改可见性）。
-            // produceRow 缺失只跳过发星但仍保留解锁状态，避免何遇表错乱时反复为同一 code 发星。
-            if (_produceRowsByCode.TryGetValue(produceCode, out PetProduceDataRow produceRow)
-                && produceRow != null
-                && produceRow.RewardStars > 0)
-            {
-                AddStars(produceRow.RewardStars);
-            }
-
-            CollectionUnlocksChanged?.Invoke();
+            return false;
         }
+
+        if (!_produceRowsByCode.TryGetValue(produceCode, out PetProduceDataRow produceRow) || produceRow == null)
+        {
+            Log.Warning("PlayerRuntimeModule 无法卖出产出物，编码 '{0}' 无效。", produceCode);
+            return false;
+        }
+
+        UnlockProduceIfNeeded(produceCode, produceRow);
+        AddGold(produceRow.CoinValue);
         return true;
     }
 
@@ -223,16 +230,38 @@ public sealed partial class PlayerRuntimeModule
 
         if (!_producePoolsByPetId.TryGetValue(petId, out PetProducePool producePool)
             || producePool == null
-            || producePool.Items.Count == 0)
+            || producePool.Items.Count == 0
+            || producePool.TotalWeight <= 0)
         {
             Log.Warning("PlayerRuntimeModule 无法抽取产出物，宠物 Id '{0}' 无产出池。", petId);
             return false;
         }
 
-        // 同 PetId 产出池中等概率随机抽 1 条。
-        // List 索引读取不产生任何堆分配，满足高频成就结算的零 GC 要求。
-        int randomIndex = UnityEngine.Random.Range(0, producePool.Items.Count);
-        produceDataRow = producePool.Items[randomIndex];
+        // 同 PetId 产出池中按 Weight 权重随机抽 1 条。
+        // 例：三条权重 20/51/11，则分母为 82，对应概率为 20/82、51/82、11/82；
+        // 若删掉第三条，分母自然变为 71，对应概率为 20/71、51/71。
+        // 这里不额外构建累计数组，避免 Warmup 之外再维护一份重复内存；单宠物产出条目规模很小，线性扣减足够稳定。
+        int roll = UnityEngine.Random.Range(0, producePool.TotalWeight);
+        int accumulatedWeight = 0;
+        for (int i = 0; i < producePool.Items.Count; i++)
+        {
+            PetProduceDataRow candidateRow = producePool.Items[i];
+            if (candidateRow == null)
+            {
+                Log.Warning("PlayerRuntimeModule 无法抽取产出物，宠物 Id '{0}' 产出池内出现空项。", petId);
+                return false;
+            }
+
+            accumulatedWeight += candidateRow.Weight;
+            if (roll < accumulatedWeight)
+            {
+                produceDataRow = candidateRow;
+                return true;
+            }
+        }
+
+        // 理论上不会走到这里；若走到，说明 TotalWeight 与 Items 内权重总和不一致。
+        produceDataRow = producePool.Items[producePool.Items.Count - 1];
         if (produceDataRow == null)
         {
             Log.Warning("PlayerRuntimeModule 无法抽取产出物，宠物 Id '{0}' 产出池内出现空项。", petId);
@@ -251,5 +280,30 @@ public sealed partial class PlayerRuntimeModule
     private bool EnsureProduceCatalogInitialized()
     {
         return _isProduceCatalogInitialized || WarmupProduceCatalog();
+    }
+
+    /// <summary>
+    /// 在首次获得产出物时写入解锁集合，并按 PetProduce.txt 的 RewardStars 发放星星。
+    /// </summary>
+    /// <param name="produceCode">产出物 Code。</param>
+    /// <param name="produceRow">产出物配置行，允许为空；为空时只写入解锁状态。</param>
+    private void UnlockProduceIfNeeded(string produceCode, PetProduceDataRow produceRow)
+    {
+        // 首解发星：HashSet<T>.Add 返回 true 代表“之前不在集合里”，即本次为首次拾取。
+        // 原子“查+写”合并为一句，避免先 Contains 后 Add 的两次哈表查询。
+        // 后续同 code 拾取 Add 返回 false 直接跳过发星逻辑。
+        if (!_unlockedProduceCodes.Add(produceCode))
+        {
+            return;
+        }
+
+        // 表中 RewardStars > 0 才调 AddStars（同为 partial 内部可见，无须改可见性）。
+        // produceRow 缺失只跳过发星但仍保留解锁状态，避免表错乱时反复为同一 code 发星。
+        if (produceRow != null && produceRow.RewardStars > 0)
+        {
+            AddStars(produceRow.RewardStars);
+        }
+
+        CollectionUnlocksChanged?.Invoke();
     }
 }

@@ -1,0 +1,48 @@
+
+CHW_2003.png
+size: 404,170
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+body
+  rotate: false
+  xy: 181, 65
+  size: 178, 103
+  orig: 178, 103
+  offset: 0, 0
+  index: -1
+eye01
+  rotate: false
+  xy: 181, 5
+  size: 120, 58
+  orig: 120, 58
+  offset: 0, 0
+  index: -1
+eye02
+  rotate: true
+  xy: 361, 53
+  size: 115, 41
+  orig: 115, 41
+  offset: 0, 0
+  index: -1
+foot01
+  rotate: false
+  xy: 303, 16
+  size: 42, 47
+  orig: 42, 47
+  offset: 0, 0
+  index: -1
+foot02
+  rotate: true
+  xy: 347, 10
+  size: 41, 48
+  orig: 42, 48
+  offset: 1, 0
+  index: -1
+head01
+  rotate: false
+  xy: 2, 2
+  size: 177, 166
+  orig: 180, 169
+  offset: 3, 3
+  index: -1

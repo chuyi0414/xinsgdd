@@ -219,7 +219,7 @@ public partial class MainUIForm
 
     /// <summary>
     /// 产出物按钮点击收取回调。
-    /// 点击后立即写入运行时库存并回收按钮。
+    /// 点击后立即按配置金币价值卖出，并保留首次拾取解锁逻辑。
     /// </summary>
     /// <param name="produceItem">被点击的产出物按钮。</param>
     private void OnOutputProduceItemCollected(OutputProduceItem produceItem)
@@ -231,11 +231,51 @@ public partial class MainUIForm
 
         if (GameEntry.Fruits != null && !string.IsNullOrWhiteSpace(produceItem.ProduceCode))
         {
-            GameEntry.Fruits.AddProduce(produceItem.ProduceCode);
+            PetProduceDataRow produceDataRow = GetProduceDataRow(produceItem.ProduceCode);
+            int coinValue = produceDataRow != null ? produceDataRow.CoinValue : 0;
+            bool isFirstUnlock = !GameEntry.Fruits.IsProduceUnlocked(produceItem.ProduceCode);
+            if (GameEntry.Fruits.SellProduceForGold(produceItem.ProduceCode))
+            {
+                ShowGoldCoinToastAtRectTransform(coinValue, produceItem.CachedRectTransform);
+                if (isFirstUnlock)
+                {
+                    ShowProduceUnlockToast(produceDataRow);
+                }
+            }
         }
 
         ReleaseOutputProduceItem(produceItem);
         GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
+    }
+
+    /// <summary>
+    /// 获取产出物配置行。
+    /// </summary>
+    /// <param name="produceCode">产出物 Code。</param>
+    /// <returns>命中配置时返回 PetProduceDataRow；配置缺失或非法时返回 null。</returns>
+    private PetProduceDataRow GetProduceDataRow(string produceCode)
+    {
+        if (string.IsNullOrWhiteSpace(produceCode) || GameEntry.DataTables == null)
+        {
+            return null;
+        }
+
+        return GameEntry.DataTables.GetDataRowByCode<PetProduceDataRow>(produceCode);
+    }
+
+    /// <summary>
+    /// 显示产出物首次解锁 Toast。
+    /// </summary>
+    /// <param name="produceDataRow">本次首次解锁的产出物配置行。</param>
+    private void ShowProduceUnlockToast(PetProduceDataRow produceDataRow)
+    {
+        if (produceDataRow == null || string.IsNullOrWhiteSpace(produceDataRow.Name))
+        {
+            ToastUtility.Show("解锁成功");
+            return;
+        }
+
+        ToastUtility.Show($"解锁成功：{produceDataRow.Name}");
     }
 
     // ──────────────────────────────────────────────────────────
@@ -418,7 +458,7 @@ public partial class MainUIForm
             results.Add(new PendingProduceDropSaveData
             {
                 code = produceItem.ProduceCode ?? string.Empty,
-                localPosition = produceRectTransform.anchoredPosition
+                localPosition = CloudSaveVector2.FromVector2(produceRectTransform.anchoredPosition)
             });
         }
 
@@ -434,14 +474,14 @@ public partial class MainUIForm
             results.Add(new PendingProduceDropSaveData
             {
                 code = pendingRequest.ProduceCode ?? string.Empty,
-                localPosition = localPosition
+                localPosition = CloudSaveVector2.FromVector2(localPosition)
             });
         }
     }
 
     /// <summary>
     /// 从云存档恢复未点击产出物掉落按钮。
-    /// 恢复出来的按钮仍需要玩家点击后才会真正写入产出物库存。
+    /// 恢复出来的按钮仍需要玩家点击后才会按配置金币价值卖出。
     /// </summary>
     /// <param name="drops">云端保存的未点击产出物掉落按钮数组。</param>
     public void RestorePendingProduceDropsFromCloudSave(PendingProduceDropSaveData[] drops)
@@ -467,7 +507,7 @@ public partial class MainUIForm
                 continue;
             }
 
-            TryPresentProduceDropAtLocalPosition(drop.localPosition, drop.code);
+            TryPresentProduceDropAtLocalPosition(drop.localPosition.ToVector2(), drop.code);
         }
 
         UpdateProduceRewardUiVisibility(CanPresentPetRewardDropsNow());

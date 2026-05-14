@@ -1,0 +1,69 @@
+
+CHW_2004.png
+size: 239,269
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+body
+  rotate: false
+  xy: 2, 86
+  size: 180, 181
+  orig: 180, 181
+  offset: 0, 0
+  index: -1
+eye
+  rotate: false
+  xy: 129, 29
+  size: 43, 55
+  orig: 43, 55
+  offset: 0, 0
+  index: -1
+eyeb
+  rotate: false
+  xy: 129, 3
+  size: 38, 24
+  orig: 38, 24
+  offset: 0, 0
+  index: -1
+hat
+  rotate: true
+  xy: 184, 119
+  size: 148, 53
+  orig: 148, 53
+  offset: 0, 0
+  index: -1
+leg1
+  rotate: true
+  xy: 174, 6
+  size: 38, 46
+  orig: 38, 46
+  offset: 0, 0
+  index: -1
+leg3
+  rotate: true
+  xy: 174, 6
+  size: 38, 46
+  orig: 38, 46
+  offset: 0, 0
+  index: -1
+leg2
+  rotate: true
+  xy: 184, 82
+  size: 35, 53
+  orig: 36, 53
+  offset: 1, 0
+  index: -1
+leg4
+  rotate: true
+  xy: 174, 46
+  size: 34, 53
+  orig: 36, 53
+  offset: 2, 0
+  index: -1
+mout
+  rotate: false
+  xy: 2, 2
+  size: 125, 82
+  orig: 125, 82
+  offset: 0, 0
+  index: -1

@@ -565,7 +565,7 @@ public sealed class PetDiningOrderComponent : GameFrameworkComponent
     /// 统一结算宠物吃完后的奖励。
     /// “金币”与“产出物”现为两个完全独立的概率判定：
     /// 　- 金币分支：按 FruitDataRow.CoinProbability 单独掷 1 次。
-    /// 　- 产出物分支：按 PetDataRow.ProduceProbability 再单独掷 1 次，命中后从同 PetId 产出池随机抽 1 条。
+    /// 　- 产出物分支：按 PetDataRow.ProduceProbability 再单独掷 1 次，命中后从同 PetId 产出池按 Weight 抽 1 条。
     /// 两者互不抢颁，可同时命中 / 同时未命中。
     /// </summary>
     /// <param name="petState">宠物运行时状态。</param>
