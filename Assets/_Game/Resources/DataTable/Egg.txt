@@ -4,5 +4,5 @@
 2	egg_normal	普通蛋	Arts/Egg/UI_Egg_Normal	10	Normal	90|10|0|0|0	Shop	3000	60	基础普通蛋
 3	egg_rare	稀有蛋	Arts/Egg/UI_Egg_Rare	15	Rare	0|90|10|0|0	Shop	6000	240	基础稀有蛋
 4	egg_epic	史诗蛋	Arts/Egg/UI_Egg_Epic	20	Epic	0|10|90|0|0	Shop	10000	600	基础史诗蛋
-5	egg_legendary	传说蛋	Arts/Egg/UI_Egg_Legendary	25	Legendary	0|0|15|80|5	Shop	15000	1380	基础传说蛋
+5	egg_legendary	传说蛋	Arts/Egg/UI_Egg_Legendary	25	Legendary	0|0|0|90|10	Shop	15000	1380	基础传说蛋
 6	egg_mythic	神话蛋	Arts/Egg/UI_Egg_Mythic	30	Mythic	0|0|0|10|90	Shop	20000	3000	基础神话蛋

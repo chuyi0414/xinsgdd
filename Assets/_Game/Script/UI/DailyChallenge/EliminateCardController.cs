@@ -25,7 +25,7 @@ public sealed class EliminateCardController
     /// 默认卡图名称。
     /// 这个名字同时作为“缺省精灵键”使用。
     /// </summary>
-    private const string DefaultCardSpriteName = "WP_80001";
+    private const string DefaultCardSpriteName = "SG_0001";
 
     /// <summary>
     /// 世界卡片所在的 Z 平面基准值。
@@ -313,6 +313,22 @@ public sealed class EliminateCardController
     private DailyChallengeScoreDataRow _scoreConfig;
 
     /// <summary>
+    /// 已解锁宠物 ScoreBase 属性累加值。
+    /// 每次进入每日一关时由 RefreshPetAttributeBonuses 重算并缓存，
+    /// 之后参与每张三消卡片的基础分计算（叠加在数据表配置之上）。
+    /// 初始为 0，未解锁任何 ScoreBase 宠物或数据表/玩家模块缺失时保持 0，相当于零加成。
+    /// </summary>
+    private int _petScoreBaseBonus;
+
+    /// <summary>
+    /// 已解锁宠物 ComboTime 属性累加值（秒）。
+    /// 每次进入每日一关时由 RefreshPetAttributeBonuses 重算并缓存，
+    /// 之后叠加到 Combo 时间窗，玩家会感知为更长的连击容忍时间。
+    /// 初始为 0f，未解锁任何 ComboTime 宠物或前置依赖缺失时保持 0f，相当于零加成。
+    /// </summary>
+    private float _petComboTimeBonus;
+
+    /// <summary>
     /// 得分配置默认值：每张被三消卡片的初始基础分。
     /// 数据表不可用时回退到 1，保证第一轮三张卡总计 3 分。
     /// </summary>
@@ -474,6 +490,13 @@ public sealed class EliminateCardController
         _takenCount = 0;
         _maxTakeCount = 0;
 
+        // ── 刷新已解锁宠物属性加成快照 ──
+        // 在运行时基线全部清零之后，按当前已解锁宠物刷新一次属性加成快照。
+        // 之所以放在这里而不是循环里：玩家解锁进度只在“开局”这一刻取一次即可，
+        // 关卡进行中即便外部强行写入解锁，也不会因为读快照导致数值跳变。
+        // 每次 RebuildPreview 都会重算，下一局自然反映新解锁结果。
+        RefreshPetAttributeBonuses();
+
         // ⚠️ 这里必须保留 BuildSpawnInstructions 刚刚缓存好的棋盘几何数据，
         // 否则点击入等待区后，UpdateBlockingAfterRemoval 会因为缓存被清空直接返回，
         // 下层卡片永远停留在首帧置灰状态。
@@ -503,6 +526,13 @@ public sealed class EliminateCardController
         _comboCount = 0;
         _lastSettlementRealTime = -1f;
         _scoreConfig = null;
+
+        // ── 清理宠物属性加成快照 ──
+        // 释放当前预览时同时清掉宠物属性快照，避免下一次 RebuildPreview 取快照之前，
+        // 外部误用 GetCurrentBaseScore / GetComboWindowSeconds 读到上一局的残留加成值。
+        // ScoreBase 用 0、ComboTime 用 0f：等价于“无任何宠物加成”的安全初值。
+        _petScoreBaseBonus = 0;
+        _petComboTimeBonus = 0f;
 
         Instance = null;
     }
@@ -866,7 +896,7 @@ public sealed class EliminateCardController
     /// <summary>
     /// 从 Fruit 数据表中提取所有已解锁水果的卡图精灵名。
     /// 只有 IsUnlocked == true 的水果才会被纳入随机卡池。
-    /// 精灵名从 EffectiveDailyChallengePath 末尾提取（如 Arts/Fruit/FruitCard/WP_80001 -> WP_80001）。
+    /// 精灵名从 EffectiveDailyChallengePath 末尾提取（如 Arts/Fruit/FruitCard/SG_0001 -> SG_0001）。
     /// </summary>
     /// <returns>已解锁水果的精灵名数组；水果表不可用时返回 null。</returns>
     private static string[] GetUnlockedFruitSpriteNames(HashSet<string> excludedSpriteNames)
@@ -1012,7 +1042,7 @@ public sealed class EliminateCardController
 
     /// <summary>
     /// 从 IconPath 中提取末尾精灵名。
-    /// 例如：Arts/Fruit/FruitTJ/WP_80001 -> WP_80001。
+    /// 例如：Arts/Fruit/FruitTJ/SG_0001 -> SG_0001。
     /// 与 GameAssetModule.ExtractAssetLeafName 口径一致。
     /// </summary>
     private static string ExtractSpriteNameFromIconPath(string iconPath)
@@ -1037,7 +1067,7 @@ public sealed class EliminateCardController
     /// </summary>
     /// <param name="visuals">目标视觉数据列表；追加成功后会多一条 EliminateCardAssignedTypeVisual。</param>
     /// <param name="typeId">当前 spriteName 对应的逻辑类型 Id，用于等待区归组和消除结算。</param>
-    /// <param name="spriteName">每日关卡卡图精灵名，例如 WP_80001。</param>
+    /// <param name="spriteName">每日关卡卡图精灵名，例如 SG_0001。</param>
     /// <returns>成功追加返回 true；资源未加载或不存在返回 false。</returns>
     private bool TryAddAssignedTypeVisual(List<EliminateCardAssignedTypeVisual> visuals, int typeId, string spriteName)
     {
@@ -1056,7 +1086,7 @@ public sealed class EliminateCardController
     /// 判断指定每日关卡卡图是否已经进入 GameAssetModule 的同步缓存。
     /// 随机水果池只允许使用已命中的 Sprite，防止错误路径在运行时被默认图掩盖。
     /// </summary>
-    /// <param name="spriteName">每日关卡卡图精灵名，例如 WP_80001。</param>
+    /// <param name="spriteName">每日关卡卡图精灵名，例如 SG_0001。</param>
     /// <returns>缓存中存在有效 Sprite 返回 true；否则返回 false。</returns>
     private static bool IsCardSpriteLoaded(string spriteName)
     {
@@ -2336,12 +2366,14 @@ public sealed class EliminateCardController
     /// <summary>
     /// 获取连击时间窗口（秒）。
     /// 优先从得分配置表读取，若配置缺失则使用默认值 DefaultComboWindowSeconds。
+    /// 在数据表基础值之上叠加 _petComboTimeBonus（已解锁宠物 ComboTime 属性总和）。
     /// </summary>
     /// <returns>连击时间窗口时长（秒）。</returns>
     private float GetComboWindowSeconds()
     {
         DailyChallengeScoreDataRow config = GetScoreConfig();
-        return config != null ? config.ComboWindowSeconds : DefaultComboWindowSeconds;
+        float baseSeconds = config != null ? config.ComboWindowSeconds : DefaultComboWindowSeconds;
+        return baseSeconds + _petComboTimeBonus;
     }
 
     /// <summary>
@@ -2356,12 +2388,106 @@ public sealed class EliminateCardController
 
     /// <summary>
     /// 获取当前轮每张三消卡片的基础分。
+    /// 在数据表当轮基础分之上叠加 _petScoreBaseBonus（已解锁宠物 ScoreBase 属性总和），
+    /// 加成是“恒定追加值”，不会跟随 BaseScoreIncreasePerInterval 的阶梯一起翻倍。
     /// </summary>
-    /// <returns>当前基础分；配置缺失时返回默认基础分。</returns>
+    /// <returns>当前基础分；配置缺失时返回默认基础分 + 宠物加成。</returns>
     private int GetCurrentBaseScore()
     {
         DailyChallengeScoreDataRow config = GetScoreConfig();
-        return config != null ? config.GetBaseScorePerRound(_currentRound) : DefaultBaseScorePerCard;
+        int baseScore = config != null ? config.GetBaseScorePerRound(_currentRound) : DefaultBaseScorePerCard;
+        return baseScore + _petScoreBaseBonus;
+    }
+
+    /// <summary>
+    /// 重新计算并缓存"已解锁宠物属性加成"快照。
+    ///
+    /// 调用时机：
+    ///   仅在每日一关 RebuildPreview 入口调用一次（运行时基线归零之后）；
+    ///   关卡进行中不会再次执行，确保战斗中数值绝对稳定、不会因为图鉴解锁触发跳变。
+    ///
+    /// 计算口径：
+    ///   1. 遍历 PetDataRow 全表；
+    ///   2. 用 GameEntry.Fruits.IsPetUnlocked(Code) 过滤掉未解锁宠物（O(1)）；
+    ///   3. ScoreBase 类型 → AttributeValue 累加到 _petScoreBaseBonus；
+    ///   4. ComboTime 类型 → AttributeValue 累加到 _petComboTimeBonus；
+    ///   5. None 与未来扩展类型 → 直接忽略，不抛异常。
+    ///
+    /// 性能保证（Zero GC）：
+    ///   - 不使用 LINQ、不创建任何集合；
+    ///   - HashSet&lt;string&gt;.Contains 走 StringComparer.Ordinal 路径，不装箱；
+    ///   - PetDataRow[] 是 GameEntry.DataTables 常驻引用，无副本拷贝；
+    ///   - 用普通 for 循环替代 foreach，规避部分平台/IL2CPP 上的迭代器结构体装箱。
+    ///
+    /// 容错：
+    ///   - DataTables / PetDataRow 表 / Fruits 任意一项缺失时，把两个加成置 0 / 0f，
+    ///     等同于"无任何宠物加成"，调用方看到的就是数据表原始基础分与原始 Combo 时间窗。
+    /// </summary>
+    private void RefreshPetAttributeBonuses()
+    {
+        // 重要：先清零再算。
+        // 即便后续 return，也能保证不会把上一局/上一次的脏数据残留下来；
+        // 这种"先归零再尝试填充"的写法在防御性编程里叫 reset-before-populate。
+        _petScoreBaseBonus = 0;
+        _petComboTimeBonus = 0f;
+
+        // 前置守卫：DataTables 模块或宠物表或玩家模块缺失，则保持零加成回退。
+        // 这里用 IsAvailable 做存在性检查，避免后续 GetAllDataRows 因为表未注册而走告警分支。
+        if (GameEntry.DataTables == null
+            || !GameEntry.DataTables.IsAvailable<PetDataRow>()
+            || GameEntry.Fruits == null)
+        {
+            return;
+        }
+
+        // 取宠物全表的常驻数组引用，不做 Copy，行数中等（当前 20 行级别）。
+        PetDataRow[] petRows = GameEntry.DataTables.GetAllDataRows<PetDataRow>();
+        if (petRows == null || petRows.Length == 0)
+        {
+            return;
+        }
+
+        // 单次线性扫描：时间复杂度 O(N)，N 是宠物总数，远低于一次三消结算的开销。
+        // 用 for + 索引替代 foreach，等价但绝对零迭代器分配。
+        for (int i = 0; i < petRows.Length; i++)
+        {
+            PetDataRow row = petRows[i];
+            if (row == null)
+            {
+                // 数据表注册阶段就会过滤掉空行，这里只是双保险。
+                continue;
+            }
+
+            // 解锁筛选先行：未解锁宠物的属性必须一律忽略；
+            // 否则会出现"图鉴里还显示锁定但战斗中已经吃到加成"的数值漏洞。
+            if (!GameEntry.Fruits.IsPetUnlocked(row.Code))
+            {
+                continue;
+            }
+
+            // 按属性类型分流累加。
+            // 注意：不写 default 抛异常，避免后续 PetAttributeType 扩展枚举时炸运行时。
+            switch (row.AttributeType)
+            {
+                case PetAttributeType.ScoreBase:
+                    // ScoreBase：恒定追加值。
+                    // 例：pet_lulu(+1) + pet_shuxiaoxiao(+2) = +3，叠加到数据表基础分 1 后 = 4，符合策划口径。
+                    // 该值不参与 BaseScoreIncreasePerInterval 的阶梯放大，只是单纯加在最终基础分上。
+                    _petScoreBaseBonus += row.AttributeValue;
+                    break;
+
+                case PetAttributeType.ComboTime:
+                    // ComboTime：直接以"秒"为单位叠加到 ComboWindowSeconds。
+                    // AttributeValue 是 int，赋给 float 字段是隐式扩展，不会丢失精度，也不产生装箱。
+                    // 数值膨胀边界：策划侧需注意 ComboTime 总和不要让 Combo 时间窗大到玩家无法失误。
+                    _petComboTimeBonus += row.AttributeValue;
+                    break;
+
+                // PetAttributeType.None：当前表中存在的"无加成"宠物会落到这里，直接忽略即可。
+                // 未来若新增类型（例如 ProduceBoost、StarBonus），不在这里处理就不会改变现有行为，
+                // 由专门的扩展逻辑去消费即可，保持本方法对得分/连击系统的单一职责。
+            }
+        }
     }
 
     /// <summary>

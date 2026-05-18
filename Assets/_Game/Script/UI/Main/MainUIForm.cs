@@ -252,6 +252,8 @@ public partial class MainUIForm : UIFormLogic
         SubscribeAvatarDisplayEvents();
         GameEntry.CloudSave?.RegisterMainUIForm(this);
         SubscribeManualCloudSaveResultEvents();
+        // 每日一关解锁闸门：订阅事件并按当前解锁数刷新图标颜色。
+        OpenDailyChallengeGate();
     }
 
     /// <summary>
@@ -274,6 +276,8 @@ public partial class MainUIForm : UIFormLogic
         CloseDailyChallengeView();
         CloseFruitTJView();
         ClosePetTJView();
+        // 每日一关解锁闸门：退订 CollectionUnlocksChanged，避免界面关闭后仍响应事件。
+        CloseDailyChallengeGate();
         base.OnClose(isShutdown, userData);
     }
 
@@ -356,6 +360,8 @@ public partial class MainUIForm : UIFormLogic
         DestroyFruitTJView();
         DestroyPetTJView();
         DestroyPersonalSettingButton();
+        // 每日一关解锁闸门：双保险退订，防止 OnClose 未被调用时出现悬挂引用。
+        DestroyDailyChallengeGate();
     }
 
     /// <summary>
@@ -424,7 +430,16 @@ public partial class MainUIForm : UIFormLogic
     {
         // 播放点击音效
         UIInteractionSound.PlayClick();
-        
+
+        // 解锁闸门早退分支：未解锁足够水果时弹 Toast 并拦截切页。
+        // 注意：此分支必须在 PlayClick 之后，保证锁定态点击也有音效反馈。
+        // 不修改 _btnDailyChallenge.interactable，保留 UpdateButtonState 原有语义。
+        if (IsDailyChallengeGateLocked())
+        {
+            ToastUtility.Show(LockedToastMessage);
+            return;
+        }
+
         if (_currentPageSlot == MainPageSlot.Center)
         {
             _pendingRestoreDailyChallengeAuxiliaryUi = false;

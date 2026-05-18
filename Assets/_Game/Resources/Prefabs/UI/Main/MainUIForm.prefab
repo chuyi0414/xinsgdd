@@ -1680,6 +1680,9 @@ MonoBehaviour:
   _pageRight: {fileID: 7161785927764263639}
   _pageBelow: {fileID: 5967946275352036584}
   _switchDuration: 0.2
+  _imgDailyChallengeIcon: {fileID: 8657112102114589140}
+  _lockedIconColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  _unlockedIconColor: {r: 1, g: 1, b: 1, a: 1}
   _goldText: {fileID: 8881444964285645216}
   _btnOfflineEarnings: {fileID: 8675265196274123116}
   _offlineEarningsText: {fileID: 3966831065462968267}

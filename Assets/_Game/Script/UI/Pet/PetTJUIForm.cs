@@ -1201,7 +1201,7 @@ public sealed class PetTJUIForm : UIFormLogic
                 return string.Format("基础得分 +{0}", row.AttributeValue);
 
             case PetAttributeType.ComboTime:
-                return string.Format("连击时长 +{0}", row.AttributeValue);
+                return string.Format("COMBO +{0}", row.AttributeValue);
 
             default:
                 return "无额外属性";

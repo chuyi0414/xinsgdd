@@ -175,10 +175,15 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
+        // 默认解锁水果(IsUnlocked=true)的 UnlockGold 在运行时不会被任何模块消费：
+        //   - ShuiGuoTJUIForm 的解锁按钮/金币文案在 isUnlocked=true 时整体 SetActive(false)；
+        //   - PlayerRuntimeModule.TryPurchaseFruit 永远不会被默认解锁水果触发（默认解锁走 InitializeFruitCatalog）。
+        // 但策划/数据可能误把"如果未来要重置时的售价"也填到这里，硬 fail 会拖垮整张数据表加载——
+        // 改为"容错 + 强制归零 + Warning"：保护数据表加载链路，并保证运行时语义无副作用。
         if (isUnlocked && unlockGold != 0)
         {
-            Log.Warning("FruitDataRow parse failed because unlocked fruit '{0}' must have UnlockGold = 0.", code);
-            return false;
+            Log.Warning("FruitDataRow: unlocked fruit '{0}' has non-zero UnlockGold '{1}', will be coerced to 0 (default-unlocked fruits never consume UnlockGold).", code, unlockGold.ToString());
+            unlockGold = 0;
         }
 
         // 未解锁水果允许 UnlockGold = 0：表示免费解锁（玩家点按钮即可拿到，仍按 RewardStars 发星）。
