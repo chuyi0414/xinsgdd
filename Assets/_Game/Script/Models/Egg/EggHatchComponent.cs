@@ -12,6 +12,59 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     private const int HatchSlotCountValue = 4;
 
     /// <summary>
+    /// 自动孵化（看广告获得）库存上限。
+    /// 与手动蛋库存彻底独立，互不挤占。
+    /// </summary>
+    private const int MaxAutoEggCountValue = 15;
+
+    /// <summary>
+    /// 自动孵化奖励池：85% 普通蛋 Code。
+    /// 不在配置表中再加字段，所有 Code 与现有 Egg.txt 行 1:1 对应。
+    /// </summary>
+    private const string AutoEggCodeNormal = "egg_normal";
+
+    /// <summary>
+    /// 自动孵化奖励池：8% 稀有蛋 Code。
+    /// </summary>
+    private const string AutoEggCodeRare = "egg_rare";
+
+    /// <summary>
+    /// 自动孵化奖励池：4% 史诗蛋 Code。
+    /// </summary>
+    private const string AutoEggCodeEpic = "egg_epic";
+
+    /// <summary>
+    /// 自动孵化奖励池：2% 传说蛋 Code。
+    /// </summary>
+    private const string AutoEggCodeLegendary = "egg_legendary";
+
+    /// <summary>
+    /// 自动孵化奖励池：1% 神话蛋 Code。
+    /// </summary>
+    private const string AutoEggCodeMythic = "egg_mythic";
+
+    /// <summary>
+    /// 普通蛋累计阈值：[0,85) 命中。
+    /// </summary>
+    private const int AutoEggThresholdNormal = 85;
+
+    /// <summary>
+    /// 稀有蛋累计阈值：[85,93) 命中。
+    /// </summary>
+    private const int AutoEggThresholdRare = 93;
+
+    /// <summary>
+    /// 史诗蛋累计阈值：[93,97) 命中。
+    /// </summary>
+    private const int AutoEggThresholdEpic = 97;
+
+    /// <summary>
+    /// 传说蛋累计阈值：[97,99) 命中。
+    /// 神话蛋走 [99,100) 默认分支。
+    /// </summary>
+    private const int AutoEggThresholdLegendary = 99;
+
+    /// <summary>
     /// 蛋购买失败原因。
     /// </summary>
     public enum EggPurchaseFailure
@@ -69,6 +122,24 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     private int _manualEggCount;
 
     /// <summary>
+    /// 自动孵化（看广告获得）库存中的蛋 Code 队列。
+    /// 容量固定为 MaxAutoEggCountValue，0 号元素为最先消耗。
+    /// </summary>
+    private readonly string[] _autoEggCodes = new string[MaxAutoEggCountValue];
+
+    /// <summary>
+    /// 自动孵化（看广告获得）库存中的蛋品质队列。
+    /// 与 _autoEggCodes 同步维护，仅供 UI 着色使用。
+    /// </summary>
+    private readonly QualityType[] _autoEggQualities = new QualityType[MaxAutoEggCountValue];
+
+    /// <summary>
+    /// 自动孵化库存的当前数量。
+    /// 永远满足 0 ≤ _autoEggCount ≤ MaxAutoEggCountValue。
+    /// </summary>
+    private int _autoEggCount;
+
+    /// <summary>
     /// 当前累计的补蛋进度秒数。
     /// </summary>
     private float _refillElapsedSeconds;
@@ -109,6 +180,39 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     /// 最大手动蛋库存。
     /// </summary>
     public int MaxManualEggCount => _gameplayRuleDataRow != null ? _gameplayRuleDataRow.MaxManualEggCount : 0;
+
+    /// <summary>
+    /// 最大自动孵化蛋库存。
+    /// </summary>
+    public int MaxAutoEggCount => MaxAutoEggCountValue;
+
+    /// <summary>
+    /// 当前自动孵化蛋库存数量。
+    /// </summary>
+    public int AutoEggCount => _autoEggCount;
+
+    /// <summary>
+    /// 获取指定下标的自动孵化蛋信息。
+    /// 该接口供 UI 刷新 GoZiDongFuHua/GoDanShuLiang 库存点使用。
+    /// </summary>
+    /// <param name="index">下标，范围 [0, AutoEggCount)。</param>
+    /// <param name="eggCode">输出蛋 Code。</param>
+    /// <param name="quality">输出蛋品质。</param>
+    /// <returns>该下标存在合法蛋时返回 true。</returns>
+    public bool TryGetAutoEggAt(int index, out string eggCode, out QualityType quality)
+    {
+        eggCode = null;
+        quality = QualityType.Universal;
+
+        if (index < 0 || index >= _autoEggCount)
+        {
+            return false;
+        }
+
+        eggCode = _autoEggCodes[index];
+        quality = _autoEggQualities[index];
+        return !string.IsNullOrWhiteSpace(eggCode);
+    }
 
     /// <summary>
     /// 孵化槽位数量。
@@ -224,6 +328,9 @@ public sealed class EggHatchComponent : GameFrameworkComponent
 
         UpdateHatchSlots(deltaTime);
         UpdateRefillProgress(deltaTime);
+        // 自动孵化库存只要还有蛋且存在空槽，就在每帧 Tick 末尾消耗一次。
+        // 放在手动孵化和补蛋之后，确保玩家手动行为始终拥有最高优先级。
+        TryAutoConsumeFront();
     }
 
     /// <summary>
@@ -446,6 +553,168 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     }
 
     /// <summary>
+    /// 广告奖励入口：按 85/8/4/2/1 概率独立随机 amount 个蛋追加到自动孵化库存队尾。
+    /// 单次调用内每个蛋单独 roll，不做批量优化，严格满足"15 次独立随机"。
+    /// 库存满（达到 MaxAutoEggCountValue）时会丢弃多余蛋并发出警告，
+    /// 业务层应在调用前确保有足够空位（通常一次给 15 个，必须保证库存为空才能塞满）。
+    /// </summary>
+    /// <param name="amount">本次要发放的蛋数量；非正数直接返回。</param>
+    /// <returns>实际成功入库的蛋数量。</returns>
+    public int AddRandomAutoEggs(int amount)
+    {
+        EnsureInitialized();
+        if (!_isInitialized || !_isAvailable || amount <= 0)
+        {
+            return 0;
+        }
+
+        if (GameEntry.DataTables == null || !GameEntry.DataTables.IsAvailable<EggDataRow>())
+        {
+            Log.Warning("EggHatchComponent 无法发放广告奖励蛋，蛋表不可用。");
+            return 0;
+        }
+
+        int previousAutoEggCount = _autoEggCount;
+        int grantedCount = 0;
+        for (int i = 0; i < amount; i++)
+        {
+            // 每个蛋独立 roll：Random.Range(int,int) 上界开区间 → [0,100)。
+            // 阈值升序累加比较，分支极少，无装箱、无委托、无 LINQ。
+            int roll = UnityEngine.Random.Range(0, 100);
+            string eggCode;
+            if (roll < AutoEggThresholdNormal)
+            {
+                eggCode = AutoEggCodeNormal;
+            }
+            else if (roll < AutoEggThresholdRare)
+            {
+                eggCode = AutoEggCodeRare;
+            }
+            else if (roll < AutoEggThresholdEpic)
+            {
+                eggCode = AutoEggCodeEpic;
+            }
+            else if (roll < AutoEggThresholdLegendary)
+            {
+                eggCode = AutoEggCodeLegendary;
+            }
+            else
+            {
+                eggCode = AutoEggCodeMythic;
+            }
+
+            EggDataRow eggDataRow = GameEntry.DataTables.GetDataRowByCode<EggDataRow>(eggCode);
+            if (eggDataRow == null || eggDataRow.HatchSeconds <= 0)
+            {
+                // 配置缺失：记录一次，后续相同蛋仍按当前 roll 失败处理，避免静默吞掉奖励。
+                Log.Warning("EggHatchComponent 跳过非法广告奖励蛋 '{0}'。", eggCode);
+                continue;
+            }
+
+            if (!TryAppendAutoEggToBack(eggDataRow.Code, eggDataRow.Quality))
+            {
+                // 库存已满：直接停止，避免 14 次空循环。
+                Log.Warning("EggHatchComponent 自动孵化库存已满，本次仅入库 {0}/{1} 个广告奖励蛋。", grantedCount, amount);
+                break;
+            }
+
+            grantedCount++;
+        }
+
+        if (_autoEggCount != previousAutoEggCount)
+        {
+            // 立刻尝试消耗一次，防止"看完广告 → 4 个空槽未瞬间生效"的体感卡顿。
+            TryAutoConsumeFront();
+            NotifyHatchStateChanged();
+        }
+
+        return grantedCount;
+    }
+
+    /// <summary>
+    /// 自动消耗：只要还有空槽且自动孵化库存非空，就把队首蛋直接放入孵化槽。
+    /// 该方法在 Update Tick 与 AddRandomAutoEggs 末尾各调一次，
+    /// 保证"满足空位即开始孵化并库存 -1"的预期行为。
+    /// </summary>
+    /// <returns>本次是否真正占用过任何槽位。</returns>
+    private bool TryAutoConsumeFront()
+    {
+        if (_autoEggCount <= 0 || GameEntry.DataTables == null)
+        {
+            return false;
+        }
+
+        bool hasOccupied = false;
+        // 这里使用 while 而不是单次 if，是为了在玩家同时购买多个槽位/解锁多个槽位的极端情况下，
+        // 一次 Update 就能把所有空槽全部填满，不依赖下一帧再补。
+        while (_autoEggCount > 0 && TryGetEmptySlotIndex(out int emptySlotIndex))
+        {
+            string eggCode = _autoEggCodes[0];
+            EggDataRow eggDataRow = ResolveValidEggDataRow(eggCode);
+            if (eggDataRow == null)
+            {
+                // 数据非法时丢弃队首并继续尝试下一个，避免脏数据卡死循环。
+                Log.Warning("EggHatchComponent 跳过非法自动孵化蛋 '{0}'。", eggCode);
+                DequeueAutoEggFront();
+                continue;
+            }
+
+            // 注意：OccupySlot 内部会按建筑加速倍率再次缩放 hatchSeconds，
+            // 这里直接传蛋表基础时长即可，与手动孵化路径完全一致。
+            OccupySlot(emptySlotIndex, eggDataRow.Code, eggDataRow.HatchSeconds);
+            DequeueAutoEggFront();
+            hasOccupied = true;
+        }
+
+        return hasOccupied;
+    }
+
+    /// <summary>
+    /// 自动孵化库存 -> 队尾追加一个蛋。
+    /// 与 TryAppendEggToBack（手动队列）独立，不会触碰 MaxManualEggCount。
+    /// </summary>
+    /// <param name="eggCode">蛋 Code。</param>
+    /// <param name="quality">蛋品质。</param>
+    /// <returns>追加成功返回 true。</returns>
+    private bool TryAppendAutoEggToBack(string eggCode, QualityType quality)
+    {
+        if (string.IsNullOrWhiteSpace(eggCode) || _autoEggCount >= MaxAutoEggCountValue)
+        {
+            return false;
+        }
+
+        _autoEggCodes[_autoEggCount] = eggCode;
+        _autoEggQualities[_autoEggCount] = quality;
+        _autoEggCount++;
+        return true;
+    }
+
+    /// <summary>
+    /// 自动孵化库存 -> 弹出队首一个蛋。
+    /// 内部用尾元素覆盖头位的方式做 O(1) 弹出，避免大数组 Array.Copy 触发 GC。
+    /// 注意：库存语义保持队列顺序对 UI 着色无影响（UI 只关心数量与品质聚合），
+    /// 真要严格 FIFO，可改成线性左移；这里用尾覆盖头是有意为之，性能优先。
+    /// </summary>
+    private void DequeueAutoEggFront()
+    {
+        if (_autoEggCount <= 0)
+        {
+            return;
+        }
+
+        // 把队尾元素移到 0 号位，等价于一次出队：保持数量 -1，且 [0, _autoEggCount) 内仍是合法蛋。
+        int lastIndex = _autoEggCount - 1;
+        if (lastIndex > 0)
+        {
+            _autoEggCodes[0] = _autoEggCodes[lastIndex];
+            _autoEggQualities[0] = _autoEggQualities[lastIndex];
+        }
+        _autoEggCodes[lastIndex] = null;
+        _autoEggQualities[lastIndex] = QualityType.Universal;
+        _autoEggCount--;
+    }
+
+    /// <summary>
     /// 导出当前孵化运行时状态到云存档。
     /// </summary>
     /// <returns>可序列化的孵化存档数据；组件不可用时返回空存档对象，避免微信云函数入参出现 null。</returns>
@@ -460,6 +729,7 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         EggHatchSaveData saveData = new EggHatchSaveData
         {
             manualEggCodes = ExportManualEggCodes(),
+            autoEggCodes = ExportAutoEggCodes(),
             refillElapsedSeconds = Mathf.Max(0f, _refillElapsedSeconds),
             slots = ExportSlotSaveData()
         };
@@ -487,6 +757,8 @@ public sealed class EggHatchComponent : GameFrameworkComponent
 
         ClearManualEggInventory();
         RestoreManualEggInventory(saveData.manualEggCodes);
+        ClearAutoEggInventory();
+        RestoreAutoEggInventory(saveData.autoEggCodes);
         RestoreRefillElapsedSeconds(saveData.refillElapsedSeconds);
         RestoreHatchSlots(saveData.slots);
         NotifyEggSlotsChanged();
@@ -569,6 +841,9 @@ public sealed class EggHatchComponent : GameFrameworkComponent
                 _manualEggQualities[i] = QualityType.Universal;
             }
         }
+
+        // 自动孵化库存与运行时一起清空，避免重置后旧的广告奖励残留。
+        ClearAutoEggInventory();
 
         for (int i = 0; i < _slotStates.Length; i++)
         {
@@ -889,6 +1164,10 @@ public sealed class EggHatchComponent : GameFrameworkComponent
 
     /// <summary>
     /// 处理孵化完成后的宠物生成。
+    /// 行为分两段：
+    /// 　① 餐桌或排队任一有空位 → 走 TryHatchPetFromEggCode（保留从孵化槽出生的移动动画）。
+    /// 　② 餐桌+排队都满 → 改走 TryHatchPetFromEggCodeToPlayArea，宠物直接出现在 PlayArea 玩耍，避免蛋丢失。
+    /// 这样玩家在自动孵化高峰期（看广告攒满 15 蛋 + 4 个槽并行孵化）也不会出现蛋无声消失的问题。
     /// </summary>
     private static void TrySpawnHatchedPet(EggHatchSlotState slotState, int hatchSlotIndex)
     {
@@ -900,6 +1179,17 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         if (GameEntry.PetPlacement == null)
         {
             Log.Warning("EggHatchComponent can not spawn pet because PetPlacementModule is missing.");
+            return;
+        }
+
+        // 满员预检：避开 TryHatchPetFromEggCode 内部那条 "餐桌和排队位均已满" 的 Warning 日志风暴。
+        // 该接口扫描 _diningSeatInstanceIds + _queueInstanceIds，O(N)、零分配，满足 Zero GC。
+        if (GameEntry.PetPlacement.IsDiningAndQueueFull())
+        {
+            // 满员 fallback：宠物状态进 PlayArea，但 PendingSpawnHatchSlotIndex 仍写当前孵化槽索引，
+            // PlayfieldEntityModule 会用它从蛋位置生成实体并播放"走到 PlayArea 目标点"的动画，
+            // 视觉与正常孵化一致，避免宠物在 PlayArea 直接瞬现。
+            GameEntry.PetPlacement.TryHatchPetFromEggCodeToPlayArea(slotState.EggCode, hatchSlotIndex, out _);
             return;
         }
 
@@ -950,6 +1240,27 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         for (int i = 0; i < _manualEggCount; i++)
         {
             results[i] = _manualEggCodes[i] ?? string.Empty;
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// 导出自动孵化库存队列。
+    /// 与手动队列结构一致，老存档若该字段为空数组则反序列化即代表"无自动蛋"。
+    /// </summary>
+    /// <returns>自动孵化蛋 Code 数组。</returns>
+    private string[] ExportAutoEggCodes()
+    {
+        if (_autoEggCount <= 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        string[] results = new string[_autoEggCount];
+        for (int i = 0; i < _autoEggCount; i++)
+        {
+            results[i] = _autoEggCodes[i] ?? string.Empty;
         }
 
         return results;
@@ -1027,6 +1338,45 @@ public sealed class EggHatchComponent : GameFrameworkComponent
             }
 
             TryAppendEggToBack(eggDataRow.Code, eggDataRow.Quality);
+        }
+    }
+
+    /// <summary>
+    /// 清空当前自动孵化库存。
+    /// 该方法只负责重置队列状态，不派发事件，调用方按需调用 NotifyHatchStateChanged。
+    /// </summary>
+    private void ClearAutoEggInventory()
+    {
+        _autoEggCount = 0;
+        for (int i = 0; i < _autoEggCodes.Length; i++)
+        {
+            _autoEggCodes[i] = null;
+            _autoEggQualities[i] = QualityType.Universal;
+        }
+    }
+
+    /// <summary>
+    /// 恢复自动孵化库存队列。
+    /// </summary>
+    /// <param name="autoEggCodes">云端保存的自动孵化蛋 Code 队列。</param>
+    private void RestoreAutoEggInventory(string[] autoEggCodes)
+    {
+        if (autoEggCodes == null || autoEggCodes.Length <= 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < autoEggCodes.Length && _autoEggCount < MaxAutoEggCountValue; i++)
+        {
+            string eggCode = autoEggCodes[i];
+            EggDataRow eggDataRow = ResolveValidEggDataRow(eggCode);
+            if (eggDataRow == null)
+            {
+                Log.Warning("EggHatchComponent 读取云存档时跳过无效自动孵化蛋 '{0}'。", eggCode);
+                continue;
+            }
+
+            TryAppendAutoEggToBack(eggDataRow.Code, eggDataRow.Quality);
         }
     }
 

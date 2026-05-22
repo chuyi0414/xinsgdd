@@ -1,0 +1,181 @@
+
+CHW_5001.png
+size: 842,175
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+yang1
+  rotate: true
+  xy: 780, 124
+  size: 49, 60
+  orig: 49, 60
+  offset: 0, 0
+  index: -1
+yang10
+  rotate: false
+  xy: 90, 31
+  size: 176, 142
+  orig: 178, 142
+  offset: 2, 0
+  index: -1
+yang11
+  rotate: true
+  xy: 578, 2
+  size: 81, 73
+  orig: 81, 77
+  offset: 0, 4
+  index: -1
+yang12
+  rotate: true
+  xy: 612, 88
+  size: 85, 77
+  orig: 86, 79
+  offset: 0, 2
+  index: -1
+yang13
+  rotate: false
+  xy: 727, 101
+  size: 51, 72
+  orig: 51, 72
+  offset: 0, 0
+  index: -1
+yang14
+  rotate: false
+  xy: 780, 54
+  size: 53, 68
+  orig: 55, 68
+  offset: 0, 0
+  index: -1
+yang15
+  rotate: false
+  xy: 386, 2
+  size: 90, 56
+  orig: 90, 56
+  offset: 0, 0
+  index: -1
+yang16
+  rotate: false
+  xy: 268, 58
+  size: 104, 115
+  orig: 124, 121
+  offset: 14, 6
+  index: -1
+yang16b
+  rotate: false
+  xy: 374, 60
+  size: 102, 113
+  orig: 105, 113
+  offset: 3, 0
+  index: -1
+yang17
+  rotate: true
+  xy: 268, 2
+  size: 54, 59
+  orig: 54, 59
+  offset: 0, 0
+  index: -1
+yang18
+  rotate: true
+  xy: 329, 2
+  size: 54, 55
+  orig: 55, 55
+  offset: 0, 0
+  index: -1
+yang19
+  rotate: false
+  xy: 165, 7
+  size: 20, 22
+  orig: 28, 31
+  offset: 4, 5
+  index: -1
+yang2
+  rotate: true
+  xy: 746, 3
+  size: 49, 48
+  orig: 49, 48
+  offset: 0, 0
+  index: -1
+yang20
+  rotate: false
+  xy: 796, 10
+  size: 44, 42
+  orig: 44, 42
+  offset: 0, 0
+  index: -1
+yang21
+  rotate: false
+  xy: 131, 2
+  size: 32, 27
+  orig: 32, 27
+  offset: 0, 0
+  index: -1
+yang22
+  rotate: true
+  xy: 2, 10
+  size: 163, 86
+  orig: 171, 100
+  offset: 4, 9
+  index: -1
+yang23
+  rotate: false
+  xy: 530, 4
+  size: 46, 69
+  orig: 50, 70
+  offset: 2, 1
+  index: -1
+yang24
+  rotate: false
+  xy: 478, 2
+  size: 50, 71
+  orig: 50, 71
+  offset: 0, 0
+  index: -1
+yang3
+  rotate: true
+  xy: 478, 75
+  size: 98, 64
+  orig: 98, 64
+  offset: 0, 0
+  index: -1
+yang4
+  rotate: true
+  xy: 544, 85
+  size: 88, 66
+  orig: 91, 67
+  offset: 0, 1
+  index: -1
+yang5
+  rotate: true
+  xy: 683, 10
+  size: 76, 61
+  orig: 78, 61
+  offset: 2, 0
+  index: -1
+yang6
+  rotate: true
+  xy: 653, 2
+  size: 84, 28
+  orig: 84, 28
+  offset: 0, 0
+  index: -1
+yang7
+  rotate: true
+  xy: 691, 88
+  size: 85, 34
+  orig: 85, 34
+  offset: 0, 0
+  index: -1
+yang8
+  rotate: true
+  xy: 187, 8
+  size: 21, 18
+  orig: 30, 26
+  offset: 5, 4
+  index: -1
+yang9
+  rotate: false
+  xy: 90, 2
+  size: 39, 27
+  orig: 39, 27
+  offset: 0, 0
+  index: -1

@@ -30,4 +30,13 @@
 28	18	petprod_redshell	红壳	Primary	50	30000	3	红壳菜虫的初级产出物
 29	19	petprod_cactus_needle	仙人掌刺	Primary	50	30000	3	仙人掌球的初级产出物
 30	20	petprod_duck_scarf	围脖鸭围脖	Primary	50	30000	3	围脖鸭的初级产出物
-
+31	21	petprod_rat_tail	偷偷鼠尾巴	Primary	50	40000	4	偷偷鼠的初级产出物
+32	22	petprod_bear_claw	毛毛熊熊爪	Primary	50	40000	4	毛毛熊的初级产出物
+33	23	petprod_mushroom_cap	泥泥菇蘑菇	Primary	50	40000	4	泥泥菇的初级产出物
+34	24	petprod_fluffy_spore	蓬蓬菇孢	Primary	50	40000	4	蓬蓬菇的初级产出物
+35	25	petprod_tree_essence	树精精树精华	Primary	50	40000	4	树精精的初级产出物
+36	26	petprod_banana	香蕉猴香蕉	Primary	50	50000	5	香蕉猴的初级产出物
+37	27	petprod_fox_tail	法杖狐的法杖	Primary	50	50000	5	法杖狐的初级产出物
+38	28	petprod_hamster_wheel	豚豚鼠的泡泡枪	Primary	50	50000	5	豚豚鼠的初级产出物
+39	29	petprod_hammer	锤锤牛的锤子	Primary	50	50000	5	锤锤牛的初级产出物
+40	30	petprod_shield	盾盾猪的盾牌	Primary	50	50000	5	盾盾猪的初级产出物

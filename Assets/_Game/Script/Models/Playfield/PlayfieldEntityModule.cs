@@ -960,6 +960,8 @@ public sealed class PlayfieldEntityModule
                 petEntityLogic.MoveToWorldPosition(
                     playAreaWorldPosition,
                     () => CompletePlayAreaArrival(petState.InstanceId));
+                // 与 Queue 分支一致：消费 PendingSpawnHatchSlotIndex，避免下次状态变化重复走 animate 分支。
+                petState.PendingSpawnHatchSlotIndex = -1;
             }
             else if (!petEntityLogic.IsMoving)
             {

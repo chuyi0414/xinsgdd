@@ -619,12 +619,21 @@ public sealed partial class PetPlacementModule
         // 两种情况都需要先释放原占位（PlayArea 转出时 ReleasePlacementSlotIfNeeded 自然 no-op）。
         ReleaseSeatAndPromoteIfNeeded(petState);
 
-        if (stillHasMeal && TrySeatOrEnqueueForRedining(petState))
+        if (stillHasMeal)
         {
+            if (TrySeatOrEnqueueForRedining(petState))
+            {
+                return;
+            }
+
+            // 餐桌+排队全满 + 还有吃饭次数 → 继续在 PlayArea 玩耍，重置 5 秒停留计时。
+            // 不重抽 PlayAreaIndex/Position，避免视觉瞬移；只清 wish/Producing 等遗留字段。
+            // 这一步是为了避免"PlayArea 想吃饭但全场满员就被迫离场丢掉剩余次数"的体验崩坏。
+            ContinuePlayAreaStay(petState, gameplayRuleDataRow);
             return;
         }
 
-        // 次数耗尽 或 Queue 满 → 离场。
+        // 次数耗尽 → 离场（满员不挽留，按原设计）。
         BeginLeaving(petState);
     }
 
@@ -703,6 +712,47 @@ public sealed partial class PetPlacementModule
         petState.DiningWishState = PetDiningWishState.None;
         petState.DesiredFruitCode = null;
         petState.OrchardSlotIndex = -1;
+        NotifyPlacementChanged();
+    }
+
+    /// <summary>
+    /// 继续在 PlayArea 玩耍：用于"想去吃饭但餐桌+排队全满"的兜底分支。
+    /// 与 BeginPlayAreaPlacement 的关键区别：
+    /// 　1) 不重抽 PlayAreaIndex / PlayAreaRandomPosition01，避免宠物在玩家眼里瞬移；
+    /// 　2) 直接把 RemainingPostMealSeconds 设回 PlayAreaStaySeconds，跳过"等到达再开始计时"那一步，
+    /// 　   因为宠物已经在 PlayArea 内，没有移动过程；
+    /// 　3) PetDiningOrderComponent.UpdatePostMealState 仍按"<= 0 时再次调 ResolvePostMealOutcome"工作，自动周期重试。
+    /// 调用前需保证 petState != null 且 gameplayRuleDataRow != null（外层 ResolvePostMealOutcome 已校验）。
+    /// </summary>
+    /// <param name="petState">需要继续玩耍的宠物状态。</param>
+    /// <param name="gameplayRuleDataRow">玩法规则数据行，提供 PlayAreaStaySeconds。</param>
+    private void ContinuePlayAreaStay(PetRuntimeState petState, GameplayRuleDataRow gameplayRuleDataRow)
+    {
+        if (petState == null || gameplayRuleDataRow == null)
+        {
+            return;
+        }
+
+        // 防御性兜底：若调用方误把"非 PlayArea"宠物送进来，不静默修改它的 PlacementType，
+        // 而是直接 return，避免破坏当前餐桌/排队的占位状态。
+        if (petState.PlacementType != PetPlacementType.PlayArea)
+        {
+            Log.Warning("PetPlacementModule.ContinuePlayAreaStay 收到非 PlayArea 宠物 '{0}'，已忽略。", petState.PetCode);
+            return;
+        }
+
+        // 与 BeginPlayAreaPlacement 同步清理"上一轮 wish/生产/孵化遗留"，避免 UI 还把旧气泡挂在身上。
+        petState.DiningWishState = PetDiningWishState.None;
+        petState.DesiredFruitCode = null;
+        petState.OrchardSlotIndex = -1;
+        petState.RemainingDiningStageSeconds = 0f;
+        petState.PendingPromoteToDining = false;
+        petState.PendingSpawnHatchSlotIndex = -1;
+
+        // 重置停留计时：直接用规则表里的停留秒数，PlayAreaStaySeconds 在配置层已经保证 > 0。
+        // 5 秒后 UpdatePostMealState 会再次调本函数，状态机自然循环。
+        petState.RemainingPostMealSeconds = Mathf.Max(0.1f, gameplayRuleDataRow.PlayAreaStaySeconds);
+
         NotifyPlacementChanged();
     }
 
@@ -1101,6 +1151,29 @@ public sealed partial class PetPlacementModule
                 Log.Warning("PetPlacementModule can not occupy slot because placement type '{0}' is invalid.", placementType);
                 return false;
         }
+    }
+
+    /// <summary>
+    /// 当前餐桌位与排队位是否同时已满。
+    /// 该接口供蛋孵化完成时判断是否需要走"直进 PlayArea"的 fallback：
+    /// 餐桌+排队任一有空位时返回 false，允许宠物按常规流程入座/排队；
+    /// 两者都满时返回 true，调用方应改走 TryHatchPetFromEggCodeToPlayArea。
+    /// 实现复用现有的 TryGetEmpty* 私有接口，会自动跳过未解锁的"洞"。
+    /// </summary>
+    /// <returns>true 表示餐桌位和排队位均无可用空位。</returns>
+    public bool IsDiningAndQueueFull()
+    {
+        if (TryGetEmptyDiningSeatIndex(out _))
+        {
+            return false;
+        }
+
+        if (TryGetEmptyQueueSlotIndex(out _))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

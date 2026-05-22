@@ -119,6 +119,25 @@ public sealed partial class PetPlacementModule
     /// <returns>成功生成并登记宠物返回 true。</returns>
     public bool TryHatchPetFromEggCodeToPlayArea(string eggCode, out PetRuntimeState petState)
     {
+        // 离线分支保持原行为：传 -1 表示不设置 PendingSpawnHatchSlotIndex，宠物直接出现在 PlayArea。
+        return TryHatchPetFromEggCodeToPlayArea(eggCode, -1, out petState);
+    }
+
+    /// <summary>
+    /// 根据蛋配置抽取一只宠物并直接放入游玩区，可指定孵化槽索引以获得"从蛋走到 PlayArea"的出生动画。
+    /// 适用场景：在线孵化完成时餐桌+排队均满，但又不希望蛋丢失，需要让宠物像正常孵化那样从蛋位置出现并跑到 PlayArea。
+    /// 实现要点：
+    /// 　1) 仅当 hatchSlotIndex >= 0 时才写入 PendingSpawnHatchSlotIndex，离线分支继续传 -1；
+    /// 　2) 其余字段与离线路径完全一致，避免维护两份重复代码；
+    /// 　3) PlayfieldEntityModule 中 PlayArea 分支的 shouldAnimateMovement 已经识别 PendingSpawnHatchSlotIndex >= 0
+    /// 　   并自动从 GetHatchGenericWorldPosition 取初始位置，无需额外改 UI 层。
+    /// </summary>
+    /// <param name="eggCode">已经孵化完成的蛋 Code。</param>
+    /// <param name="hatchSlotIndex">来源孵化槽索引，传 -1 表示不播放出生动画（云存档/离线分支专用）。</param>
+    /// <param name="petState">成功生成的宠物运行时状态。</param>
+    /// <returns>成功生成并登记宠物返回 true。</returns>
+    public bool TryHatchPetFromEggCodeToPlayArea(string eggCode, int hatchSlotIndex, out PetRuntimeState petState)
+    {
         petState = null;
         if (string.IsNullOrWhiteSpace(eggCode))
         {
@@ -174,7 +193,10 @@ public sealed partial class PetPlacementModule
             PlayAreaIndex = playAreaIndex,
             PlayAreaRandomPosition01 = new Vector2(UnityEngine.Random.value, UnityEngine.Random.value),
             RemainingPostMealSeconds = 0f,
-            PendingSpawnHatchSlotIndex = -1,
+            // 关键差异：在线满员 fallback 时 hatchSlotIndex >= 0，
+            // PlayfieldEntityModule.BuildPetEntityData 会用它取蛋位置作为出生坐标，
+            // 进而触发 ApplyPetPlacementState 中 PlayArea 分支的 MoveToWorldPosition 动画。
+            PendingSpawnHatchSlotIndex = hatchSlotIndex,
             OrchardSlotIndex = -1,
             PendingPromoteToDining = false,
             RemainingEatFruitCount = ResolveInitialEatFruitCount(petCode)

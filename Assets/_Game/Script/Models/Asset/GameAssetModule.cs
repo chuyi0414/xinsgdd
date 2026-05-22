@@ -1455,10 +1455,22 @@ public sealed class GameAssetModule
             return;
         }
 
+        // 预加载数据表中默认解锁的水果卡图，以及运行时已解锁（云存档恢复）的水果卡图。
+        // 云存档恢复发生在 CloudSave.IsReady 之后，而 BeginPreloadDailyChallengeCardSprites
+        // 可能在云存档恢复之前就被 LoadProcedure 触发（数据表就绪即触发）。
+        // 因此这里同时检查 GameEntry.Fruits.IsFruitUnlocked，覆盖运行时解锁的水果。
+        // 若云存档尚未恢复，IsFruitUnlocked 返回 false，后续由 SupplementDailyChallengeCardSpritesAfterCloudRestore 补齐。
         for (int i = 0; i < rows.Length; i++)
         {
             FruitDataRow row = rows[i];
-            if (row == null || !row.IsUnlocked)
+            if (row == null)
+            {
+                continue;
+            }
+
+            bool isUnlocked = row.IsUnlocked
+                || (GameEntry.Fruits != null && GameEntry.Fruits.IsFruitUnlocked(row.Code));
+            if (!isUnlocked)
             {
                 continue;
             }
@@ -1468,6 +1480,61 @@ public sealed class GameAssetModule
 
         UpdatePreloadCompletionState();
         NotifyPreloadStateChanged();
+    }
+
+    /// <summary>
+    /// 云存档恢复完成后，补充预加载运行时解锁的水果卡图。
+    /// 调用时机：CloudSaveModule.ApplySnapshotToRuntime 完成后。
+    /// 只会为尚未缓存/尚未在加载中的水果发起新的加载请求。
+    /// </summary>
+    public void SupplementDailyChallengeCardSpritesAfterCloudRestore()
+    {
+        if (!_dailyChallengeCardSpritePreloadRequested)
+        {
+            // 首次预加载尚未触发，等 BeginPreloadDailyChallengeCardSprites 自然覆盖。
+            return;
+        }
+
+        if (GameEntry.DataTables == null || !GameEntry.DataTables.IsAvailable<FruitDataRow>())
+        {
+            return;
+        }
+
+        FruitDataRow[] rows = GameEntry.DataTables.GetAllDataRows<FruitDataRow>();
+        if (rows == null || rows.Length == 0)
+        {
+            return;
+        }
+
+        bool hasNewLoad = false;
+        for (int i = 0; i < rows.Length; i++)
+        {
+            FruitDataRow row = rows[i];
+            if (row == null)
+            {
+                continue;
+            }
+
+            // 只补充运行时解锁（非数据表默认解锁）且尚未缓存的水果。
+            if (row.IsUnlocked)
+            {
+                continue;
+            }
+
+            if (GameEntry.Fruits == null || !GameEntry.Fruits.IsFruitUnlocked(row.Code))
+            {
+                continue;
+            }
+
+            StartLoadDailyChallengeCardSprite(row);
+            hasNewLoad = true;
+        }
+
+        if (hasNewLoad)
+        {
+            UpdatePreloadCompletionState();
+            NotifyPreloadStateChanged();
+        }
     }
 
     /// <summary>

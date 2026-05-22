@@ -779,6 +779,10 @@ public sealed class CloudSaveModule
         GameEntry.Fruits?.ApplyPlayerCloudSaveSnapshot(snapshot);
         GameEntry.EggHatch?.ApplyCloudSaveData(snapshot.eggHatch);
         GameEntry.PetPlacement?.ApplyPetLiteSaveData(snapshot.pets);
+
+        // 云存档恢复了运行时解锁的水果后，补充预加载这些水果的每日关卡卡图。
+        // 必须在 ApplyPlayerCloudSaveSnapshot 之后调用，此时 _unlockedFruitCodes 已写入。
+        GameEntry.GameAssets?.SupplementDailyChallengeCardSpritesAfterCloudRestore();
         _loadedPendingGoldDrops = snapshot.pendingGoldDrops;
         _loadedPendingProduceDrops = snapshot.pendingProduceDrops;
         _mainUIForm?.RefreshPlayerNameDisplay();

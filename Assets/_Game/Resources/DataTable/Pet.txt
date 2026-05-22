@@ -1,10 +1,10 @@
 #Id	Code	Name	Quality	EntitySkeletonDataPath	UiSkeletonDataPath	IdleAnimationName	MoveAnimationName	GiveGoldAnimationName	AttributeType	AttributeValue	RequiredStars	EatFruitCount	ProduceProbability	Description
 #唯一编号	机器码	显示名称	宠物品质	实体SkeletonData资源路径	UI SkeletonData资源路径	待机动画名	移动动画名	给金币动画名	属性类型	属性数值	星星条件	吃水果次数	产出物概率	备注描述
 1	pet_lulu	史莱姆	Normal	Pet/CHW_1001/CHW_1001_SkeletonData	Pet/CHW_1001/CHW_1001_SkeletonData 1	move	move	win	ScoreBase	1	0	1	2	蹦蹦跳跳的水滴状粘液小怪物
-2	pet_shuxiaoxiao	树小小	Rare	Assets/_Game/Resources_moved/Pet/CHW_2001/CHW_2001_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_2001/CHW_2001_SkeletonData.asset	run	run	victory	ComboTime	1	1	1	2	受到魔法石影响的树妖
-3	pet_papagui	爬爬龟	Epic	Assets/_Game/Resources_moved/Pet/CHW_3001/CHW_3001_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_3001/CHW_3001_SkeletonData.asset	Move	Move	Win	ScoreBase	2	0	2	2	移动缓慢，喜欢吃苹果
-4	pet_duoduoshou	多多兽	Legendary	Pet/Duoduoshou/BOOS_Duoduoshou_001_SkeletonData	Pet/Duoduoshou/BOOS_Duoduoshou_001_SkeletonDataUI	Walk	Walk	Attack	ScoreBase	4	0	2	2	黄色独眼变异兽
-5	pet_miemieyang	咩咩羊	Mythic	Pet/Miemieyang/MS_Miemieyang_001_SkeletonData	Pet/Miemieyang/MS_Miemieyang_001_SkeletonDataUI	Idle	Idle	Attack	ScoreBase	5	0	3	2	拥有治愈之力的绵羊
+2	pet_shuxiaoxiao	树小小	Rare	Assets/_Game/Resources_moved/Pet/CHW_2001/CHW_2001_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_2001/CHW_2001_SkeletonData.asset	run	run	victory	ComboTime	1	1	2	2	受到魔法石影响的树妖
+3	pet_papagui	爬爬龟	Epic	Assets/_Game/Resources_moved/Pet/CHW_3001/CHW_3001_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_3001/CHW_3001_SkeletonData.asset	Move	Move	Win	ScoreBase	2	1	3	2	移动缓慢，喜欢吃苹果
+4	pet_duoduoshou	多多兽	Legendary	Assets/_Game/Resources_moved/Pet/CHW_4001/CHW_4001_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_4001/CHW_4001_SkeletonData.asset	Move	Move	WIN	ComboTime	2	1	4	2	黄色独眼变异兽
+5	pet_miemieyang	咩咩羊	Mythic	Assets/_Game/Resources_moved/Pet/CHW_5001/CHW_5001_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_5001/CHW_5001_SkeletonData.asset	Move	Move	Win	ScoreBase	3	1	5	2	拥有治愈之力的绵羊
 6	pet_fxf	蜂小蜂	Normal	Pet/CHW_1002/CHW_1002_SkeletonData	Pet/CHW_1002/CHW_1002_SkeletonData	Move	Move	win	ScoreBase	1	5	1	2	喜欢吃花蜜的小蜜蜂
 7	pet_lxz	萝小紫	Normal	Pet/CHW_1003/CHW_1003_SkeletonData	Pet/CHW_1003/CHW_1003_SkeletonData	run	run	victory	ScoreBase	1	10	1	2	萝卜成精
 8	pet_cslm	草史莱姆	Normal	Pet/CHW_1004/CHW_1004_SkeletonData	Pet/CHW_1004/CHW_1004_SkeletonData	run	run	victory	ScoreBase	1	25	1	2	草史莱姆是史莱姆的变异体，草免
@@ -20,3 +20,13 @@
 18	pet_hkcc	红壳菜虫	Epic	Assets/_Game/Resources_moved/Pet/CHW_3004/CHW_3004_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_3004/CHW_3004_SkeletonData.asset	Move	Move	Win	ScoreBase	2	300	3	2	红色外壳的菜虫
 19	pet_xrzq	仙人掌球	Epic	Assets/_Game/Resources_moved/Pet/CHW_3005/CHW_3005_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_3005/CHW_3005_SkeletonData.asset	Move	Move	Win	ScoreBase	2	500	3	2	长满刺的仙人掌球
 20	pet_wby	白小鹅	Epic	Assets/_Game/Resources_moved/Pet/CHW_3006/CHW_3006_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_3006/CHW_3006_SkeletonData.asset	Move	Move	Win	ScoreBase	2	900	3	2	穿着围脖的鸭子
+21	pet_tts	偷偷鼠	Legendary	Assets/_Game/Resources_moved/Pet/CHW_4002/CHW_4002_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_4002/CHW_4002_SkeletonData.asset	Move	Move	Win	ComboTime	2	200	4	2	偷偷鼠，喜欢吃萝卜
+22	pet_mmx	毛毛熊	Legendary	Assets/_Game/Resources_moved/Pet/CHW_4003/CHW_4003_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_4003/CHW_4003_SkeletonData.asset	Move	Move	Win	ComboTime	2	500	4	2	毛茸茸的熊，喜欢吃蜂蜜
+23	pet_nnk	泥泥菇	Legendary	Assets/_Game/Resources_moved/Pet/CHW_4004/CHW_4004_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_4004/CHW_4004_SkeletonData.asset	Move	Move	Win	ComboTime	2	800	4	2	泥巴做成的蘑菇
+24	pet_ppk	蓬蓬菇	Legendary	Assets/_Game/Resources_moved/Pet/CHW_4005/CHW_4005_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_4005/CHW_4005_SkeletonData.asset	Move	Move	Win	ComboTime	2	1000	4	2	蓬松的蘑菇
+25	pet_sjj	树精精	Legendary	Assets/_Game/Resources_moved/Pet/CHW_4006/CHW_4006_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_4006/CHW_4006_SkeletonData.asset	Move	Move	Win	ComboTime	2	1200	4	2	树精
+26	pet_xjh	香蕉猴	Mythic	Assets/_Game/Resources_moved/Pet/CHW_5002/CHW_5002_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_5002/CHW_5002_SkeletonData.asset	Move	Move	Win	ScoreBase	3	500	5	2	喜欢吃香蕉的猴子
+27	pet_fzh	法杖狐	Mythic	Assets/_Game/Resources_moved/Pet/CHW_5003/CHW_5003_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_5003/CHW_5003_SkeletonData.asset	Move	Move	Win	ScoreBase	3	1000	5	2	拿着法杖的狐狸
+28	pet_ttsm	豚豚鼠	Mythic	Assets/_Game/Resources_moved/Pet/CHW_5004/CHW_5004_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_5004/CHW_5004_SkeletonData.asset	Move	Move	Win	ScoreBase	3	1800	5	2	想开飞机的豚鼠
+29	pet_ccn	锤锤牛	Mythic	Assets/_Game/Resources_moved/Pet/CHW_5005/CHW_5005_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_5005/CHW_5005_SkeletonData.asset	Move	Move	Win	ScoreBase	3	2500	5	2	拿着锤子的牛
+30	pet_ddz	盾盾猪	Mythic	Assets/_Game/Resources_moved/Pet/CHW_5006/CHW_5006_SkeletonData.asset	Assets/_Game/Resources_moved/Pet/CHW_5006/CHW_5006_SkeletonData.asset	Move	Move	Win	ScoreBase	3	3000	5	2	拿着盾牌的猪

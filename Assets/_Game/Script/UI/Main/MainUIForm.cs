@@ -217,6 +217,7 @@ public partial class MainUIForm : UIFormLogic
         RefreshPageLayout(true);
         UpdateButtonState();
         InitializeHatchView();
+        InitializeAutoHatchView();
         InitializePetPlacementView();
         InitializeGoldView();
         InitializeStarsView();
@@ -240,6 +241,7 @@ public partial class MainUIForm : UIFormLogic
         RefreshPageLayout(true);
         UpdateButtonState();
         OpenHatchView();
+        OpenAutoHatchView();
         OpenPetPlacementView();
         OpenGoldView();
         OpenStarsView();
@@ -269,6 +271,7 @@ public partial class MainUIForm : UIFormLogic
         GameEntry.CloudSave?.UnregisterMainUIForm(this);
         StopSwitchTween();
         CloseHatchView();
+        CloseAutoHatchView();
         ClosePetPlacementView();
         CloseGoldView();
         CloseProduceView();
@@ -299,6 +302,7 @@ public partial class MainUIForm : UIFormLogic
     {
         base.OnUpdate(elapseSeconds, realElapseSeconds);
         UpdateHatchView();
+        UpdateAutoHatchView();
         UpdatePetPlacementView();
         TryFlushPendingPetRewardDrops();
     }
@@ -351,6 +355,7 @@ public partial class MainUIForm : UIFormLogic
         }
 
         DestroyHatchView();
+        DestroyAutoHatchView();
         DestroyPetPlacementView();
         DestroyGoldView();
         DestroyStarsView();

@@ -917,7 +917,16 @@ public sealed class EliminateCardController
         for (int i = 0; i < allFruits.Length; i++)
         {
             FruitDataRow fruit = allFruits[i];
-            if (fruit == null || !fruit.IsUnlocked)
+            if (fruit == null)
+            {
+                continue;
+            }
+
+            // 解锁语义（并集）：数据表默认解锁 || 运行时购买解锁。
+            // 与 ShuiGuoTJUIForm / MainUIForm.DailyChallengeGate 中的判定逻辑保持一致。
+            bool isUnlocked = fruit.IsUnlocked
+                || (GameEntry.Fruits != null && GameEntry.Fruits.IsFruitUnlocked(fruit.Code));
+            if (!isUnlocked)
             {
                 continue;
             }

@@ -362,6 +362,14 @@ public sealed class EggHatchSaveData
     public string[] manualEggCodes = Array.Empty<string>();
 
     /// <summary>
+    /// 当前自动孵化（看广告获得）蛋库存队列。
+    /// 数组顺序与运行时库存顺序一致，0 号元素优先消耗。
+    /// 该队列与 manualEggCodes 完全独立，不与手动蛋互相挤压。
+    /// 老存档反序列化时若该字段缺失，默认空数组，业务上等价于"无自动蛋"。
+    /// </summary>
+    public string[] autoEggCodes = Array.Empty<string>();
+
+    /// <summary>
     /// 当前自动补蛋已经累计的秒数。
     /// 读取时会被限制在 0 到 RefillDurationSeconds 之间，避免云端手改异常值导致立即刷满。
     /// </summary>

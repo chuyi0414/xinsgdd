@@ -17,6 +17,18 @@ MonoBehaviour:
     m_SerializedData: []
   m_GUID: c4cbf292c64146b48b10c3290313f812
   m_SerializeEntries:
+  - m_GUID: 01e01b07dcb158349bf7ddba5fc49fe3
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_5006
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_5006
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 02afc6ef7874a1c4e9b021fac6881089
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_4002
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_4002
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 03e83f86b36ba4b4d9d4d4e373820732
     m_Address: Pet/CHW_1006/CHW_1006.atlas
     m_ReadOnly: 0
@@ -41,6 +53,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - CHW_1006
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 09baa8b0712a39d4d9b88c1beeae6f79
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_5005
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_5005
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0af98b86d1aacc84e847664aa10869fb
     m_Address: Pet/Shuxiaoxiao/GW_Shuxiaoxiao_1002_Material.mat
     m_ReadOnly: 0
@@ -64,6 +82,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Pet_MieMieYang
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1951ff2baa3b8f04191443da9b19742b
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_4001
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_4001
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 196eb6779caf0504f86fec797f8ea08c
     m_Address: Pet/Papagui/GW_Papagui_1003.atlas
@@ -143,6 +167,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Pet_TuJian
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3d13ac870341c15478c3a04e1e5044f7
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_5001
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_5001
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4134180c4034b89499787373fae15449
     m_Address: Pet/Miemieyang/MS_Miemieyang_001.atlas
     m_ReadOnly: 0
@@ -172,6 +202,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Pet_ShuXiaoXiao
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 47187a3f4cf10764cb366ef87f41f519
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_4006
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_4006
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 493061a487ba9d34eb4162e5b706ec3b
     m_Address: Pet/Duoduoshou/BOOS_Duoduoshou_001_Atlas 1
@@ -304,6 +340,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - CHW_1006
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7f5349cf6d107be4a98a94d34677f732
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_5003
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_5003
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8121c81bdfb936c498192f8ec5f8ad6c
     m_Address: Pet/CHW_1002/CHW_1002
     m_ReadOnly: 0
@@ -321,6 +363,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - CHW_1002
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8b5820e9d4e6cee41ac130ac429548e2
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_5004
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_5004
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8c4b1a8fce09c8147b34a50191ad283b
     m_Address: Assets/_Game/Resources_moved/Pet/CHW_2002
@@ -408,6 +456,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Pet_ShuXiaoXiao
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a251fffe198c6944fbdcfc965e16e8a9
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_4004
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_4004
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a304f3d4cf93ef34f97cdb33345f08c8
     m_Address: Pet/UI/UI_Chongwu_004
     m_ReadOnly: 0
@@ -467,6 +521,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Pet_TuJian
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b44c91d7bcb03ec439b125d6234244a2
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_5002
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_5001
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b44d514762319a940ac904d51ce1841e
     m_Address: Pet/CHW_1004/CHW_1004.atlas
@@ -576,11 +636,23 @@ MonoBehaviour:
     m_SerializedLabels:
     - CHW_1001
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dcb5a6c71fdc4f847abfc3f4854d025f
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_4003
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_4003
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ddc6ae5ccc282f2418c45ac70462c499
     m_Address: Assets/_Game/Resources_moved/Pet/CHW_3006
     m_ReadOnly: 0
     m_SerializedLabels:
     - CHW_3006
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e65058daa81e7cd44b36a19a2d41432d
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_4005
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_4005
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e8d2238f7d107034f9fe74f89ab2b7b6
     m_Address: Pet/CHW_1004/CHW_1004.skel

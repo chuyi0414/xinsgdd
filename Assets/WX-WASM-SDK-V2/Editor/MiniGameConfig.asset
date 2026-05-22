@@ -24,7 +24,7 @@ MonoBehaviour:
     StreamCDN: 
     bundleHashLength: 32
     bundlePathIdentifier: StreamingAssets;
-    bundleExcludeExtensions: 
+    bundleExcludeExtensions: json;
     AssetsUrl: 
     MemorySize: 256
     HideAfterCallMain: 1

@@ -1,0 +1,125 @@
+
+CHW_4003.png
+size: 532,271
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+3c1
+  rotate: false
+  xy: 193, 74
+  size: 93, 195
+  orig: 94, 195
+  offset: 0, 0
+  index: -1
+3c10
+  rotate: true
+  xy: 486, 41
+  size: 51, 31
+  orig: 51, 31
+  offset: 0, 0
+  index: -1
+3c11
+  rotate: true
+  xy: 288, 141
+  size: 128, 101
+  orig: 128, 101
+  offset: 0, 0
+  index: -1
+3c12
+  rotate: false
+  xy: 395, 17
+  size: 89, 67
+  orig: 89, 67
+  offset: 0, 0
+  index: -1
+3c13
+  rotate: false
+  xy: 2, 57
+  size: 189, 212
+  orig: 189, 212
+  offset: 0, 0
+  index: -1
+3c14
+  rotate: false
+  xy: 390, 86
+  size: 44, 51
+  orig: 44, 52
+  offset: 0, 1
+  index: -1
+3c15
+  rotate: true
+  xy: 288, 86
+  size: 53, 52
+  orig: 53, 52
+  offset: 0, 0
+  index: -1
+3c16
+  rotate: true
+  xy: 218, 3
+  size: 69, 175
+  orig: 71, 180
+  offset: 2, 5
+  index: -1
+3c17
+  rotate: false
+  xy: 395, 139
+  size: 131, 130
+  orig: 132, 140
+  offset: 0, 0
+  index: -1
+3c2
+  rotate: true
+  xy: 486, 10
+  size: 29, 19
+  orig: 38, 27
+  offset: 4, 4
+  index: -1
+3c3
+  rotate: true
+  xy: 159, 5
+  size: 50, 57
+  orig: 50, 57
+  offset: 0, 0
+  index: -1
+3c4
+  rotate: false
+  xy: 507, 16
+  size: 23, 23
+  orig: 23, 23
+  offset: 0, 0
+  index: -1
+3c5
+  rotate: true
+  xy: 484, 94
+  size: 43, 38
+  orig: 43, 38
+  offset: 0, 0
+  index: -1
+3c6
+  rotate: true
+  xy: 342, 85
+  size: 54, 46
+  orig: 57, 46
+  offset: 0, 0
+  index: -1
+3c7
+  rotate: true
+  xy: 2, 2
+  size: 53, 78
+  orig: 53, 78
+  offset: 0, 0
+  index: -1
+3c8
+  rotate: true
+  xy: 82, 3
+  size: 52, 75
+  orig: 53, 75
+  offset: 1, 0
+  index: -1
+3c9
+  rotate: true
+  xy: 436, 90
+  size: 47, 46
+  orig: 47, 46
+  offset: 0, 0
+  index: -1

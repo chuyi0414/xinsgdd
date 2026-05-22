@@ -120,37 +120,159 @@ public static class AddressablesAssetRouterImpl
                 return;
             }
 
-            AsyncOperationHandle<IResourceLocator> remoteCatalogHandle;
-            try
-            {
-                remoteCatalogHandle = Addressables.LoadContentCatalogAsync(result.CatalogUrl, true);
-            }
-            catch (Exception ex)
-            {
-                Log.Error("[AddressablesRouter] LoadContentCatalogAsync 启动异常，将继续使用包内默认 catalog。catalogUrl='"
-                    + result.CatalogUrl + "'，error='" + ex + "'。");
-                CompleteSuccessfulInitialize(onComplete);
-                return;
-            }
-
-            remoteCatalogHandle.Completed += op =>
-            {
-                if (op.Status == AsyncOperationStatus.Succeeded && op.Result != null)
-                {
-                    s_RemoteCatalogLocator = op.Result;
-                    Log.Info("[AddressablesRouter] 远程 Addressables catalog 加载成功，resourceVersion='"
-                        + result.ResourceVersion + "'，catalogUrl='" + result.CatalogUrl + "'。");
-                }
-                else
-                {
-                    Log.Error("[AddressablesRouter] 远程 Addressables catalog 加载失败，将继续使用包内默认 catalog。catalogUrl='"
-                        + result.CatalogUrl + "'，error='"
-                        + (op.OperationException != null ? op.OperationException.ToString() : "unknown") + "'。");
-                }
-
-                CompleteSuccessfulInitialize(onComplete);
-            };
+            // LoadContentCatalogAsync 走带重试的内部协程。
+            // 弱网下第一次 catalog 下载经常失败（HTTP/2 协商抖动、CDN 节点切换），重试 3 次能显著提升首启成功率。
+            BeginLoadRemoteCatalogWithRetry(result, onComplete);
         });
+    }
+
+    /// <summary>
+    /// LoadContentCatalogAsync 的带重试封装。
+    /// 因为 AsyncOperationHandle 不能直接 yield 在静态类里，借用 AddressablesRemoteVersionResolver 的协程驱动器（同源同生命周期）。
+    /// 与 version.json 重试同步策略：
+    /// 　- 最多 3 次（含首次）；
+    /// 　- 失败后指数退避；
+    /// 　- 任意一次成功立即赋值 s_RemoteCatalogLocator 并放行业务。
+    /// 此处不区分 retryable / permanent：catalog 下载失败几乎全是 transient（CDN 抖动、TLS 握手、Bundle 校验），无需特别区分。
+    /// </summary>
+    /// <param name="versionResult">version.json 解析得到的远程 catalog 元信息。</param>
+    /// <param name="onComplete">Addressables 完整初始化完成回调。</param>
+    private static void BeginLoadRemoteCatalogWithRetry(AddressablesRemoteVersionResolveResult versionResult, Action onComplete)
+    {
+        AddressablesCatalogRetryDriver.Start(versionResult, onComplete);
+    }
+
+    /// <summary>
+    /// LoadContentCatalogAsync 重试常量。
+    /// </summary>
+    private const int RemoteCatalogMaxAttemptCount = 3;
+
+    /// <summary>
+    /// 远程 catalog 重试基础退避秒数。
+    /// </summary>
+    private const float RemoteCatalogInitialBackoffSeconds = 0.5f;
+
+    /// <summary>
+    /// 远程 catalog 退避增长因子。
+    /// </summary>
+    private const float RemoteCatalogBackoffGrowthFactor = 1.5f;
+
+    /// <summary>
+    /// 远程 catalog 加载重试驱动器。
+    /// 走 MonoBehaviour 协程承载 yield，避免在静态类里手撸状态机。
+    /// </summary>
+    private sealed class AddressablesCatalogRetryDriver : UnityEngine.MonoBehaviour
+    {
+        /// <summary>
+        /// 静态入口：创建一次 GameObject 承载协程，启动重试链路。
+        /// </summary>
+        public static void Start(AddressablesRemoteVersionResolveResult versionResult, Action onComplete)
+        {
+            UnityEngine.GameObject driverGo = new UnityEngine.GameObject("[AddressablesRouter.CatalogRetryDriver]");
+            UnityEngine.Object.DontDestroyOnLoad(driverGo);
+            driverGo.hideFlags = UnityEngine.HideFlags.HideAndDontSave;
+            AddressablesCatalogRetryDriver driver = driverGo.AddComponent<AddressablesCatalogRetryDriver>();
+            driver.StartCoroutine(driver.LoadCatalogWithRetry(versionResult, onComplete, driverGo));
+        }
+
+        /// <summary>
+        /// 主重试协程。
+        /// 步骤：发起加载 → yield 等完成 → 检查状态 → 失败时退避后重试 → 成功或重试用尽时放行。
+        /// </summary>
+        private System.Collections.IEnumerator LoadCatalogWithRetry(
+            AddressablesRemoteVersionResolveResult versionResult,
+            Action onComplete,
+            UnityEngine.GameObject driverGo)
+        {
+            bool succeeded = false;
+            string lastError = null;
+            for (int attempt = 1; attempt <= RemoteCatalogMaxAttemptCount; attempt++)
+            {
+                AsyncOperationHandle<IResourceLocator> handle;
+                Exception startException = null;
+                try
+                {
+                    handle = Addressables.LoadContentCatalogAsync(versionResult.CatalogUrl, true);
+                }
+                catch (Exception ex)
+                {
+                    // C# 限制：catch 里禁止直接 yield return。把异常先存起来，跳出 try-catch 后再判断是否需要退避。
+                    handle = default;
+                    startException = ex;
+                }
+
+                if (startException != null)
+                {
+                    lastError = startException.ToString();
+                    Log.Warning(Utility.Text.Format(
+                        "[AddressablesRouter] 第 {0}/{1} 次 LoadContentCatalogAsync 启动异常：{2}",
+                        attempt, RemoteCatalogMaxAttemptCount, lastError));
+                    if (TryWaitForRetry(attempt, out System.Collections.IEnumerator startWait))
+                    {
+                        yield return startWait;
+                        continue;
+                    }
+                    break;
+                }
+
+                yield return handle;
+
+                if (handle.Status == AsyncOperationStatus.Succeeded && handle.Result != null)
+                {
+                    s_RemoteCatalogLocator = handle.Result;
+                    Log.Info("[AddressablesRouter] 远程 Addressables catalog 加载成功，resourceVersion='"
+                        + versionResult.ResourceVersion + "'，catalogUrl='" + versionResult.CatalogUrl
+                        + "'，attempt=" + attempt + "。");
+                    succeeded = true;
+                    break;
+                }
+
+                lastError = handle.OperationException != null
+                    ? handle.OperationException.ToString()
+                    : "status=" + handle.Status;
+                Log.Warning(Utility.Text.Format(
+                    "[AddressablesRouter] 第 {0}/{1} 次 LoadContentCatalogAsync 失败：{2}",
+                    attempt, RemoteCatalogMaxAttemptCount, lastError));
+
+                // 失败后释放句柄，避免泄漏。
+                if (handle.IsValid())
+                {
+                    Addressables.Release(handle);
+                }
+
+                if (TryWaitForRetry(attempt, out System.Collections.IEnumerator backoff))
+                {
+                    yield return backoff;
+                }
+            }
+
+            if (!succeeded)
+            {
+                Log.Error("[AddressablesRouter] 远程 Addressables catalog 加载在 "
+                    + RemoteCatalogMaxAttemptCount + " 次重试后仍失败，将继续使用包内默认 catalog。catalogUrl='"
+                    + versionResult.CatalogUrl + "'，lastError='" + lastError + "'。");
+            }
+
+            CompleteSuccessfulInitialize(onComplete);
+            // 协程结束后销毁驱动 GameObject，避免内存累积。
+            UnityEngine.Object.Destroy(driverGo);
+        }
+
+        /// <summary>
+        /// 计算退避等待迭代器。
+        /// </summary>
+        private static bool TryWaitForRetry(int finishedAttempt, out System.Collections.IEnumerator backoff)
+        {
+            backoff = null;
+            if (finishedAttempt >= RemoteCatalogMaxAttemptCount)
+            {
+                return false;
+            }
+
+            float waitSeconds = RemoteCatalogInitialBackoffSeconds * UnityEngine.Mathf.Pow(RemoteCatalogBackoffGrowthFactor, finishedAttempt - 1);
+            backoff = new UnityEngine.WaitForSecondsRealtime(waitSeconds);
+            return true;
+        }
     }
 
     /// <summary>

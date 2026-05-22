@@ -15,9 +15,9 @@ MonoBehaviour:
   m_DefaultGroup: b8cc2399154852140b551d5f8e6dcdfa
   m_currentHash:
     serializedVersion: 2
-    Hash: ada53d512364104c42bacb0f14f33a0c
+    Hash: 00000000000000000000000000000000
   m_OptimizeCatalogSize: 0
-  m_BuildRemoteCatalog: 1
+  m_BuildRemoteCatalog: 0
   m_BundleLocalCatalog: 0
   m_CatalogRequestsTimeout: 0
   m_DisableCatalogUpdateOnStart: 0
@@ -44,6 +44,7 @@ MonoBehaviour:
   m_BuildAddressablesWithPlayerBuild: 0
   m_overridePlayerVersion: '[UnityEditor.PlayerSettings.bundleVersion]'
   m_GroupAssets:
+  - {fileID: 11400000, guid: 2520b632af40a1a4aa364ee35fc79a76, type: 2}
   - {fileID: 11400000, guid: 69d7ee0fde09e164081421f00c7f562e, type: 2}
   - {fileID: 11400000, guid: fec543bc35050e24cbc8ba00918a8f43, type: 2}
   - {fileID: 11400000, guid: 867a5d60d2461c2419937efcd477a748, type: 2}
@@ -113,6 +114,23 @@ MonoBehaviour:
     - CHW_3004
     - CHW_3005
     - CHW_3006
+    - Fruit_1
+    - Fruit_2
+    - Fruit_3
+    - FruitCard_1
+    - FruitCard_2
+    - FruitCard_3
+    - CHW_4001
+    - CHW_4002
+    - CHW_4003
+    - CHW_4004
+    - CHW_4005
+    - CHW_4006
+    - CHW_5001
+    - CHW_5003
+    - CHW_5004
+    - CHW_5005
+    - CHW_5006
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: 6bf8a47d9d811a3448188709ffb92cca, type: 2}
@@ -143,7 +161,7 @@ MonoBehaviour:
           m_Key: HostingServiceUploadSpeed
         - m_AssemblyName: mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089
           m_ClassName: System.String
-          m_Data: Library/com.unity.addressables/aa/WebGL/WebGL;ServerData_sgdd/WebGL
+          m_Data: ServerData_sgdd/WebGL;Library/com.unity.addressables/aa/WebGL/WebGL
           m_Key: ContentRoot
         - m_AssemblyName: mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089
           m_ClassName: System.Boolean

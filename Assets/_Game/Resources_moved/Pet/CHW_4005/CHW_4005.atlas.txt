@@ -1,0 +1,83 @@
+
+CHW_4005.png
+size: 241,454
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+5c1
+  rotate: true
+  xy: 2, 178
+  size: 274, 175
+  orig: 274, 187
+  offset: 0, 12
+  index: -1
+5c10
+  rotate: true
+  xy: 2, 12
+  size: 67, 69
+  orig: 70, 73
+  offset: 2, 2
+  index: -1
+5c11
+  rotate: true
+  xy: 179, 261
+  size: 191, 53
+  orig: 196, 53
+  offset: 5, 0
+  index: -1
+5c2
+  rotate: false
+  xy: 102, 82
+  size: 75, 94
+  orig: 80, 97
+  offset: 3, 2
+  index: -1
+5c3
+  rotate: false
+  xy: 179, 52
+  size: 55, 102
+  orig: 57, 102
+  offset: 2, 0
+  index: -1
+5c4
+  rotate: false
+  xy: 179, 156
+  size: 55, 103
+  orig: 61, 105
+  offset: 3, 2
+  index: -1
+5c5
+  rotate: false
+  xy: 176, 15
+  size: 41, 10
+  orig: 50, 18
+  offset: 4, 4
+  index: -1
+5c6
+  rotate: true
+  xy: 220, 9
+  size: 41, 19
+  orig: 49, 28
+  offset: 4, 4
+  index: -1
+5c7
+  rotate: false
+  xy: 176, 27
+  size: 42, 23
+  orig: 42, 23
+  offset: 0, 0
+  index: -1
+5c8
+  rotate: false
+  xy: 2, 81
+  size: 98, 95
+  orig: 105, 95
+  offset: 7, 0
+  index: -1
+5c9
+  rotate: true
+  xy: 102, 2
+  size: 78, 72
+  orig: 81, 77
+  offset: 2, 3
+  index: -1

@@ -88,6 +88,11 @@ const initialSnapshotTemplate = {
     eggHatch: {
         manualEggCodes: [
         ],
+        // 自动孵化（看广告获得）库存队列。
+        // 与 manualEggCodes 完全独立，不与手动蛋互相挤压。
+        // 客户端 EggHatchSaveData.autoEggCodes 默认即为空数组，这里保持一致避免新账号建档后字段缺失。
+        autoEggCodes: [
+        ],
         refillElapsedSeconds: 0,
         slots: [
             { eggCode: '', totalSeconds: 0, remainingSeconds: 0 },
@@ -777,6 +782,12 @@ function normalizeEggHatch(eggHatch) {
 
     if (!Array.isArray(eggHatch.manualEggCodes)) {
         eggHatch.manualEggCodes = []
+    }
+
+    // 自动孵化库存队列：客户端 EggHatchSaveData.autoEggCodes 默认空数组，
+    // 控制台手动改测试数据或老玩家存档可能漏掉这个字段，统一兜底成 [] 避免下游空引用。
+    if (!Array.isArray(eggHatch.autoEggCodes)) {
+        eggHatch.autoEggCodes = []
     }
 
     eggHatch.refillElapsedSeconds = normalizeNonNegativeNumber(eggHatch.refillElapsedSeconds, 0)

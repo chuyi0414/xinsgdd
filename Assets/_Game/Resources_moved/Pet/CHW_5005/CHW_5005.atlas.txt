@@ -1,0 +1,174 @@
+
+CHW_5005.png
+size: 766,286
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+niu1
+  rotate: false
+  xy: 193, 13
+  size: 89, 36
+  orig: 89, 36
+  offset: 0, 0
+  index: -1
+niu10
+  rotate: false
+  xy: 193, 51
+  size: 96, 92
+  orig: 96, 92
+  offset: 0, 0
+  index: -1
+niu11
+  rotate: false
+  xy: 378, 4
+  size: 79, 71
+  orig: 79, 74
+  offset: 0, 3
+  index: -1
+niu12
+  rotate: false
+  xy: 606, 14
+  size: 50, 40
+  orig: 64, 52
+  offset: 7, 6
+  index: -1
+niu13
+  rotate: false
+  xy: 291, 54
+  size: 84, 89
+  orig: 84, 89
+  offset: 0, 0
+  index: -1
+niu14
+  rotate: false
+  xy: 216, 145
+  size: 167, 139
+  orig: 167, 141
+  offset: 0, 2
+  index: -1
+niu15
+  rotate: true
+  xy: 620, 117
+  size: 75, 57
+  orig: 75, 60
+  offset: 0, 3
+  index: -1
+niu16
+  rotate: false
+  xy: 658, 6
+  size: 40, 48
+  orig: 53, 60
+  offset: 7, 6
+  index: -1
+niu17
+  rotate: false
+  xy: 385, 140
+  size: 148, 144
+  orig: 161, 161
+  offset: 7, 6
+  index: -1
+niu18
+  rotate: true
+  xy: 535, 113
+  size: 79, 83
+  orig: 79, 85
+  offset: 0, 2
+  index: -1
+niu19
+  rotate: false
+  xy: 679, 122
+  size: 66, 71
+  orig: 78, 84
+  offset: 6, 7
+  index: -1
+niu2
+  rotate: false
+  xy: 291, 2
+  size: 85, 50
+  orig: 85, 50
+  offset: 0, 0
+  index: -1
+niu20
+  rotate: false
+  xy: 611, 56
+  size: 62, 55
+  orig: 62, 55
+  offset: 0, 0
+  index: -1
+niu21
+  rotate: false
+  xy: 700, 16
+  size: 45, 39
+  orig: 56, 46
+  offset: 4, 3
+  index: -1
+niu22
+  rotate: false
+  xy: 679, 57
+  size: 67, 63
+  orig: 67, 63
+  offset: 0, 0
+  index: -1
+niu23
+  rotate: false
+  xy: 485, 85
+  size: 48, 53
+  orig: 56, 56
+  offset: 5, 0
+  index: -1
+niu24
+  rotate: false
+  xy: 535, 13
+  size: 69, 45
+  orig: 82, 57
+  offset: 6, 6
+  index: -1
+niu25
+  rotate: false
+  xy: 2, 159
+  size: 212, 125
+  orig: 212, 130
+  offset: 0, 5
+  index: -1
+niu3
+  rotate: false
+  xy: 377, 77
+  size: 106, 61
+  orig: 106, 61
+  offset: 0, 0
+  index: -1
+niu4
+  rotate: false
+  xy: 535, 60
+  size: 74, 51
+  orig: 74, 52
+  offset: 0, 1
+  index: -1
+niu5
+  rotate: true
+  xy: 656, 195
+  size: 89, 108
+  orig: 93, 108
+  offset: 0, 0
+  index: -1
+niu6
+  rotate: false
+  xy: 535, 194
+  size: 119, 90
+  orig: 124, 90
+  offset: 4, 0
+  index: -1
+niu8
+  rotate: false
+  xy: 2, 10
+  size: 189, 147
+  orig: 197, 152
+  offset: 8, 5
+  index: -1
+niu9
+  rotate: false
+  xy: 459, 23
+  size: 74, 52
+  orig: 76, 54
+  offset: 0, 2
+  index: -1
