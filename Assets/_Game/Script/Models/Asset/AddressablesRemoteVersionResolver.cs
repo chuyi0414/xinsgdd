@@ -17,7 +17,7 @@ public static class AddressablesRemoteVersionResolver
     /// CDN 上固定的资源版本入口文件地址。
     /// 初始状态：每次启动都会尝试读取；读取失败时不影响包内默认 catalog。
     /// </summary>
-    private const string VersionManifestUrl = "https://7469-tianxing-001-2g9lrxwh45e5182d-1385561715.tcb.qcloud.la/ServerData_sgdd/version.json";
+    private const string VersionManifestUrl = "https://7469-tianxing-001-2g9lrxwh45e5182d-1385561715.tcb.qcloud.la/ServerData_sgdd/WebGL/version.json";
 
     /// <summary>
     /// version.json 单次请求超时时间，单位为秒。
@@ -113,7 +113,11 @@ public static class AddressablesRemoteVersionResolver
             request.Dispose();
 
             // 成功直接派发并退出。
-            if (parseOutcome.Result.HasRemoteCatalog)
+            // 「成功」包括两种语义：拿到远程 catalog 可加载（HasRemoteCatalog），
+            // 或仅拿到 resourceVersion 用于缓存版本比对（HasResourceVersion）。
+            // 后者对应"工程关闭 BuildRemoteCatalog、version.json 仅下发 resourceVersion"的合法场景，
+            // 不应该被当作失败重试，更不该打 Warning。
+            if (parseOutcome.Result.HasRemoteCatalog || parseOutcome.Result.HasResourceVersion)
             {
                 lastResult = parseOutcome.Result;
                 break;
@@ -243,9 +247,12 @@ public static class AddressablesRemoteVersionResolver
 
         if (string.IsNullOrEmpty(manifest.catalogUrl))
         {
+            // 不再把 catalogUrl 缺失视为失败：当前工程关闭了 BuildRemoteCatalog，
+            // 所有资源信息走包内 catalog，CDN 上压根没有 catalog_xxx.json 文件。
+            // 只要拿到 resourceVersion 就足以驱动版本切换和缓存清理。
             return new ParseResultOutcome
             {
-                Result = AddressablesRemoteVersionResolveResult.Fallback("version.json 未配置 catalogUrl。"),
+                Result = AddressablesRemoteVersionResolveResult.VersionOnly(manifest.resourceVersion),
                 IsRetryable = false
             };
         }
@@ -258,7 +265,18 @@ public static class AddressablesRemoteVersionResolver
     }
 
     /// <summary>
-    /// 安全派发解析完成回调。
+    /// 持久化"上次成功使用的 resourceVersion"用 PlayerPrefs key。
+    /// 在微信小游戏底层映射到 wx.setStorageSync，跨启动保留；首次启动取空串，等价于"必清一次"。
+    /// </summary>
+    private const string PrefsKeyResourceVersion = "wx.cache.lastResourceVersion";
+
+    /// <summary>
+    /// 安全派发解析完成回调，并在版本号变化时主动清理微信文件缓存。
+    /// 设计要点：
+    /// 　1) 只要拿到 resourceVersion 就参与版本比对，不要求一定拿到远程 catalog；
+    /// 　2) 清缓存是异步调用，不阻塞 onComplete 派发，避免首屏被卡；
+    /// 　3) 本次启动依旧走老缓存（清缓存是为下次启动生效），符合"小步换新"安全策略；
+    /// 　4) 编辑器与非微信平台 WechatBundleCacheUtility 内部 no-op，调用方零分支。
     /// </summary>
     /// <param name="onComplete">外部传入的解析完成回调。</param>
     /// <param name="result">本次解析结果。</param>
@@ -268,12 +286,58 @@ public static class AddressablesRemoteVersionResolver
         {
             Log.Info("[AddressablesRemoteVersion] 使用远程资源版本，resourceVersion=" + result.ResourceVersion + "，catalogUrl=" + result.CatalogUrl);
         }
+        else if (result.HasResourceVersion)
+        {
+            Log.Info("[AddressablesRemoteVersion] 仅获取到资源版本号（无远程 catalog），resourceVersion=" + result.ResourceVersion + "，沿用包内默认 catalog。");
+        }
         else
         {
             Log.Warning("[AddressablesRemoteVersion] 使用包内默认 Addressables catalog。原因：" + result.Reason);
         }
 
+        // 只要服务端下发了 resourceVersion 就驱动版本比对，与 catalogUrl 是否存在解耦。
+        TryCleanWechatCacheOnVersionChanged(result.ResourceVersion);
+
         onComplete?.Invoke(result);
+    }
+
+    /// <summary>
+    /// 仅在 resourceVersion 与上次记录不一致时，触发一次微信文件缓存全量清理。
+    /// 注意：
+    /// 　- 服务端 version.json 的 resourceVersion 字段必须保证"小版本递增 / 资源变化即变更"，否则清缓存不生效；
+    /// 　- 第一次上线该逻辑时，所有老用户 lastVersion 为空字符串，必触发一次清理 → 弱网下首启会重下，属正常阵痛；
+    /// 　- 异常路径下 PersistentKv.SetString 失败可能导致下次启动重复清一次，可接受。
+    /// 　- 持久化必须走 PersistentKv 而非 PlayerPrefs：微信小游戏 webview 禁用了 IndexedDB，
+    ///     vconsole 启动会打 "IndexedDB is not available. Data will not persist..."，
+    ///     PlayerPrefs 写入永远不会落盘。PersistentKv 在小游戏侧改走 wx.setStorageSync / wx.getStorageSync，跨启动稳定持久化。
+    /// </summary>
+    /// <param name="currentResourceVersion">本次 version.json 解析得到的资源版本号；空字符串视为"未知"，不触发清理。</param>
+    private static void TryCleanWechatCacheOnVersionChanged(string currentResourceVersion)
+    {
+        if (string.IsNullOrEmpty(currentResourceVersion))
+        {
+            // 服务端没下发版本号 → 不掌握任何切换证据，保守不清，防止误删。
+            return;
+        }
+
+        string lastResourceVersion = PersistentKv.GetString(PrefsKeyResourceVersion, string.Empty);
+        if (string.Equals(lastResourceVersion, currentResourceVersion, StringComparison.Ordinal))
+        {
+            // 版本未变化 → 缓存仍然有效，按命中走，不触发任何 IO。
+            return;
+        }
+
+        Log.Warning(Utility.Text.Format(
+            "[AddressablesRemoteVersion] resourceVersion 变化：{0} -> {1}，触发 WX.CleanAllFileCache。",
+            string.IsNullOrEmpty(lastResourceVersion) ? "<empty>" : lastResourceVersion,
+            currentResourceVersion));
+
+        // ⚠️ 必须先写 KV：清缓存是 fire-and-forget 异步调用，
+        //    若先等回调再写 KV，本次进程被强杀（玩家划掉小游戏）会导致下次启动再清一次。
+        //    先写 KV 等价于"本次决意切换版本"，即使清失败也不会陷入死循环。
+        PersistentKv.SetString(PrefsKeyResourceVersion, currentResourceVersion);
+
+        WechatBundleCacheUtility.CleanAll(null);
     }
 
     /// <summary>
@@ -350,6 +414,13 @@ public sealed class AddressablesRemoteVersionResolveResult
     public readonly bool HasRemoteCatalog;
 
     /// <summary>
+    /// 是否已经成功拿到 resourceVersion。
+    /// 初始状态：true 表示服务端下发了非空版本号，可参与版本比对与缓存清理；
+    /// 与 HasRemoteCatalog 互不强约束：拿到版本号但没有远程 catalog 是合法状态。
+    /// </summary>
+    public readonly bool HasResourceVersion;
+
+    /// <summary>
     /// 远程 catalog 完整 URL。
     /// 初始状态：仅 HasRemoteCatalog 为 true 时有效。
     /// </summary>
@@ -357,13 +428,13 @@ public sealed class AddressablesRemoteVersionResolveResult
 
     /// <summary>
     /// 远程资源版本号。
-    /// 初始状态：仅用于日志输出，可为空。
+    /// 初始状态：HasResourceVersion 为 true 时非空，可作为 PlayerPrefs 比对键。
     /// </summary>
     public readonly string ResourceVersion;
 
     /// <summary>
     /// 回退包内默认 catalog 的原因。
-    /// 初始状态：仅 HasRemoteCatalog 为 false 时有效。
+    /// 初始状态：仅在 HasRemoteCatalog 与 HasResourceVersion 均为 false 时才有意义。
     /// </summary>
     public readonly string Reason;
 
@@ -380,6 +451,7 @@ public sealed class AddressablesRemoteVersionResolveResult
         CatalogUrl = catalogUrl;
         ResourceVersion = resourceVersion;
         Reason = reason;
+        HasResourceVersion = !string.IsNullOrEmpty(resourceVersion);
     }
 
     /// <summary>
@@ -391,6 +463,18 @@ public sealed class AddressablesRemoteVersionResolveResult
     public static AddressablesRemoteVersionResolveResult RemoteCatalog(string catalogUrl, string resourceVersion)
     {
         return new AddressablesRemoteVersionResolveResult(true, catalogUrl, resourceVersion, null);
+    }
+
+    /// <summary>
+    /// 创建"仅版本号、无远程 catalog"结果。
+    /// 用于工程关闭 BuildRemoteCatalog 的场景：CDN 上不会产出 catalog_xxx.json，
+    /// version.json 只用来下发 resourceVersion 触发缓存清理与热更感知。
+    /// </summary>
+    /// <param name="resourceVersion">远程资源版本号；空字符串视为"未下发"，调用方应改用 Fallback。</param>
+    /// <returns>HasResourceVersion = true、HasRemoteCatalog = false 的解析结果。</returns>
+    public static AddressablesRemoteVersionResolveResult VersionOnly(string resourceVersion)
+    {
+        return new AddressablesRemoteVersionResolveResult(false, null, resourceVersion, null);
     }
 
     /// <summary>

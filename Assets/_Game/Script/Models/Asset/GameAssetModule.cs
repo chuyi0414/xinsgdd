@@ -96,6 +96,13 @@ public sealed class GameAssetModule
         /// 从 Fruit 表 DailyChallengePath 加载，专供每日一关消除卡使用。
         /// </summary>
         DailyChallengeCardSprite = 15,
+
+        /// <summary>
+        /// 宠物产出物图标精灵资源。
+        /// 从 PetProduce 表 IconPath 加载，UI 主界面 OutputBtn 用。
+        /// 设计语义：路径为空 / 加载失败均静默忽略，不阻塞主流程，UI 回退到预制体默认图。
+        /// </summary>
+        ProduceSprite = 16,
     }
 
     /// <summary>
@@ -187,6 +194,12 @@ public sealed class GameAssetModule
     private readonly Dictionary<string, Sprite> _fruitSpritesByCode = new Dictionary<string, Sprite>(StringComparer.Ordinal);
 
     /// <summary>
+    /// 已缓存的产出物图标，按产出物 Code 索引。
+    /// 资源加载失败 / 路径为空的产出物不会进入此字典，UI 查询命中失败将自动回退到预制体默认图。
+    /// </summary>
+    private readonly Dictionary<string, Sprite> _produceSpritesByCode = new Dictionary<string, Sprite>(StringComparer.Ordinal);
+
+    /// <summary>
     /// 已缓存的消除卡图，按精灵名索引。
     /// 从 Fruit 表 EffectiveDailyChallengePath 末尾文件名反向索引成卡图名。
     /// 例如：Arts/Fruit/DailyChallenge/WP_80001 -> WP_80001。
@@ -244,6 +257,11 @@ public sealed class GameAssetModule
     /// 当前仍在加载中的水果图标路径集合。
     /// </summary>
     private readonly HashSet<string> _loadingFruitAssetPaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 当前仍在加载中的产出物图标路径集合。
+    /// </summary>
+    private readonly HashSet<string> _loadingProduceSpritePaths = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// 当前仍在加载中的每日关卡卡图路径集合。
@@ -326,6 +344,11 @@ public sealed class GameAssetModule
     private int _pendingFruitAssetCount;
 
     /// <summary>
+    /// 当前待完成的产出物图标加载数量。
+    /// </summary>
+    private int _pendingProduceSpriteCount;
+
+    /// <summary>
     /// 当前待完成的每日关卡卡图加载数量。
     /// </summary>
     private int _pendingDailyChallengeCardSpriteCount;
@@ -401,6 +424,11 @@ public sealed class GameAssetModule
     private bool _fruitPreloadRequested;
 
     /// <summary>
+    /// 是否已经发起过产出物图标预加载。
+    /// </summary>
+    private bool _producePreloadRequested;
+
+    /// <summary>
     /// 是否已经发起过每日关卡卡图预加载。
     /// </summary>
     private bool _dailyChallengeCardSpritePreloadRequested;
@@ -474,6 +502,11 @@ public sealed class GameAssetModule
     /// 水果图标预加载是否已经完成。
     /// </summary>
     private bool _fruitPreloadCompleted;
+
+    /// <summary>
+    /// 产出物图标预加载是否已经完成。
+    /// </summary>
+    private bool _producePreloadCompleted;
 
     /// <summary>
     /// 每日关卡卡图预加载是否已经完成。
@@ -607,7 +640,8 @@ public sealed class GameAssetModule
         && _scoreDigitSmallSpritePreloadCompleted
         && _headPortraitPreloadCompleted
         && _headPortraitFramePreloadCompleted
-        && _architectureSpritePreloadCompleted;
+        && _architectureSpritePreloadCompleted
+        && _producePreloadCompleted;
 
     /// <summary>
     /// 当前是否已经出现预加载失败。
@@ -700,6 +734,11 @@ public sealed class GameAssetModule
         if (!_architectureSpritePreloadRequested && GameEntry.DataTables.IsAvailable<ArchitectureDataRow>())
         {
             BeginPreloadArchitectureSprites(GameEntry.DataTables.GetAllDataRows<ArchitectureDataRow>());
+        }
+
+        if (!_producePreloadRequested && GameEntry.DataTables.IsAvailable<PetProduceDataRow>())
+        {
+            BeginPreloadProduceSprites(GameEntry.DataTables.GetAllDataRows<PetProduceDataRow>());
         }
     }
 
@@ -852,6 +891,24 @@ public sealed class GameAssetModule
         }
 
         return _fruitSpritesByCode.TryGetValue(fruitCode, out sprite) && sprite != null;
+    }
+
+    /// <summary>
+    /// 获取产出物图标缓存。
+    /// 命中失败时调用方应自行回退到预制体默认图（产出物图标允许缺失，且不会阻塞主流程）。
+    /// </summary>
+    /// <param name="produceCode">产出物 Code。</param>
+    /// <param name="sprite">命中的图标资源。</param>
+    /// <returns>是否命中缓存。</returns>
+    public bool TryGetProduceSprite(string produceCode, out Sprite sprite)
+    {
+        if (string.IsNullOrWhiteSpace(produceCode))
+        {
+            sprite = null;
+            return false;
+        }
+
+        return _produceSpritesByCode.TryGetValue(produceCode, out sprite) && sprite != null;
     }
 
     /// <summary>
@@ -1438,6 +1495,68 @@ public sealed class GameAssetModule
     }
 
     /// <summary>
+    /// 根据宠物产出表批量预加载产出物图标。
+    /// 设计语义：
+    /// 1. 路径为空的行直接跳过，不发起加载，不计 pending；
+    /// 2. 加载失败 / 资源缺失走静默忽略路径（OnLoadAssetFailure 中 ProduceSprite 分支不调 RegisterFailure）；
+    /// 3. UI 端 TryGetProduceSprite 命中失败回退到预制体默认图，确保拿不到图标不卡进程。
+    /// </summary>
+    /// <param name="rows">宠物产出表行集合。</param>
+    private void BeginPreloadProduceSprites(PetProduceDataRow[] rows)
+    {
+        _producePreloadRequested = true;
+        _producePreloadCompleted = false;
+
+        if (rows == null || rows.Length == 0)
+        {
+            // 表为空属于预期情况（数据未配置 / 全部行 IconPath 为空）— 直接判完成，不阻塞 IsReady。
+            UpdatePreloadCompletionState();
+            NotifyPreloadStateChanged();
+            return;
+        }
+
+        for (int i = 0; i < rows.Length; i++)
+        {
+            PetProduceDataRow row = rows[i];
+            if (row == null)
+            {
+                continue;
+            }
+
+            StartLoadProduceSprite(row);
+        }
+
+        UpdatePreloadCompletionState();
+        NotifyPreloadStateChanged();
+    }
+
+    /// <summary>
+    /// 为单条产出物表记录启动图标加载。
+    /// 路径为空、已缓存、已在加载中均直接返回，不写错误日志。
+    /// </summary>
+    /// <param name="row">产出物表行。</param>
+    private void StartLoadProduceSprite(PetProduceDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.Code) || string.IsNullOrWhiteSpace(row.IconPath))
+        {
+            // 【关键】允许 IconPath 为空：策划尚未配图时不应触发任何错误，UI 自动回退默认图。
+            return;
+        }
+
+        if (_produceSpritesByCode.ContainsKey(row.Code) || _loadingProduceSpritePaths.Contains(row.IconPath))
+        {
+            return;
+        }
+
+        if (!TryLoadAsset(row.IconPath, typeof(Sprite), PreloadAssetKind.ProduceSprite, row.Code))
+        {
+            // ⚠️ 注意：此处不调 RegisterFailure，与 OnLoadAssetFailure 中 ProduceSprite 分支保持一致 —
+            // 产出物图标缺失被设计为可降级错误，不应污染 _hasPreloadFailure。
+            Log.Warning("预加载产出物图标失败（已忽略），Code='{0}'，Path='{1}'。", row.Code, row.IconPath);
+        }
+    }
+
+    /// <summary>
     /// 根据水果表批量预加载每日关卡卡图精灵。
     /// 使用 EffectiveDailyChallengePath 作为资源路径，与 IconPath 完全独立。
     /// 当 DailyChallengePath 为空时，EffectiveDailyChallengePath 回退到 IconPath，
@@ -1455,22 +1574,17 @@ public sealed class GameAssetModule
             return;
         }
 
-        // 预加载数据表中默认解锁的水果卡图，以及运行时已解锁（云存档恢复）的水果卡图。
-        // 云存档恢复发生在 CloudSave.IsReady 之后，而 BeginPreloadDailyChallengeCardSprites
-        // 可能在云存档恢复之前就被 LoadProcedure 触发（数据表就绪即触发）。
-        // 因此这里同时检查 GameEntry.Fruits.IsFruitUnlocked，覆盖运行时解锁的水果。
-        // 若云存档尚未恢复，IsFruitUnlocked 返回 false，后续由 SupplementDailyChallengeCardSpritesAfterCloudRestore 补齐。
+        // 早期路径仅预加载“数据表中默认解锁”的水果卡图。
+        // 触发时机：LoadProcedure 在 FruitDataRow 注册成功后即同步派发 LoadStateChanged，
+        // 此时云存档必然未恢复，PlayerRuntimeModule 的依赖表也可能尚未全部注册完成。
+        // 调用 GameEntry.Fruits.IsFruitUnlocked 在该时刻必为 false（运行时解锁集合还是空的），
+        // 同时会触发 PlayerRuntimeModule.EnsureInitialized 在依赖未就绪时的 false 返回。
+        // 因此这里只看 row.IsUnlocked，运行时解锁的水果卡图统一交由：
+        // CloudSaveModule.ApplyPlayerCloudSaveSnapshot → SupplementDailyChallengeCardSpritesAfterCloudRestore 补齐。
         for (int i = 0; i < rows.Length; i++)
         {
             FruitDataRow row = rows[i];
-            if (row == null)
-            {
-                continue;
-            }
-
-            bool isUnlocked = row.IsUnlocked
-                || (GameEntry.Fruits != null && GameEntry.Fruits.IsFruitUnlocked(row.Code));
-            if (!isUnlocked)
+            if (row == null || !row.IsUnlocked)
             {
                 continue;
             }
@@ -1702,6 +1816,11 @@ public sealed class GameAssetModule
                 _loadingDailyChallengeCardSpritePaths.Add(assetPath);
                 _pendingDailyChallengeCardSpriteCount++;
                 break;
+
+            case PreloadAssetKind.ProduceSprite:
+                _loadingProduceSpritePaths.Add(assetPath);
+                _pendingProduceSpriteCount++;
+                break;
         }
 
         resourceManager.LoadAsset(assetPath, assetType, _loadAssetCallbacks, loadInfo);
@@ -1793,6 +1912,12 @@ public sealed class GameAssetModule
                 _loadingDailyChallengeCardSpritePaths.Remove(loadInfo.AssetPath);
                 _pendingDailyChallengeCardSpriteCount = Mathf.Max(0, _pendingDailyChallengeCardSpriteCount - 1);
                 HandleDailyChallengeCardSpriteLoaded(loadInfo.ContextCode, loadInfo.AssetPath, asset as Sprite);
+                break;
+
+            case PreloadAssetKind.ProduceSprite:
+                _loadingProduceSpritePaths.Remove(loadInfo.AssetPath);
+                _pendingProduceSpriteCount = Mathf.Max(0, _pendingProduceSpriteCount - 1);
+                HandleProduceSpriteLoaded(loadInfo.ContextCode, loadInfo.AssetPath, asset as Sprite);
                 break;
 
             case PreloadAssetKind.ScoreDigitSmallSprite:
@@ -1928,6 +2053,18 @@ public sealed class GameAssetModule
             RegisterFailure(Utility.Text.Format(
                 "每日关卡卡图预加载失败，Code='{0}'，Path='{1}'，Status='{2}'，Error='{3}'。",
                 loadInfo.ContextCode, loadInfo.AssetPath, status, errorMessage));
+        }
+        else if (loadInfo.AssetKind == PreloadAssetKind.ProduceSprite)
+        {
+            // 【设计语义】产出物图标资源缺失/加载失败属于“可降级”错误：
+            // 1. 不调用 RegisterFailure，避免 _hasPreloadFailure 被噪声污染；
+            // 2. 仅做 pending 计数回收 + 一条 Warning 便于排查；
+            // 3. 不写入 _produceSpritesByCode，UI 端 TryGetProduceSprite 命中失败会自动回退到预制体默认图标。
+            _loadingProduceSpritePaths.Remove(loadInfo.AssetPath);
+            _pendingProduceSpriteCount = Mathf.Max(0, _pendingProduceSpriteCount - 1);
+            Log.Warning(
+                "产出物图标加载失败（已忽略，不阻塞主流程），Code='{0}'，Path='{1}'，Status='{2}'，Error='{3}'。",
+                loadInfo.ContextCode, loadInfo.AssetPath, status, errorMessage);
         }
 
         UpdatePreloadCompletionState();
@@ -2133,6 +2270,25 @@ public sealed class GameAssetModule
         }
 
         _fruitSpritesByCode[fruitCode] = sprite;
+    }
+
+    /// <summary>
+    /// 处理产出物图标加载完成。
+    /// 资源缺失或类型不匹配时静默忽略，不写入缓存，UI 端将自动回退到预制体默认图。
+    /// </summary>
+    /// <param name="produceCode">产出物 Code。</param>
+    /// <param name="iconPath">产出物图标资源路径。</param>
+    /// <param name="sprite">命中的图标资源。</param>
+    private void HandleProduceSpriteLoaded(string produceCode, string iconPath, Sprite sprite)
+    {
+        if (string.IsNullOrWhiteSpace(produceCode) || sprite == null)
+        {
+            // 仅 Warning 不 RegisterFailure：产出物图标按设计可缺失，UI 自动回退默认图。
+            Log.Warning("产出物图标加载完成但被忽略（已回退默认图），Code='{0}'，Path='{1}'。", produceCode, iconPath);
+            return;
+        }
+
+        _produceSpritesByCode[produceCode] = sprite;
     }
 
     /// <summary>
@@ -2499,6 +2655,11 @@ public sealed class GameAssetModule
         if (_dailyChallengeCardSpritePreloadRequested && _pendingDailyChallengeCardSpriteCount <= 0)
         {
             _dailyChallengeCardSpritePreloadCompleted = true;
+        }
+
+        if (_producePreloadRequested && _pendingProduceSpriteCount <= 0)
+        {
+            _producePreloadCompleted = true;
         }
     }
 

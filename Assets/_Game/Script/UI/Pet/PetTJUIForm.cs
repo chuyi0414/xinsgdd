@@ -8,376 +8,246 @@ using UnityEngine.UI;
 using UnityGameFramework.Runtime;
 
 /// <summary>
-/// 宠物图鉴界面。
-/// 负责展示宠物品质分页、宠物列表、详情面板以及当前解锁状态。
-/// 顶层预制体引用全部改为 Inspector 手动拖入，不再依赖全局路径查找。
+/// 宠物图鉴 / 产出物图鉴双模式界面。
+/// 进入界面默认显示全部宠物（按品质升序、再按 Id 升序）；顶部 GoSelect / GoNoSelect 两个槽位互换两枚 tab 按钮以切换模式。
+/// 顶层节点全部走 Inspector 拖入；不再依赖 transform.Find 全路径查找，避免 prefab 结构调整后悄悄走兜底逻辑。
 /// </summary>
 public sealed class PetTJUIForm : UIFormLogic
 {
     /// <summary>
-    /// 未解锁宠物的显示颜色。
-    /// 这里直接压成纯黑色，用于表达“图鉴未点亮”。
+    /// 未解锁宠物 Spine 染色：纯黑色剪影，告知玩家"图鉴未点亮"。
     /// </summary>
     private static readonly Color32 LockedPetColor = new Color32(0, 0, 0, 255);
 
     /// <summary>
-    /// 已解锁宠物的显示颜色。
-    /// 使用纯白色，让角色以原始贴图颜色输出。
+    /// 已解锁宠物 Spine 染色：纯白色，让贴图按原色输出。
     /// </summary>
     private static readonly Color32 UnlockedPetColor = new Color32(255, 255, 255, 255);
 
     /// <summary>
-    /// 品质分页的固定顺序。
-    /// 数组索引会和品质按钮缓存、点击回调索引严格对应。
+    /// 未解锁产出物图标染色：纯黑色剪影，与宠物 Spine 同口径。
+    /// 注意：作用在 UnityEngine.UI.Image.color 上（不是 Color32），UI 系统按线性 alpha 混合，黑色剪影最干净。
     /// </summary>
-    private static readonly QualityType[] QualityOrders = { QualityType.Normal, QualityType.Rare, QualityType.Epic, QualityType.Legendary, QualityType.Mythic };
+    private static readonly Color LockedProduceColor = new Color(0f, 0f, 0f, 1f);
 
     /// <summary>
-    /// 详情面板出现条件文本格式。
-    /// 参数来自 PetDataRow.RequiredStars，表示该宠物进入孵化候选池需要拥有的星星数。
+    /// 已解锁产出物图标染色：纯白色，让 sprite 按原色输出。
     /// </summary>
-    private const string DetailOccurrenceConditionsFormat = "出现条件:拥有{0}星星";
+    private static readonly Color UnlockedProduceColor = Color.white;
+
+    /// <summary>
+    /// 未选中态 Tab 按钮的染色（中灰）。
+    /// 给玩家"这个按钮当前不在选中位、可以点击切换"的视觉提示。
+    /// </summary>
+    private static readonly Color UnselectedTabColor = new Color(0.5f, 0.5f, 0.5f, 1f);
+
+    /// <summary>
+    /// 选中态 Tab 按钮的染色（纯白），表示当前位于选中槽位。
+    /// </summary>
+    private static readonly Color SelectedTabColor = Color.white;
+
+    /// <summary>
+    /// 详情面板出现条件文本格式（宠物详情）。
+    /// 参数：PetDataRow.RequiredStars。
+    /// </summary>
+    private const string PetDetailOccurrenceFormat = "拥有{0}星星";
+
+    /// <summary>
+    /// 产出物详情：金币价值文本格式。
+    /// </summary>
+    private const string ProduceDetailValueFormat = "价值：{0} 金币";
+
+    /// <summary>
+    /// 产出物详情：获得星星文本格式（0 时整段隐藏，不进入此格式化）。
+    /// </summary>
+    private const string ProduceDetailStarsFormat = "获得 {0} 星星";
+
+    /// <summary>
+    /// 图鉴的两种模式：宠物图鉴 / 产出物图鉴。
+    /// </summary>
+    private enum CatalogMode
+    {
+        /// <summary>宠物图鉴模式（默认）。</summary>
+        Pet = 0,
+
+        /// <summary>产出物图鉴模式。</summary>
+        Produce = 1,
+    }
 
     /// <summary>
     /// 单个宠物列表条目的运行时缓存。
     /// </summary>
     private sealed class PetItemEntry
     {
-        /// <summary>
-        /// 条目根节点。
-        /// 用于控制显隐以及作为按钮挂载对象。
-        /// </summary>
+        /// <summary>条目根节点。</summary>
         public GameObject Root;
 
-        /// <summary>
-        /// 条目按钮。
-        /// 点击后会打开或关闭对应宠物的详情面板。
-        /// </summary>
+        /// <summary>条目按钮；未解锁宠物条目把 interactable 关掉来阻止打开详情。</summary>
         public Button Button;
 
-        /// <summary>
-        /// 条目名称文本。
-        /// 用于显示当前宠物名称。
-        /// </summary>
+        /// <summary>条目名称文本。</summary>
         public TextMeshProUGUI TxtName;
 
-        /// <summary>
-        /// 宠物 Spine 图像挂点。
-        /// 运行时创建的 SkeletonGraphic 会挂到这里。
-        /// </summary>
+        /// <summary>宠物 Spine 图像挂点。</summary>
         public Transform PetRoot;
 
-        /// <summary>
-        /// 条目复用的 SkeletonGraphic。
-        /// 首次创建后会一直复用，避免重复生成 UI 角色。
-        /// </summary>
+        /// <summary>条目复用的 SkeletonGraphic（首次创建后一直复用）。</summary>
         public SkeletonGraphic PetGraphic;
 
-        /// <summary>
-        /// 当前条目绑定的数据行。
-        /// 点击条目时直接使用这份缓存打开详情。
-        /// </summary>
+        /// <summary>当前条目绑定的数据行。</summary>
         public PetDataRow DataRow;
     }
 
     /// <summary>
-    /// 单个品质页签的运行时缓存。
+    /// 单个产出物列表条目的运行时缓存。
     /// </summary>
-    private sealed class QualityTabView
+    private sealed class ProduceItemEntry
     {
-        /// <summary>
-        /// 当前页签对应的宠物品质。
-        /// </summary>
-        public QualityType Quality;
+        /// <summary>条目根节点。</summary>
+        public GameObject Root;
 
-        /// <summary>
-        /// 页签按钮本体。
-        /// 用户在 Inspector 中手动拖入。
-        /// </summary>
+        /// <summary>条目按钮；未解锁产出物条目通过 interactable=false 阻止打开详情。</summary>
         public Button Button;
 
-        /// <summary>
-        /// 页签背景图。
-        /// 用于在选中态和未选中态之间切换 sprite。
-        /// </summary>
-        public Image Background;
+        /// <summary>条目名称文本。</summary>
+        public TextMeshProUGUI TxtName;
 
-        /// <summary>
-        /// 页签文字组件。
-        /// 用于在选中态和未选中态之间切换颜色。
-        /// </summary>
-        public TextMeshProUGUI Text;
+        /// <summary>条目图标 Image（直接显示 IconPath sprite，未解锁时染黑色剪影）。</summary>
+        public Image Icon;
+
+        /// <summary>条目预制体里 Image 自带的默认 sprite，作为缓存未命中时的回退图。</summary>
+        public Sprite DefaultIconSprite;
+
+        /// <summary>当前条目绑定的数据行。</summary>
+        public PetProduceDataRow DataRow;
     }
 
     /// <summary>
-    /// 详情面板的运行时缓存。
-    /// 顶层组件由 Inspector 手拖，Spine 图像仍在运行时创建并复用。
+    /// 宠物详情面板的运行时缓存。
+    /// 顶层组件由 Inspector 手拖；详情区 Spine 在运行时创建并复用。
     /// </summary>
     private sealed class PetDetailView
     {
-        /// <summary>
-        /// 详情面板根节点。
-        /// </summary>
         public GameObject Root;
-
-        /// <summary>
-        /// 详情面板关闭按钮。
-        /// </summary>
         public Button CloseButton;
-
-        /// <summary>
-        /// 宠物名称文本。
-        /// </summary>
         public TextMeshProUGUI TxtName;
-
-        /// <summary>
-        /// 宠物品质文本。
-        /// </summary>
         public TextMeshProUGUI TxtQuality;
-
-        /// <summary>
-        /// 宠物属性文本。
-        /// </summary>
         public TextMeshProUGUI TxtProperty;
-
-        /// <summary>
-        /// 宠物介绍文本。
-        /// </summary>
         public TextMeshProUGUI TxtIntroduce;
-
-        /// <summary>
-        /// 宠物出现条件文本。
-        /// </summary>
         public TextMeshProUGUI TxtOccurrenceConditions;
-
-        /// <summary>
-        /// 详情宠物 Spine 图像挂点。
-        /// </summary>
         public Transform PetRoot;
-
-        /// <summary>
-        /// 详情面板复用的 SkeletonGraphic。
-        /// </summary>
         public SkeletonGraphic PetGraphic;
-
-        /// <summary>
-        /// 当前详情面板正在展示的数据行。
-        /// 再次点击同一只宠物时，用它判断是否反向关闭详情。
-        /// </summary>
         public PetDataRow CurrentDataRow;
     }
 
     /// <summary>
-    /// 所有已创建的列表条目缓存。
-    /// 列表首次构建后会一直复用这一批条目对象。
+    /// 产出物详情面板的运行时缓存。
     /// </summary>
-    private readonly List<PetItemEntry> _entries = new List<PetItemEntry>(16);
+    private sealed class ProduceDetailView
+    {
+        public GameObject Root;
+        public Button CloseButton;
+        public TextMeshProUGUI TxtName;
+        public TextMeshProUGUI TxtQuality;
+        public TextMeshProUGUI TxtProperty;
+        public TextMeshProUGUI TxtIntroduce;
+        public TextMeshProUGUI TxtOccurrenceConditions;
+        public Image Icon;
+        public Sprite DefaultIconSprite;
+        public bool HasCachedDefaultIcon;
+        public PetProduceDataRow CurrentDataRow;
+    }
 
     /// <summary>
-    /// 当前筛选品质下可见的数据行缓存。
-    /// 切换品质时先重建这个列表，再把前 N 个条目绑定到这些数据行。
+    /// 单只宠物的两档产出物配置槽位。
+    /// 把 PetProduce 表里同一 PetId 的初级 / 高级两行打平到详情面板的 Output1 / Output2。
     /// </summary>
-    private readonly List<PetDataRow> _visibleRows = new List<PetDataRow>(16);
+    private struct PetProduceSlot
+    {
+        public PetProduceDataRow Primary;
+        public PetProduceDataRow Advanced;
+    }
+
+    private readonly List<PetItemEntry> _petEntries = new List<PetItemEntry>(32);
+    private readonly List<ProduceItemEntry> _produceEntries = new List<ProduceItemEntry>(64);
+    private PetDataRow[] _allPetRows = Array.Empty<PetDataRow>();
+    private PetProduceDataRow[] _allProduceRows = Array.Empty<PetProduceDataRow>();
 
     /// <summary>
-    /// 五个品质页签的运行时缓存数组。
-    /// 数组索引严格对应 QualityOrders 的顺序。
+    /// 宠物 Id → 该宠物两档产出物配置行的缓存（Pet 详情面板使用）。
     /// </summary>
-    private readonly QualityTabView[] _qualityTabs = new QualityTabView[5];
+    private readonly Dictionary<int, PetProduceSlot> _produceSlotsByPetId = new Dictionary<int, PetProduceSlot>(32);
 
     /// <summary>
-    /// 列表 Content 容器。
-    /// 用户需要在 Inspector 中把 Scroll View/Viewport/Content 拖进来。
+    /// 宠物 Id → PetDataRow 缓存（产出物详情用于读父宠物 QualityType）。
     /// </summary>
-    [SerializeField]
-    private RectTransform _content;
+    private readonly Dictionary<int, PetDataRow> _petRowsById = new Dictionary<int, PetDataRow>(32);
 
-    /// <summary>
-    /// 列表条目模板。
-    /// 用户需要在 Inspector 中把 Content 下的 GoPet 模板拖进来。
-    /// </summary>
-    [SerializeField]
-    private Transform _goPetTemplate;
+    [Header("通用引用")]
+    [SerializeField] private RectTransform _content;
+    [SerializeField] private GameObject _goBackgroundCloseTarget;
 
-    /// <summary>
-    /// 背景关闭点击区域。
-    /// 用户需要在 Inspector 中把 BJ 节点拖进来。
-    /// </summary>
-    [SerializeField]
-    private GameObject _goBackgroundCloseTarget;
+    [Header("宠物条目 / 详情")]
+    [SerializeField] private Transform _goPetTemplate;
+    [SerializeField] private GameObject _goDetailRoot;
+    [SerializeField] private Button _btnDetailClose;
+    [SerializeField] private TextMeshProUGUI _txtDetailName;
+    [SerializeField] private TextMeshProUGUI _txtDetailQuality;
+    [SerializeField] private TextMeshProUGUI _txtDetailProperty;
+    [SerializeField] private TextMeshProUGUI _txtDetailIntroduce;
+    [SerializeField] private TextMeshProUGUI _txtDetailOccurrenceConditions;
+    [SerializeField] private Transform _trDetailPetRoot;
+    [SerializeField] private Image _imgDetailOutput1;
+    [SerializeField] private Image _imgDetailOutput2;
 
-    /// <summary>
-    /// 普通品质页签按钮。
-    /// 用户需要在 Inspector 中手动拖入 Quality/Button。
-    /// </summary>
-    [SerializeField]
-    private Button _btnQualityNormal;
+    [Header("产出物条目 / 详情")]
+    [SerializeField] private Transform _goProduceTemplate;
+    [SerializeField] private GameObject _goProduceDetailRoot;
+    [SerializeField] private Button _btnProduceDetailClose;
+    [SerializeField] private TextMeshProUGUI _txtProduceDetailName;
+    [SerializeField] private TextMeshProUGUI _txtProduceDetailQuality;
+    [SerializeField] private TextMeshProUGUI _txtProduceDetailProperty;
+    [SerializeField] private TextMeshProUGUI _txtProduceDetailIntroduce;
+    [SerializeField] private TextMeshProUGUI _txtProduceDetailOccurrenceConditions;
+    [SerializeField] private Image _imgProduceDetailIcon;
 
-    /// <summary>
-    /// 稀有品质页签按钮。
-    /// 用户需要在 Inspector 中手动拖入 Quality/Button (1)。
-    /// </summary>
-    [SerializeField]
-    private Button _btnQualityRare;
+    [Header("Tab 切换")]
+    [SerializeField] private RectTransform _goSelectParent;
+    [SerializeField] private RectTransform _goNoSelectParent;
+    [SerializeField] private Button _btnPetTab;
+    [SerializeField] private Button _btnProduceTab;
 
-    /// <summary>
-    /// 史诗品质页签按钮。
-    /// 用户需要在 Inspector 中手动拖入 Quality/Button (2)。
-    /// </summary>
-    [SerializeField]
-    private Button _btnQualityEpic;
-
-    /// <summary>
-    /// 传说品质页签按钮。
-    /// 用户需要在 Inspector 中手动拖入 Quality/Button (3)。
-    /// </summary>
-    [SerializeField]
-    private Button _btnQualityLegendary;
-
-    /// <summary>
-    /// 神话品质页签按钮。
-    /// 用户需要在 Inspector 中手动拖入 Quality/Button (4)。
-    /// </summary>
-    [SerializeField]
-    private Button _btnQualityMythic;
-
-    /// <summary>
-    /// 详情面板根节点。
-    /// 用户需要在 Inspector 中把 GoPetDetailed 拖进来。
-    /// </summary>
-    [SerializeField]
-    private GameObject _goDetailRoot;
-
-    /// <summary>
-    /// 详情面板关闭按钮。
-    /// 用户需要在 Inspector 中把 GoPetDetailed 上的 Button 组件拖进来。
-    /// </summary>
-    [SerializeField]
-    private Button _btnDetailClose;
-
-    /// <summary>
-    /// 详情面板宠物名称文本。
-    /// 用户需要在 Inspector 中把 PetDetailed/TxtName 拖进来。
-    /// </summary>
-    [SerializeField]
-    private TextMeshProUGUI _txtDetailName;
-
-    /// <summary>
-    /// 详情面板宠物品质文本。
-    /// 用户需要在 Inspector 中把 PetDetailed/TxtQuality 拖进来。
-    /// </summary>
-    [SerializeField]
-    private TextMeshProUGUI _txtDetailQuality;
-
-    /// <summary>
-    /// 详情面板宠物属性文本。
-    /// 用户需要在 Inspector 中把 PetDetailed/TxtProperty 拖进来。
-    /// </summary>
-    [SerializeField]
-    private TextMeshProUGUI _txtDetailProperty;
-
-    /// <summary>
-    /// 详情面板宠物介绍文本。
-    /// 用户需要在 Inspector 中把 PetDetailed/TxtIntroduce 拖进来。
-    /// </summary>
-    [SerializeField]
-    private TextMeshProUGUI _txtDetailIntroduce;
-
-    /// <summary>
-    /// 详情面板宠物出现条件文本。
-    /// 用户需要在 Inspector 中把 PetDetailed/TxtOccurrenceConditions 拖进来。
-    /// </summary>
-    [SerializeField]
-    private TextMeshProUGUI _txtDetailOccurrenceConditions;
-
-    /// <summary>
-    /// 详情面板宠物 Spine 挂点。
-    /// 用户需要在 Inspector 中把 PetDetailed/Pet 拖进来。
-    /// </summary>
-    [SerializeField]
-    private Transform _trDetailPetRoot;
-
-    /// <summary>
-    /// 背景关闭按钮缓存。
-    /// 来自 _goBackgroundCloseTarget 上的 Button 组件，没有就运行时补一个。
-    /// </summary>
     private Button _btnBackgroundClose;
-
-    /// <summary>
-    /// 详情面板缓存。
-    /// 用于统一保存详情区 GameObject、文字组件以及详情 Spine 图像。
-    /// </summary>
     private readonly PetDetailView _detailView = new PetDetailView();
+    private readonly ProduceDetailView _produceDetailView = new ProduceDetailView();
+    private CatalogMode _currentMode = CatalogMode.Pet;
 
     /// <summary>
-    /// 所有宠物数据行缓存。
-    /// 列表首次构建时从数据表取出并排序，后续只读不重复取表。
-    /// </summary>
-    private PetDataRow[] _allRows = Array.Empty<PetDataRow>();
-
-    /// <summary>
-    /// 当前选中的品质分页。
-    /// 打开界面时默认重置为普通品质。
-    /// </summary>
-    private QualityType _currentQuality = QualityType.Normal;
-
-    /// <summary>
-    /// 已经由本界面发起过按需请求的 UI SkeletonData 路径集合。
-    /// 初始为空；关闭界面时清空，避免下次打开时因为上一次失败状态永久阻止重新请求。
+    /// 已经由本界面发起过按需请求的 UI SkeletonData 路径集合（避免对同一资源重复发射加载请求）。
     /// </summary>
     private readonly HashSet<string> _requestedUiSkeletonDataPaths = new HashSet<string>(StringComparer.Ordinal);
 
-    /// <summary>
-    /// 选中态页签背景图。
-    /// 首次从已绑定按钮里推断并缓存。
-    /// </summary>
-    private Sprite _selectedTabSprite;
+    /// <summary>Output1 默认 sprite 缓存。</summary>
+    private Sprite _detailOutput1DefaultSprite;
 
-    /// <summary>
-    /// 未选中态页签背景图。
-    /// 首次从已绑定按钮里推断并缓存。
-    /// </summary>
-    private Sprite _unselectedTabSprite;
+    /// <summary>Output2 默认 sprite 缓存。</summary>
+    private Sprite _detailOutput2DefaultSprite;
 
-    /// <summary>
-    /// 是否已经缓存到选中态文字颜色。
-    /// </summary>
-    private bool _hasSelectedTabTextColor;
+    /// <summary>Output1 默认 sprite 是否已快照。</summary>
+    private bool _hasCachedOutput1DefaultSprite;
 
-    /// <summary>
-    /// 是否已经缓存到未选中态文字颜色。
-    /// </summary>
-    private bool _hasUnselectedTabTextColor;
+    /// <summary>Output2 默认 sprite 是否已快照。</summary>
+    private bool _hasCachedOutput2DefaultSprite;
 
-    /// <summary>
-    /// 列表是否已经构建完成。
-    /// 首次打开构建一次，后续只刷新显示。
-    /// </summary>
     private bool _isListBuilt;
-
-    /// <summary>
-    /// 按钮事件是否已经绑定。
-    /// 防止界面重复打开时把同一个监听重复 Add 多次。
-    /// </summary>
     private bool _eventsBound;
-
-    /// <summary>
-    /// 是否已经输出过“缺少序列化引用”的警告。
-    /// 缺引用时只打一轮日志，避免同一次打开刷屏。
-    /// </summary>
     private bool _hasLoggedMissingReferenceWarning;
-
-    /// <summary>
-    /// 是否已经监听宠物 SkeletonData 加载状态事件。
-    /// 初始为 false；只有图鉴发现 UI SkeletonData 缺缓存时才临时订阅。
-    /// </summary>
     private bool _isListeningPetSkeletonDataStateChanged;
 
     /// <summary>
-    /// 初始化界面。
-    /// 这里只做显式引用缓存和一次性事件绑定，不做业务数据刷新。
+    /// 初始化时只做引用缓存与一次性事件绑定，不做业务数据刷新。
     /// </summary>
-    /// <param name="userData">打开窗体时传入的自定义参数。</param>
+    /// <param name="userData">用户自定义数据。</param>
     protected override void OnInit(object userData)
     {
         base.OnInit(userData);
@@ -390,9 +260,9 @@ public sealed class PetTJUIForm : UIFormLogic
     }
 
     /// <summary>
-    /// 打开界面时刷新当前品质、页签状态、列表内容以及详情面板显隐。
+    /// 打开界面：首次构建列表，进入 Pet 模式，关闭两个详情面板。
     /// </summary>
-    /// <param name="userData">打开窗体时传入的自定义参数。</param>
+    /// <param name="userData">用户自定义数据。</param>
     protected override void OnOpen(object userData)
     {
         base.OnOpen(userData);
@@ -402,16 +272,14 @@ public sealed class PetTJUIForm : UIFormLogic
         }
 
         BindEventsOnce();
-        BuildList();
-        _currentQuality = QualityType.Normal;
-        RefreshTabs();
-        RefreshList();
-        HideDetail();
+        BuildLists();
+        SwitchMode(CatalogMode.Pet, forceRefresh: true);
+        HidePetDetail();
+        HideProduceDetail();
     }
 
     /// <summary>
-    /// 界面关闭时释放宠物 SkeletonData 按需加载事件监听。
-    /// 列表和详情里的 SkeletonGraphic 对象保留复用，不在这里销毁。
+    /// 关闭时释放宠物 SkeletonData 加载状态监听；不销毁列表条目复用对象。
     /// </summary>
     /// <param name="isShutdown">是否为关闭流程。</param>
     /// <param name="userData">用户自定义数据。</param>
@@ -422,11 +290,17 @@ public sealed class PetTJUIForm : UIFormLogic
         base.OnClose(isShutdown, userData);
     }
 
+    /// <summary>对象销毁兜底：异常销毁时也不残留资源事件委托。</summary>
+    private void OnDestroy()
+    {
+        ReleasePetSkeletonDataStateSubscription();
+    }
+
+    #region 引用就绪校验
+
     /// <summary>
-    /// 确保所有 Inspector 手拖字段都已经可用，并把它们写入运行时缓存。
-    /// 字段未绑定时直接停止后续流程，不再回退到 transform.Find 的旧方案。
+    /// 确保所有 Inspector 手拖字段就绪并写入运行时缓存；缺引用时一次性打印警告并停流程。
     /// </summary>
-    /// <returns>是否已具备安全打开界面所需的全部引用。</returns>
     private bool EnsureSerializedReferencesReady()
     {
         CacheReferencesFromSerializedFields();
@@ -446,8 +320,7 @@ public sealed class PetTJUIForm : UIFormLogic
     }
 
     /// <summary>
-    /// 把 Inspector 手拖字段写入运行时缓存。
-    /// 这里不做全局节点路径查找，只允许在“已经手拖进来的节点内部”取局部子组件。
+    /// 把序列化字段映射进运行时 PetDetailView / ProduceDetailView 缓存里。
     /// </summary>
     private void CacheReferencesFromSerializedFields()
     {
@@ -465,68 +338,24 @@ public sealed class PetTJUIForm : UIFormLogic
         _detailView.TxtOccurrenceConditions = _txtDetailOccurrenceConditions;
         _detailView.PetRoot = _trDetailPetRoot;
 
-        CacheQualityTab(0, _btnQualityNormal, QualityOrders[0]);
-        CacheQualityTab(1, _btnQualityRare, QualityOrders[1]);
-        CacheQualityTab(2, _btnQualityEpic, QualityOrders[2]);
-        CacheQualityTab(3, _btnQualityLegendary, QualityOrders[3]);
-        CacheQualityTab(4, _btnQualityMythic, QualityOrders[4]);
-        CacheTabVisualState();
+        _produceDetailView.Root = _goProduceDetailRoot;
+        _produceDetailView.CloseButton = _btnProduceDetailClose;
+        _produceDetailView.TxtName = _txtProduceDetailName;
+        _produceDetailView.TxtQuality = _txtProduceDetailQuality;
+        _produceDetailView.TxtProperty = _txtProduceDetailProperty;
+        _produceDetailView.TxtIntroduce = _txtProduceDetailIntroduce;
+        _produceDetailView.TxtOccurrenceConditions = _txtProduceDetailOccurrenceConditions;
+        _produceDetailView.Icon = _imgProduceDetailIcon;
     }
 
-    /// <summary>
-    /// 把单个品质按钮缓存到指定页签槽位里。
-    /// Button 本体由用户手拖，背景图和文本组件再从按钮节点内部做局部查找。
-    /// </summary>
-    /// <param name="index">品质页签数组索引。</param>
-    /// <param name="button">用户手拖进来的按钮引用。</param>
-    /// <param name="quality">当前按钮对应的品质枚举。</param>
-    private void CacheQualityTab(int index, Button button, QualityType quality)
-    {
-        if (index < 0 || index >= _qualityTabs.Length)
-        {
-            return;
-        }
-
-        QualityTabView tab = _qualityTabs[index] ?? (_qualityTabs[index] = new QualityTabView());
-        tab.Quality = quality;
-        tab.Button = button;
-        tab.Background = null;
-        tab.Text = null;
-
-        if (button == null)
-        {
-            return;
-        }
-
-        Transform background = button.transform.Find("ImgBtn");
-        if (background != null)
-        {
-            tab.Background = background.GetComponent<Image>();
-        }
-
-        Transform text = button.transform.Find("Text (TMP)");
-        if (text != null)
-        {
-            tab.Text = text.GetComponent<TextMeshProUGUI>();
-        }
-    }
-
-    /// <summary>
-    /// 判断所有打开界面必需的手拖字段是否齐全。
-    /// 这里故意严格校验，防止旧 prefab 没拖字段时还悄悄依赖运行时兜底逻辑。
-    /// </summary>
-    /// <returns>所有必需字段都存在时返回 true。</returns>
+    /// <summary>判断所有打开界面必需的手拖字段是否齐全。</summary>
     private bool HasAllRequiredSerializedReferences()
     {
         return _content != null
             && _goPetTemplate != null
+            && _goProduceTemplate != null
             && _goBackgroundCloseTarget != null
             && _btnBackgroundClose != null
-            && _btnQualityNormal != null
-            && _btnQualityRare != null
-            && _btnQualityEpic != null
-            && _btnQualityLegendary != null
-            && _btnQualityMythic != null
             && _goDetailRoot != null
             && _btnDetailClose != null
             && _txtDetailName != null
@@ -534,147 +363,56 @@ public sealed class PetTJUIForm : UIFormLogic
             && _txtDetailProperty != null
             && _txtDetailIntroduce != null
             && _txtDetailOccurrenceConditions != null
-            && _trDetailPetRoot != null;
+            && _trDetailPetRoot != null
+            && _goProduceDetailRoot != null
+            && _btnProduceDetailClose != null
+            && _txtProduceDetailName != null
+            && _txtProduceDetailQuality != null
+            && _txtProduceDetailProperty != null
+            && _txtProduceDetailIntroduce != null
+            && _txtProduceDetailOccurrenceConditions != null
+            && _imgProduceDetailIcon != null
+            && _goSelectParent != null
+            && _goNoSelectParent != null
+            && _btnPetTab != null
+            && _btnProduceTab != null;
     }
 
-    /// <summary>
-    /// 输出缺少绑定时的中文警告。
-    /// 这些日志会直接告诉使用者应该把 prefab 上哪个节点拖到哪个字段里。
-    /// </summary>
+    /// <summary>缺哪个就单独提示哪个，避免一锅端式的"少了字段"。</summary>
     private void LogMissingSerializedReferenceWarnings()
     {
-        if (_content == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _content 引用，请在 Inspector 中把 Scroll View/Viewport/Content 拖入。");
-        }
-
-        if (_goPetTemplate == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _goPetTemplate 引用，请在 Inspector 中把 Content/GoPet 模板拖入。");
-        }
-
-        if (_goBackgroundCloseTarget == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _goBackgroundCloseTarget 引用，请在 Inspector 中把 BJ 节点拖入。");
-        }
-
-        if (_btnQualityNormal == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _btnQualityNormal 引用，请在 Inspector 中把 Quality/Button 拖入。");
-        }
-
-        if (_btnQualityRare == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _btnQualityRare 引用，请在 Inspector 中把 Quality/Button (1) 拖入。");
-        }
-
-        if (_btnQualityEpic == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _btnQualityEpic 引用，请在 Inspector 中把 Quality/Button (2) 拖入。");
-        }
-
-        if (_btnQualityLegendary == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _btnQualityLegendary 引用，请在 Inspector 中把 Quality/Button (3) 拖入。");
-        }
-
-        if (_btnQualityMythic == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _btnQualityMythic 引用，请在 Inspector 中把 Quality/Button (4) 拖入。");
-        }
-
-        if (_goDetailRoot == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _goDetailRoot 引用，请在 Inspector 中把 GoPetDetailed 拖入。");
-        }
-
-        if (_btnDetailClose == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _btnDetailClose 引用，请在 Inspector 中把 GoPetDetailed 上的 Button 组件拖入。");
-        }
-
-        if (_txtDetailName == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _txtDetailName 引用，请在 Inspector 中把 PetDetailed/TxtName 拖入。");
-        }
-
-        if (_txtDetailQuality == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _txtDetailQuality 引用，请在 Inspector 中把 PetDetailed/TxtQuality 拖入。");
-        }
-
-        if (_txtDetailProperty == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _txtDetailProperty 引用，请在 Inspector 中把 PetDetailed/TxtProperty 拖入。");
-        }
-
-        if (_txtDetailIntroduce == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _txtDetailIntroduce 引用，请在 Inspector 中把 PetDetailed/TxtIntroduce 拖入。");
-        }
-
-        if (_txtDetailOccurrenceConditions == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _txtDetailOccurrenceConditions 引用，请在 Inspector 中把 PetDetailed/TxtOccurrenceConditions 拖入。");
-        }
-
-        if (_trDetailPetRoot == null)
-        {
-            Log.Warning("PetTJUIForm 缺少 _trDetailPetRoot 引用，请在 Inspector 中把 PetDetailed/Pet 拖入。");
-        }
+        if (_content == null) Log.Warning("PetTJUIForm 缺少 _content 引用，请在 Inspector 中把 Scroll View/Viewport/Content 拖入。");
+        if (_goPetTemplate == null) Log.Warning("PetTJUIForm 缺少 _goPetTemplate 引用，请在 Inspector 中把 Content/GoPet 拖入。");
+        if (_goProduceTemplate == null) Log.Warning("PetTJUIForm 缺少 _goProduceTemplate 引用，请在 Inspector 中把 Content/GoPetccw 拖入。");
+        if (_goBackgroundCloseTarget == null) Log.Warning("PetTJUIForm 缺少 _goBackgroundCloseTarget 引用，请在 Inspector 中把 BtnClose 节点拖入。");
+        if (_goDetailRoot == null) Log.Warning("PetTJUIForm 缺少 _goDetailRoot 引用（GoPetDetailed）。");
+        if (_btnDetailClose == null) Log.Warning("PetTJUIForm 缺少 _btnDetailClose 引用（GoPetDetailed 上的 Button）。");
+        if (_txtDetailName == null) Log.Warning("PetTJUIForm 缺少 _txtDetailName 引用（GoPetDetailed/.../TxtName）。");
+        if (_txtDetailQuality == null) Log.Warning("PetTJUIForm 缺少 _txtDetailQuality 引用（GoPetDetailed/.../TxtQuality）。");
+        if (_txtDetailProperty == null) Log.Warning("PetTJUIForm 缺少 _txtDetailProperty 引用（GoPetDetailed/.../TxtProperty）。");
+        if (_txtDetailIntroduce == null) Log.Warning("PetTJUIForm 缺少 _txtDetailIntroduce 引用（GoPetDetailed/.../TxtIntroduce）。");
+        if (_txtDetailOccurrenceConditions == null) Log.Warning("PetTJUIForm 缺少 _txtDetailOccurrenceConditions 引用（GoPetDetailed/.../TxtOccurrenceConditions）。");
+        if (_trDetailPetRoot == null) Log.Warning("PetTJUIForm 缺少 _trDetailPetRoot 引用（GoPetDetailed/.../Pet）。");
+        if (_goProduceDetailRoot == null) Log.Warning("PetTJUIForm 缺少 _goProduceDetailRoot 引用（GoPetDetailed (1)）。");
+        if (_btnProduceDetailClose == null) Log.Warning("PetTJUIForm 缺少 _btnProduceDetailClose 引用（GoPetDetailed (1) 上的 Button）。");
+        if (_txtProduceDetailName == null) Log.Warning("PetTJUIForm 缺少 _txtProduceDetailName 引用（GoPetDetailed (1)/.../TxtName）。");
+        if (_txtProduceDetailQuality == null) Log.Warning("PetTJUIForm 缺少 _txtProduceDetailQuality 引用（GoPetDetailed (1)/.../TxtQuality）。");
+        if (_txtProduceDetailProperty == null) Log.Warning("PetTJUIForm 缺少 _txtProduceDetailProperty 引用（GoPetDetailed (1)/.../TxtProperty）。");
+        if (_txtProduceDetailIntroduce == null) Log.Warning("PetTJUIForm 缺少 _txtProduceDetailIntroduce 引用（GoPetDetailed (1)/.../TxtIntroduce）。");
+        if (_txtProduceDetailOccurrenceConditions == null) Log.Warning("PetTJUIForm 缺少 _txtProduceDetailOccurrenceConditions 引用（GoPetDetailed (1)/.../TxtOccurrenceConditions）。");
+        if (_imgProduceDetailIcon == null) Log.Warning("PetTJUIForm 缺少 _imgProduceDetailIcon 引用（GoPetDetailed (1)/.../Image）。");
+        if (_goSelectParent == null) Log.Warning("PetTJUIForm 缺少 _goSelectParent 引用（GoSelect）。");
+        if (_goNoSelectParent == null) Log.Warning("PetTJUIForm 缺少 _goNoSelectParent 引用（GoNoSelect）。");
+        if (_btnPetTab == null) Log.Warning("PetTJUIForm 缺少 _btnPetTab 引用（宠物图鉴 Tab 按钮，初始放在 GoSelect 下）。");
+        if (_btnProduceTab == null) Log.Warning("PetTJUIForm 缺少 _btnProduceTab 引用（产出物图鉴 Tab 按钮，初始放在 GoNoSelect 下）。");
     }
 
-    /// <summary>
-    /// 缓存页签视觉状态。
-    /// 这里会从当前已绑定的按钮内部提取选中态/未选中态背景图，以及两套文字颜色。
-    /// </summary>
-    private void CacheTabVisualState()
-    {
-        for (int i = 0; i < _qualityTabs.Length; i++)
-        {
-            Sprite sprite = _qualityTabs[i] != null && _qualityTabs[i].Background != null
-                ? _qualityTabs[i].Background.sprite
-                : null;
-            if (sprite == null)
-            {
-                continue;
-            }
+    #endregion
 
-            if (_selectedTabSprite == null && sprite.name.IndexOf("004", StringComparison.Ordinal) >= 0)
-            {
-                _selectedTabSprite = sprite;
-            }
-
-            if (_unselectedTabSprite == null && sprite.name.IndexOf("003", StringComparison.Ordinal) >= 0)
-            {
-                _unselectedTabSprite = sprite;
-            }
-        }
-
-        if (_selectedTabSprite == null && _qualityTabs[0] != null && _qualityTabs[0].Background != null)
-        {
-            _selectedTabSprite = _qualityTabs[0].Background.sprite;
-        }
-
-        if (_unselectedTabSprite == null)
-        {
-            for (int i = 0; i < _qualityTabs.Length; i++)
-            {
-                if (_qualityTabs[i] != null && _qualityTabs[i].Background != null)
-                {
-                    _unselectedTabSprite = _qualityTabs[i].Background.sprite;
-                    if (!ReferenceEquals(_unselectedTabSprite, _selectedTabSprite))
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    #region 事件绑定
 
     /// <summary>
-    /// 绑定所有按钮事件。
-    /// 该方法只会执行一次，避免界面重复打开时重复注册监听。
+    /// 一次性绑定所有按钮事件，避免界面重复打开重复 AddListener。
     /// </summary>
     private void BindEventsOnce()
     {
@@ -690,49 +428,68 @@ public sealed class PetTJUIForm : UIFormLogic
 
         if (_detailView.CloseButton != null)
         {
-            _detailView.CloseButton.onClick.AddListener(OnDetailCloseButtonClicked);
+            _detailView.CloseButton.onClick.AddListener(OnPetDetailCloseClicked);
         }
 
-        for (int i = 0; i < _qualityTabs.Length; i++)
+        if (_produceDetailView.CloseButton != null)
         {
-            QualityTabView tab = _qualityTabs[i];
-            if (tab == null || tab.Button == null)
-            {
-                continue;
-            }
+            _produceDetailView.CloseButton.onClick.AddListener(OnProduceDetailCloseClicked);
+        }
 
-            int capturedIndex = i;
-            tab.Button.onClick.AddListener(() => OnQualityTabClicked(capturedIndex));
+        if (_btnPetTab != null)
+        {
+            _btnPetTab.onClick.AddListener(OnPetTabClicked);
+        }
+
+        if (_btnProduceTab != null)
+        {
+            _btnProduceTab.onClick.AddListener(OnProduceTabClicked);
         }
 
         _eventsBound = true;
     }
 
+    #endregion
+
+    #region 列表构建
+
     /// <summary>
-    /// 首次打开界面时构建宠物列表。
-    /// 列表条目全部由 GoPet 模板克隆而来，构建一次后反复复用。
+    /// 首次打开时一次性构建宠物列表 + 产出物列表 + 反查缓存。
     /// </summary>
-    private void BuildList()
+    private void BuildLists()
     {
-        if (_isListBuilt || _content == null || _goPetTemplate == null || GameEntry.DataTables == null)
+        if (_isListBuilt || _content == null || _goPetTemplate == null || _goProduceTemplate == null || GameEntry.DataTables == null)
         {
             return;
         }
 
+        BuildPetList();
+        BuildProduceSlotCacheAndPetIndex();
+        BuildProduceList();
+        _isListBuilt = true;
+    }
+
+    /// <summary>
+    /// 取整张 Pet 表，按 (Quality 升序, Id 升序) 排序后克隆条目。
+    /// </summary>
+    private void BuildPetList()
+    {
         PetDataRow[] allRows = GameEntry.DataTables.GetAllDataRows<PetDataRow>();
         if (allRows == null || allRows.Length == 0)
         {
             return;
         }
 
-        Array.Sort(allRows, ComparePetById);
-        _allRows = allRows;
+        Array.Sort(allRows, ComparePetByQualityThenId);
+        _allPetRows = allRows;
+
         _goPetTemplate.gameObject.SetActive(false);
 
         for (int i = 0; i < allRows.Length; i++)
         {
             Transform itemTransform = Instantiate(_goPetTemplate, _content);
             itemTransform.gameObject.SetActive(false);
+            itemTransform.SetSiblingIndex(_goPetTemplate.GetSiblingIndex() + 1 + i);
 
             PetItemEntry entry = new PetItemEntry
             {
@@ -753,92 +510,219 @@ public sealed class PetTJUIForm : UIFormLogic
                 entry.Button.onClick.AddListener(() => OnPetItemClicked(capturedIndex));
             }
 
-            _entries.Add(entry);
+            _petEntries.Add(entry);
         }
-
-        _isListBuilt = true;
     }
 
     /// <summary>
-    /// 根据当前选中的品质刷新所有页签视觉状态。
-    /// 会统一切换背景图、文字颜色以及按钮可交互状态。
+    /// 一次性构建：宠物 Id → 两档产出物槽位、宠物 Id → PetDataRow 反查。
     /// </summary>
-    private void RefreshTabs()
+    private void BuildProduceSlotCacheAndPetIndex()
     {
-        for (int i = 0; i < _qualityTabs.Length; i++)
+        _produceSlotsByPetId.Clear();
+        _petRowsById.Clear();
+
+        for (int i = 0; i < _allPetRows.Length; i++)
         {
-            QualityTabView tab = _qualityTabs[i];
-            if (tab == null)
+            PetDataRow row = _allPetRows[i];
+            if (row != null)
+            {
+                _petRowsById[row.Id] = row;
+            }
+        }
+
+        PetProduceDataRow[] produceRows = GameEntry.DataTables.GetAllDataRows<PetProduceDataRow>();
+        if (produceRows == null || produceRows.Length == 0)
+        {
+            _allProduceRows = Array.Empty<PetProduceDataRow>();
+            return;
+        }
+
+        // 产出物按 (父宠物 Quality 升序, PetId 升序, Grade 升序) 排序，与列表展示顺序一致。
+        Array.Sort(produceRows, CompareProduceByPetThenGrade);
+        _allProduceRows = produceRows;
+
+        for (int i = 0; i < produceRows.Length; i++)
+        {
+            PetProduceDataRow produceRow = produceRows[i];
+            if (produceRow == null)
             {
                 continue;
             }
 
-            bool isSelected = tab.Quality == _currentQuality;
-            if (tab.Background != null)
+            _produceSlotsByPetId.TryGetValue(produceRow.PetId, out PetProduceSlot slot);
+            switch (produceRow.Grade)
             {
-                if (isSelected && _selectedTabSprite != null)
-                {
-                    tab.Background.sprite = _selectedTabSprite;
-                }
-                else if (!isSelected && _unselectedTabSprite != null)
-                {
-                    tab.Background.sprite = _unselectedTabSprite;
-                }
+                case ProduceGradeType.Primary:
+                    if (slot.Primary == null)
+                    {
+                        slot.Primary = produceRow;
+                    }
+                    break;
+
+                case ProduceGradeType.Advanced:
+                    if (slot.Advanced == null)
+                    {
+                        slot.Advanced = produceRow;
+                    }
+                    break;
             }
 
-
-            if (tab.Button != null)
-            {
-                tab.Button.interactable = !isSelected;
-            }
+            _produceSlotsByPetId[produceRow.PetId] = slot;
         }
     }
 
     /// <summary>
-    /// 根据当前品质筛选结果刷新列表。
-    /// 先重建可见数据行缓存，再把前 N 个条目绑定到这些数据行，其余条目统一隐藏。
+    /// 用 GoPetccw 模板克隆产出物条目。
     /// </summary>
-    private void RefreshList()
+    private void BuildProduceList()
     {
-        if (!_isListBuilt)
+        if (_allProduceRows == null || _allProduceRows.Length == 0)
         {
             return;
         }
 
-        _visibleRows.Clear();
-        for (int i = 0; i < _allRows.Length; i++)
+        _goProduceTemplate.gameObject.SetActive(false);
+
+        for (int i = 0; i < _allProduceRows.Length; i++)
         {
-            PetDataRow row = _allRows[i];
-            if (row == null || row.Quality != _currentQuality)
+            Transform itemTransform = Instantiate(_goProduceTemplate, _content);
+            itemTransform.gameObject.SetActive(false);
+            itemTransform.SetSiblingIndex(_goProduceTemplate.GetSiblingIndex() + 1 + i);
+
+            ProduceItemEntry entry = new ProduceItemEntry
             {
-                continue;
+                Root = itemTransform.gameObject,
+                Button = itemTransform.GetComponent<Button>()
+            };
+
+            Transform txtName = itemTransform.Find("ImgName/Text (TMP)");
+            if (txtName != null)
+            {
+                entry.TxtName = txtName.GetComponent<TextMeshProUGUI>();
             }
 
-            _visibleRows.Add(row);
+            // GoPetccw 内的 Image（与 ImgName 同级）作为图标显示位。
+            Transform iconTransform = itemTransform.Find("Image");
+            if (iconTransform != null)
+            {
+                entry.Icon = iconTransform.GetComponent<Image>();
+                if (entry.Icon != null)
+                {
+                    entry.DefaultIconSprite = entry.Icon.sprite;
+                }
+            }
+
+            if (entry.Button != null)
+            {
+                int capturedIndex = i;
+                entry.Button.onClick.AddListener(() => OnProduceItemClicked(capturedIndex));
+            }
+
+            _produceEntries.Add(entry);
+        }
+    }
+
+    #endregion
+
+    #region 模式切换
+
+    /// <summary>
+    /// 切换 Pet / Produce 模式：互换两个 Tab 按钮的父级槽位、刷新条目显隐、隐藏两个详情面板。
+    /// </summary>
+    /// <param name="mode">目标模式。</param>
+    /// <param name="forceRefresh">是否强制刷新（OnOpen 时即便 mode 与缓存一致也要刷一次）。</param>
+    private void SwitchMode(CatalogMode mode, bool forceRefresh)
+    {
+        if (!forceRefresh && _currentMode == mode)
+        {
+            return;
         }
 
-        for (int i = 0; i < _entries.Count; i++)
+        _currentMode = mode;
+
+        // 1. Tab 按钮父级互换。
+        if (mode == CatalogMode.Pet)
         {
-            PetItemEntry entry = _entries[i];
-            bool isActive = i < _visibleRows.Count;
+            ReparentTabButton(_btnPetTab, _goSelectParent, isSelected: true);
+            ReparentTabButton(_btnProduceTab, _goNoSelectParent, isSelected: false);
+        }
+        else
+        {
+            ReparentTabButton(_btnProduceTab, _goSelectParent, isSelected: true);
+            ReparentTabButton(_btnPetTab, _goNoSelectParent, isSelected: false);
+        }
+
+        // 2. 列表条目显隐切换。
+        bool isPetMode = mode == CatalogMode.Pet;
+        for (int i = 0; i < _petEntries.Count; i++)
+        {
+            PetItemEntry entry = _petEntries[i];
             if (entry == null || entry.Root == null)
             {
                 continue;
             }
 
-            if (!isActive)
+            if (isPetMode)
             {
-                entry.DataRow = null;
+                if (i < _allPetRows.Length)
+                {
+                    BindPetEntry(entry, _allPetRows[i]);
+                    if (!entry.Root.activeSelf)
+                    {
+                        entry.Root.SetActive(true);
+                    }
+                }
+                else
+                {
+                    entry.DataRow = null;
+                    if (entry.Root.activeSelf)
+                    {
+                        entry.Root.SetActive(false);
+                    }
+                }
+            }
+            else if (entry.Root.activeSelf)
+            {
                 entry.Root.SetActive(false);
+            }
+        }
+
+        for (int i = 0; i < _produceEntries.Count; i++)
+        {
+            ProduceItemEntry entry = _produceEntries[i];
+            if (entry == null || entry.Root == null)
+            {
                 continue;
             }
 
-            BindEntry(entry, _visibleRows[i]);
-            if (!entry.Root.activeSelf)
+            if (!isPetMode)
             {
-                entry.Root.SetActive(true);
+                if (i < _allProduceRows.Length)
+                {
+                    BindProduceEntry(entry, _allProduceRows[i]);
+                    if (!entry.Root.activeSelf)
+                    {
+                        entry.Root.SetActive(true);
+                    }
+                }
+                else
+                {
+                    entry.DataRow = null;
+                    if (entry.Root.activeSelf)
+                    {
+                        entry.Root.SetActive(false);
+                    }
+                }
+            }
+            else if (entry.Root.activeSelf)
+            {
+                entry.Root.SetActive(false);
             }
         }
+
+        HidePetDetail();
+        HideProduceDetail();
 
         if (_content != null)
         {
@@ -847,39 +731,64 @@ public sealed class PetTJUIForm : UIFormLogic
     }
 
     /// <summary>
-    /// 宠物数据行按 Id 升序排序。
-    /// 这样列表展示顺序就和数据表定义顺序保持一致。
+    /// 把 tab 按钮挪到指定父级槽位，并按选中态切换 interactable / 染色。
     /// </summary>
-    /// <param name="a">待比较的宠物数据行 A。</param>
-    /// <param name="b">待比较的宠物数据行 B。</param>
-    /// <returns>升序比较结果。</returns>
-    private static int ComparePetById(PetDataRow a, PetDataRow b)
+    /// <param name="button">要挪动的按钮。</param>
+    /// <param name="parent">目标父级 RectTransform。</param>
+    /// <param name="isSelected">true=选中槽位（白、不可点）；false=未选中槽位（灰、可点）。</param>
+    private static void ReparentTabButton(Button button, RectTransform parent, bool isSelected)
     {
-        if (ReferenceEquals(a, b))
+        if (button == null || parent == null)
         {
-            return 0;
+            return;
         }
 
-        if (a == null)
+        RectTransform buttonRect = button.transform as RectTransform;
+        if (buttonRect == null)
         {
-            return 1;
+            return;
         }
 
-        if (b == null)
+        if (buttonRect.parent != parent)
         {
-            return -1;
+            // SetParent(parent, false) 即 worldPositionStays=false，
+            // 自动保留按钮原本的 anchoredPosition / localRotation / localScale，
+            // 让两个按钮分别保留 prefab 上配置的位置和缩放，互换槽位时不会"位置漂移"。
+            buttonRect.SetParent(parent, false);
         }
 
-        return a.Id.CompareTo(b.Id);
+        // 仅调整兄弟顺序：GoSelect / GoNoSelect 当前各只挂一枚按钮，这一行其实不会改变视觉，
+        // 仅作为后续若策划再往这两个槽位塞内容时的稳定锚点；不动 RectTransform 数值。
+        buttonRect.SetAsLastSibling();
+
+        button.interactable = !isSelected;
+
+        // 仅染色 targetGraphic（按钮本身的 Image），不影响子节点上的图标。
+        Image graphic = button.targetGraphic as Image;
+        if (graphic == null)
+        {
+            graphic = button.GetComponent<Image>();
+        }
+
+        if (graphic != null)
+        {
+            Color target = isSelected ? SelectedTabColor : UnselectedTabColor;
+            if (graphic.color != target)
+            {
+                graphic.color = target;
+            }
+        }
     }
 
+    #endregion
+
+    #region 列表绑定
+
     /// <summary>
-    /// 把数据行内容绑定到单个列表条目上。
-    /// 会同步刷新名称、解锁状态以及对应的 Spine 图像。
+    /// 把数据行内容绑定到单个宠物条目。
+    /// 未解锁宠物 Button.interactable=false，无法打开详情。
     /// </summary>
-    /// <param name="entry">目标条目缓存。</param>
-    /// <param name="row">要展示的宠物数据行。</param>
-    private void BindEntry(PetItemEntry entry, PetDataRow row)
+    private void BindPetEntry(PetItemEntry entry, PetDataRow row)
     {
         if (entry == null || row == null)
         {
@@ -893,151 +802,68 @@ public sealed class PetTJUIForm : UIFormLogic
         }
 
         bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(row.Code);
+        if (entry.Button != null && entry.Button.interactable != isUnlocked)
+        {
+            entry.Button.interactable = isUnlocked;
+        }
+
         ApplyPetGraphic(entry.PetRoot, ref entry.PetGraphic, row, isUnlocked);
     }
 
     /// <summary>
-    /// 确保宠物图鉴 UI SkeletonData 资源已经被请求。
-    /// 只在同步缓存未命中时调用；不会恢复启动阶段的宠物全量预加载。
+    /// 把数据行内容绑定到单个产出物条目。
+    /// 未解锁产出物 Button.interactable=false 且 Image 染黑剪影。
     /// </summary>
-    /// <param name="row">当前需要显示的宠物数据行。</param>
-    private void RequestPetUiSkeletonDataIfNeeded(PetDataRow row)
+    private void BindProduceEntry(ProduceItemEntry entry, PetProduceDataRow row)
     {
-        if (row == null || string.IsNullOrWhiteSpace(row.UiSkeletonDataPath) || GameEntry.GameAssets == null)
+        if (entry == null || row == null)
         {
             return;
         }
 
-        if (GameEntry.GameAssets.TryGetPetSkeletonDataAsset(row.UiSkeletonDataPath, out SkeletonDataAsset cachedSkeletonDataAsset) && cachedSkeletonDataAsset != null)
+        entry.DataRow = row;
+        if (entry.TxtName != null)
         {
-            _requestedUiSkeletonDataPaths.Remove(row.UiSkeletonDataPath);
-            return;
+            entry.TxtName.text = row.Name;
         }
 
-        EnsurePetSkeletonDataStateSubscription();
-        if (_requestedUiSkeletonDataPaths.Add(row.UiSkeletonDataPath))
+        bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsProduceUnlocked(row.Code);
+        if (entry.Button != null && entry.Button.interactable != isUnlocked)
         {
-            GameEntry.GameAssets.RequestPetUiSkeletonDataAsset(row);
-        }
-    }
-
-    /// <summary>
-    /// 确保图鉴界面已经监听宠物 SkeletonData 加载状态。
-    /// 监听范围由 OnPetSkeletonDataStateChanged 内部按 UiSkeletonDataPath 精准过滤。
-    /// </summary>
-    private void EnsurePetSkeletonDataStateSubscription()
-    {
-        if (_isListeningPetSkeletonDataStateChanged || GameEntry.GameAssets == null)
-        {
-            return;
+            entry.Button.interactable = isUnlocked;
         }
 
-        GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
-        GameEntry.GameAssets.PetSkeletonDataStateChanged += OnPetSkeletonDataStateChanged;
-        _isListeningPetSkeletonDataStateChanged = true;
-    }
-
-    /// <summary>
-    /// 释放宠物 SkeletonData 加载状态监听。
-    /// 界面关闭或销毁时调用，防止 UIForm 回池后继续响应资源事件。
-    /// </summary>
-    private void ReleasePetSkeletonDataStateSubscription()
-    {
-        if (!_isListeningPetSkeletonDataStateChanged || GameEntry.GameAssets == null)
+        if (entry.Icon != null)
         {
-            _isListeningPetSkeletonDataStateChanged = false;
-            return;
-        }
+            // 始终用 IconPath sprite；命中失败回退预制体默认图。
+            Sprite iconSprite = TryGetProduceSprite(row);
+            SetSpriteIfChanged(entry.Icon, iconSprite != null ? iconSprite : entry.DefaultIconSprite);
 
-        GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
-        _isListeningPetSkeletonDataStateChanged = false;
-    }
-
-    /// <summary>
-    /// 宠物 SkeletonData 加载状态变化回调。
-    /// 只刷新 UiSkeletonDataPath 命中当前可见条目或当前详情的宠物，避免实体 SkeletonData 事件误触发整页重刷。
-    /// </summary>
-    /// <param name="skeletonDataPath">发生变化的 SkeletonData 资源路径。</param>
-    private void OnPetSkeletonDataStateChanged(string skeletonDataPath)
-    {
-        if (string.IsNullOrWhiteSpace(skeletonDataPath))
-        {
-            return;
-        }
-
-        bool isLoaded = GameEntry.GameAssets != null
-            && GameEntry.GameAssets.TryGetPetSkeletonDataAsset(skeletonDataPath, out SkeletonDataAsset skeletonDataAsset)
-            && skeletonDataAsset != null;
-        if (isLoaded)
-        {
-            _requestedUiSkeletonDataPaths.Remove(skeletonDataPath);
-        }
-
-        for (int i = 0; i < _entries.Count; i++)
-        {
-            PetItemEntry entry = _entries[i];
-            if (entry == null
-                || entry.DataRow == null
-                || !string.Equals(entry.DataRow.UiSkeletonDataPath, skeletonDataPath, StringComparison.Ordinal))
+            Color target = isUnlocked ? UnlockedProduceColor : LockedProduceColor;
+            if (entry.Icon.color != target)
             {
-                continue;
+                entry.Icon.color = target;
             }
-
-            bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(entry.DataRow.Code);
-            ApplyPetGraphic(entry.PetRoot, ref entry.PetGraphic, entry.DataRow, isUnlocked);
-        }
-
-        if (_detailView.CurrentDataRow != null
-            && string.Equals(_detailView.CurrentDataRow.UiSkeletonDataPath, skeletonDataPath, StringComparison.Ordinal))
-        {
-            bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(_detailView.CurrentDataRow.Code);
-            ApplyPetGraphic(_detailView.PetRoot, ref _detailView.PetGraphic, _detailView.CurrentDataRow, isUnlocked);
         }
     }
 
-    /// <summary>
-    /// 品质按钮点击回调。
-    /// 切换当前品质后，统一刷新页签、列表和详情面板。
-    /// </summary>
-    /// <param name="index">被点击品质按钮的数组索引。</param>
-    private void OnQualityTabClicked(int index)
-    {
-        // 播放点击音效
-        UIInteractionSound.PlayClick();
-        
-        if (index < 0 || index >= _qualityTabs.Length || _qualityTabs[index] == null)
-        {
-            return;
-        }
+    #endregion
 
-        QualityType quality = _qualityTabs[index].Quality;
-        if (_currentQuality == quality)
-        {
-            return;
-        }
-
-        _currentQuality = quality;
-        RefreshTabs();
-        RefreshList();
-        HideDetail();
-    }
+    #region 宠物详情
 
     /// <summary>
-    /// 宠物列表项点击回调。
-    /// 点击已展开详情的同一只宠物时，会执行“再次点击即关闭详情”的交互。
+    /// 宠物条目点击：再次点同一只宠物时关闭详情；锁定项 Button.interactable=false 不会到这里。
     /// </summary>
-    /// <param name="index">被点击条目的缓存索引。</param>
     private void OnPetItemClicked(int index)
     {
-        // 播放点击音效
         UIInteractionSound.PlayClick();
-        
-        if (index < 0 || index >= _entries.Count)
+
+        if (index < 0 || index >= _petEntries.Count)
         {
             return;
         }
 
-        PetItemEntry entry = _entries[index];
+        PetItemEntry entry = _petEntries[index];
         if (entry == null || entry.DataRow == null)
         {
             return;
@@ -1047,19 +873,17 @@ public sealed class PetTJUIForm : UIFormLogic
             && _detailView.Root.activeSelf
             && ReferenceEquals(_detailView.CurrentDataRow, entry.DataRow))
         {
-            HideDetail();
+            HidePetDetail();
             return;
         }
 
-        ShowDetail(entry.DataRow);
+        ShowPetDetail(entry.DataRow);
     }
 
     /// <summary>
-    /// 打开并刷新详情面板。
-    /// 这里会更新所有文本内容，并同步显示该宠物的 Spine 图像。
+    /// 打开并刷新宠物详情面板（含 Output1 / Output2 图标）。
     /// </summary>
-    /// <param name="row">要展示详情的宠物数据行。</param>
-    private void ShowDetail(PetDataRow row)
+    private void ShowPetDetail(PetDataRow row)
     {
         if (row == null || _detailView.Root == null)
         {
@@ -1072,62 +896,101 @@ public sealed class PetTJUIForm : UIFormLogic
             _detailView.Root.SetActive(true);
         }
 
-        if (_detailView.TxtName != null)
-        {
-            _detailView.TxtName.text = row.Name;
-        }
-
-        if (_detailView.TxtQuality != null)
-        {
-            _detailView.TxtQuality.text = GetQualityLabel(row.Quality);
-        }
-
-        if (_detailView.TxtProperty != null)
-        {
-            _detailView.TxtProperty.text = GetAttributeText(row);
-        }
-
-        if (_detailView.TxtIntroduce != null)
-        {
-            _detailView.TxtIntroduce.text = row.Description;
-        }
+        if (_detailView.TxtName != null) _detailView.TxtName.text = row.Name;
+        if (_detailView.TxtQuality != null) _detailView.TxtQuality.text = GetQualityLabel(row.Quality);
+        if (_detailView.TxtProperty != null) _detailView.TxtProperty.text = GetAttributeText(row);
+        if (_detailView.TxtIntroduce != null) _detailView.TxtIntroduce.text = row.Description;
 
         if (_detailView.TxtOccurrenceConditions != null)
         {
-            bool shouldShowOccurrenceConditions = row.RequiredStars > 0;
-            if (_detailView.TxtOccurrenceConditions.gameObject.activeSelf != shouldShowOccurrenceConditions)
+            bool show = row.RequiredStars > 0;
+            if (_detailView.TxtOccurrenceConditions.gameObject.activeSelf != show)
             {
-                _detailView.TxtOccurrenceConditions.gameObject.SetActive(shouldShowOccurrenceConditions);
+                _detailView.TxtOccurrenceConditions.gameObject.SetActive(show);
             }
 
-            if (shouldShowOccurrenceConditions)
+            if (show)
             {
-                _detailView.TxtOccurrenceConditions.SetText(DetailOccurrenceConditionsFormat, row.RequiredStars);
+                _detailView.TxtOccurrenceConditions.SetText(PetDetailOccurrenceFormat, row.RequiredStars);
             }
         }
 
         bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(row.Code);
         ApplyPetGraphic(_detailView.PetRoot, ref _detailView.PetGraphic, row, isUnlocked);
+        RefreshPetDetailOutputs(row);
     }
 
     /// <summary>
-    /// 详情面板关闭按钮的点击回调。
-    /// 播放点击音效后关闭详情面板。
+    /// 刷新宠物详情面板的两个 Output 图标。
+    /// 设计语义：Output1 / Output2 始终显示 IconPath 配置图（命中失败回退预制体默认图）；
+    /// 解锁=白色，未解锁=黑色剪影；与玩家"我看到的就是该格位长什么样"的预期对齐。
     /// </summary>
-    private void OnDetailCloseButtonClicked()
+    private void RefreshPetDetailOutputs(PetDataRow row)
     {
-        // 播放点击音效
-        UIInteractionSound.PlayClick();
+        PetProduceSlot slot = default;
+        if (row != null)
+        {
+            _produceSlotsByPetId.TryGetValue(row.Id, out slot);
+        }
 
-        HideDetail();
+        ApplyOutputIcon(_imgDetailOutput1, slot.Primary, ref _detailOutput1DefaultSprite, ref _hasCachedOutput1DefaultSprite);
+        ApplyOutputIcon(_imgDetailOutput2, slot.Advanced, ref _detailOutput2DefaultSprite, ref _hasCachedOutput2DefaultSprite);
     }
 
     /// <summary>
-    /// 关闭详情面板。
-    /// 这里只做显隐和当前数据行清空，不销毁详情区域复用的 Spine 图像对象。
-    /// 注意：此方法不播放音效，音效由调用方负责。
+    /// 单个 Output 图标刷新：始终显示 IconPath sprite，未解锁染黑色剪影。
     /// </summary>
-    private void HideDetail()
+    /// <param name="image">目标 Image；空引用直接跳过（兼容 prefab 没拖该字段）。</param>
+    /// <param name="produceRow">该槽位对应的产出物配置行；空表示无配置。</param>
+    /// <param name="defaultSprite">该槽位预制体默认 sprite（按引用）。</param>
+    /// <param name="hasCachedDefaultSprite">默认 sprite 是否已快照（按引用，首次会被置 true）。</param>
+    private static void ApplyOutputIcon(Image image, PetProduceDataRow produceRow, ref Sprite defaultSprite, ref bool hasCachedDefaultSprite)
+    {
+        if (image == null)
+        {
+            return;
+        }
+
+        if (!hasCachedDefaultSprite)
+        {
+            defaultSprite = image.sprite;
+            hasCachedDefaultSprite = true;
+        }
+
+        if (produceRow == null || string.IsNullOrWhiteSpace(produceRow.Code))
+        {
+            // 该宠物没有这一档产出物 → 直接显默认图，颜色还原白色（视为"无效图标"，不染黑）。
+            SetSpriteIfChanged(image, defaultSprite);
+            if (image.color != UnlockedProduceColor)
+            {
+                image.color = UnlockedProduceColor;
+            }
+            return;
+        }
+
+        // 始终显配置 sprite；缓存命中失败回退默认图。
+        Sprite iconSprite = TryGetProduceSprite(produceRow);
+        SetSpriteIfChanged(image, iconSprite != null ? iconSprite : defaultSprite);
+
+        bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsProduceUnlocked(produceRow.Code);
+        Color target = isUnlocked ? UnlockedProduceColor : LockedProduceColor;
+        if (image.color != target)
+        {
+            image.color = target;
+        }
+    }
+
+    /// <summary>
+    /// 宠物详情关闭按钮回调。
+    /// </summary>
+    private void OnPetDetailCloseClicked()
+    {
+        UIInteractionSound.PlayClick();
+        HidePetDetail();
+    }
+
+    /// <summary>关闭宠物详情面板。</summary>
+    private void HidePetDetail()
     {
         _detailView.CurrentDataRow = null;
         if (_detailView.Root != null && _detailView.Root.activeSelf)
@@ -1136,15 +999,157 @@ public sealed class PetTJUIForm : UIFormLogic
         }
     }
 
+    #endregion
+
+    #region 产出物详情
+
     /// <summary>
-    /// 关闭按钮点击回调。
-    /// 通知 UGF 关闭当前窗体实例。
+    /// 产出物条目点击：解锁项打开详情；未解锁不会进入（interactable=false 已拦）。
     /// </summary>
+    private void OnProduceItemClicked(int index)
+    {
+        UIInteractionSound.PlayClick();
+
+        if (index < 0 || index >= _produceEntries.Count)
+        {
+            return;
+        }
+
+        ProduceItemEntry entry = _produceEntries[index];
+        if (entry == null || entry.DataRow == null)
+        {
+            return;
+        }
+
+        if (_produceDetailView.Root != null
+            && _produceDetailView.Root.activeSelf
+            && ReferenceEquals(_produceDetailView.CurrentDataRow, entry.DataRow))
+        {
+            HideProduceDetail();
+            return;
+        }
+
+        ShowProduceDetail(entry.DataRow);
+    }
+
+    /// <summary>
+    /// 打开并刷新产出物详情面板。
+    /// 字段映射：Name → TxtName；父宠物 QualityType → TxtQuality；CoinValue → TxtProperty；
+    /// RewardStars → TxtOccurrenceConditions（0 时整段隐藏）；Description → TxtIntroduce；IconPath → Image。
+    /// </summary>
+    private void ShowProduceDetail(PetProduceDataRow row)
+    {
+        if (row == null || _produceDetailView.Root == null)
+        {
+            return;
+        }
+
+        _produceDetailView.CurrentDataRow = row;
+        if (!_produceDetailView.Root.activeSelf)
+        {
+            _produceDetailView.Root.SetActive(true);
+        }
+
+        if (_produceDetailView.TxtName != null) _produceDetailView.TxtName.text = row.Name;
+
+        // 品质：取关联宠物 QualityType；查不到则留空，避免 KeyNotFoundException。
+        if (_produceDetailView.TxtQuality != null)
+        {
+            string quality = string.Empty;
+            if (_petRowsById.TryGetValue(row.PetId, out PetDataRow parentPet) && parentPet != null)
+            {
+                quality = GetQualityLabel(parentPet.Quality);
+            }
+
+            _produceDetailView.TxtQuality.text = quality;
+        }
+
+        if (_produceDetailView.TxtProperty != null)
+        {
+            _produceDetailView.TxtProperty.SetText(ProduceDetailValueFormat, row.CoinValue);
+        }
+
+        if (_produceDetailView.TxtIntroduce != null)
+        {
+            _produceDetailView.TxtIntroduce.text = row.Description;
+        }
+
+        if (_produceDetailView.TxtOccurrenceConditions != null)
+        {
+            bool show = row.RewardStars > 0;
+            if (_produceDetailView.TxtOccurrenceConditions.gameObject.activeSelf != show)
+            {
+                _produceDetailView.TxtOccurrenceConditions.gameObject.SetActive(show);
+            }
+
+            if (show)
+            {
+                _produceDetailView.TxtOccurrenceConditions.SetText(ProduceDetailStarsFormat, row.RewardStars);
+            }
+        }
+
+        if (_produceDetailView.Icon != null)
+        {
+            if (!_produceDetailView.HasCachedDefaultIcon)
+            {
+                _produceDetailView.DefaultIconSprite = _produceDetailView.Icon.sprite;
+                _produceDetailView.HasCachedDefaultIcon = true;
+            }
+
+            Sprite iconSprite = TryGetProduceSprite(row);
+            SetSpriteIfChanged(_produceDetailView.Icon, iconSprite != null ? iconSprite : _produceDetailView.DefaultIconSprite);
+
+            // 详情入口本身就是"已解锁"才能点开 → 始终白色。
+            if (_produceDetailView.Icon.color != UnlockedProduceColor)
+            {
+                _produceDetailView.Icon.color = UnlockedProduceColor;
+            }
+        }
+    }
+
+    /// <summary>产出物详情根 Button 点击回调（与 GoPetDetailed 对称：点击即关闭）。</summary>
+    private void OnProduceDetailCloseClicked()
+    {
+        UIInteractionSound.PlayClick();
+        HideProduceDetail();
+    }
+
+    /// <summary>关闭产出物详情面板。</summary>
+    private void HideProduceDetail()
+    {
+        _produceDetailView.CurrentDataRow = null;
+        if (_produceDetailView.Root != null && _produceDetailView.Root.activeSelf)
+        {
+            _produceDetailView.Root.SetActive(false);
+        }
+    }
+
+    #endregion
+
+    #region Tab 按钮回调
+
+    /// <summary>宠物图鉴 Tab 按钮点击：切到宠物模式。</summary>
+    private void OnPetTabClicked()
+    {
+        UIInteractionSound.PlayClick();
+        SwitchMode(CatalogMode.Pet, forceRefresh: false);
+    }
+
+    /// <summary>产出物图鉴 Tab 按钮点击：切到产出物模式。</summary>
+    private void OnProduceTabClicked()
+    {
+        UIInteractionSound.PlayClick();
+        SwitchMode(CatalogMode.Produce, forceRefresh: false);
+    }
+
+    #endregion
+
+    #region 关闭按钮
+
+    /// <summary>右上角 BtnClose 点击：通过 UGF 关闭当前窗体。</summary>
     private void OnBtnClose()
     {
-        // 播放点击音效
         UIInteractionSound.PlayClick();
-        
         if (GameEntry.UI == null)
         {
             return;
@@ -1153,41 +1158,80 @@ public sealed class PetTJUIForm : UIFormLogic
         GameEntry.UI.CloseUIForm(UIForm.SerialId);
     }
 
+    #endregion
+
+    #region 工具方法
+
     /// <summary>
-    /// 把品质枚举转成界面显示文案。
+    /// 宠物按 (QualityType 升序, Id 升序) 排序。
     /// </summary>
-    /// <param name="quality">宠物品质枚举。</param>
-    /// <returns>对应的中文品质名称。</returns>
+    private static int ComparePetByQualityThenId(PetDataRow a, PetDataRow b)
+    {
+        if (ReferenceEquals(a, b)) return 0;
+        if (a == null) return 1;
+        if (b == null) return -1;
+
+        int qcmp = ((int)a.Quality).CompareTo((int)b.Quality);
+        if (qcmp != 0) return qcmp;
+        return a.Id.CompareTo(b.Id);
+    }
+
+    /// <summary>
+    /// 产出物按 (父宠物 Quality 升序, PetId 升序, Grade 升序) 排序。
+    /// 父宠物缺失时降级为按 (PetId, Grade) 排，确保排序稳定。
+    /// </summary>
+    private int CompareProduceByPetThenGrade(PetProduceDataRow a, PetProduceDataRow b)
+    {
+        if (ReferenceEquals(a, b)) return 0;
+        if (a == null) return 1;
+        if (b == null) return -1;
+
+        int qa = _petRowsById.TryGetValue(a.PetId, out PetDataRow petA) && petA != null ? (int)petA.Quality : int.MaxValue;
+        int qb = _petRowsById.TryGetValue(b.PetId, out PetDataRow petB) && petB != null ? (int)petB.Quality : int.MaxValue;
+        int qcmp = qa.CompareTo(qb);
+        if (qcmp != 0) return qcmp;
+
+        int pcmp = a.PetId.CompareTo(b.PetId);
+        if (pcmp != 0) return pcmp;
+        return ((int)a.Grade).CompareTo((int)b.Grade);
+    }
+
+    /// <summary>仅在 sprite 真正变化时才赋值，省掉 Image 无谓的 SetVerticesDirty。</summary>
+    private static void SetSpriteIfChanged(Image image, Sprite sprite)
+    {
+        if (image.sprite != sprite)
+        {
+            image.sprite = sprite;
+        }
+    }
+
+    /// <summary>从 GameAssetModule 取产出物 IconPath 缓存图。</summary>
+    private static Sprite TryGetProduceSprite(PetProduceDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.Code) || GameEntry.GameAssets == null)
+        {
+            return null;
+        }
+
+        GameEntry.GameAssets.TryGetProduceSprite(row.Code, out Sprite sprite);
+        return sprite;
+    }
+
+    /// <summary>把品质枚举转中文。</summary>
     private static string GetQualityLabel(QualityType quality)
     {
         switch (quality)
         {
-            case QualityType.Normal:
-                return "普通";
-
-            case QualityType.Rare:
-                return "稀有";
-
-            case QualityType.Epic:
-                return "史诗";
-
-            case QualityType.Legendary:
-                return "传说";
-
-            case QualityType.Mythic:
-                return "神话";
-
-            default:
-                return string.Empty;
+            case QualityType.Normal: return "普通";
+            case QualityType.Rare: return "稀有";
+            case QualityType.Epic: return "史诗";
+            case QualityType.Legendary: return "传说";
+            case QualityType.Mythic: return "神话";
+            default: return string.Empty;
         }
     }
 
-    /// <summary>
-    /// 根据宠物属性类型拼出属性展示文本。
-    /// 这里只在打开详情时调用，不在高频帧循环里运行。
-    /// </summary>
-    /// <param name="row">当前详情绑定的宠物数据行。</param>
-    /// <returns>宠物属性展示文本。</returns>
+    /// <summary>根据宠物属性类型拼属性展示文本（仅在打开详情时调用，不在帧循环里）。</summary>
     private static string GetAttributeText(PetDataRow row)
     {
         if (row == null)
@@ -1197,25 +1241,19 @@ public sealed class PetTJUIForm : UIFormLogic
 
         switch (row.AttributeType)
         {
-            case PetAttributeType.ScoreBase:
-                return string.Format("基础得分 +{0}", row.AttributeValue);
-
-            case PetAttributeType.ComboTime:
-                return string.Format("COMBO +{0}", row.AttributeValue);
-
-            default:
-                return "无额外属性";
+            case PetAttributeType.ScoreBase: return string.Format("基础得分 +{0}", row.AttributeValue);
+            case PetAttributeType.ComboTime: return string.Format("COMBO +{0}", row.AttributeValue);
+            default: return "无额外属性";
         }
     }
 
+    #endregion
+
+    #region SkeletonGraphic 处理
+
     /// <summary>
-    /// 把指定宠物的 Spine 图像显示到目标挂点下。
-    /// 这段逻辑会优先复用已有的 SkeletonGraphic，只有首次或资源变化时才重新初始化。
+    /// 把宠物 Spine 显示到目标挂点；优先复用已存在的 SkeletonGraphic。
     /// </summary>
-    /// <param name="host">Spine 图像目标挂点。</param>
-    /// <param name="graphic">要复用的 SkeletonGraphic 缓存引用。</param>
-    /// <param name="row">当前宠物数据行。</param>
-    /// <param name="isUnlocked">当前宠物是否已解锁。</param>
     private void ApplyPetGraphic(Transform host, ref SkeletonGraphic graphic, PetDataRow row, bool isUnlocked)
     {
         if (host == null)
@@ -1246,8 +1284,7 @@ public sealed class PetTJUIForm : UIFormLogic
             return;
         }
 
-        // 先从缓存好的 SkeletonDataAsset 里取材质。
-        // 这里绝不能自己 new Material，否则会把图鉴界面变成长期材质泄漏点。
+        // 严禁 new Material；统一用 SkeletonDataAsset 自带的 PrimaryMaterial，否则会出现长期材质泄漏。
         Material material = skeletonDataAsset.atlasAssets[0].PrimaryMaterial;
         bool createdGraphic = false;
         if (graphic == null)
@@ -1262,7 +1299,6 @@ public sealed class PetTJUIForm : UIFormLogic
         }
         else if (graphic.transform.parent != host)
         {
-            // 条目或详情缓存被重绑到别的挂点时，强制把旧图像对象挪到新的宿主下面继续复用。
             graphic.transform.SetParent(host, false);
             graphic.gameObject.layer = host.gameObject.layer;
             ConfigureGraphicRect(graphic.rectTransform);
@@ -1288,12 +1324,90 @@ public sealed class PetTJUIForm : UIFormLogic
         graphic.color = isUnlocked ? UnlockedPetColor : LockedPetColor;
     }
 
+    private void RequestPetUiSkeletonDataIfNeeded(PetDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.UiSkeletonDataPath) || GameEntry.GameAssets == null)
+        {
+            return;
+        }
+
+        if (GameEntry.GameAssets.TryGetPetSkeletonDataAsset(row.UiSkeletonDataPath, out SkeletonDataAsset cachedSkeletonDataAsset) && cachedSkeletonDataAsset != null)
+        {
+            _requestedUiSkeletonDataPaths.Remove(row.UiSkeletonDataPath);
+            return;
+        }
+
+        EnsurePetSkeletonDataStateSubscription();
+        if (_requestedUiSkeletonDataPaths.Add(row.UiSkeletonDataPath))
+        {
+            GameEntry.GameAssets.RequestPetUiSkeletonDataAsset(row);
+        }
+    }
+
+    private void EnsurePetSkeletonDataStateSubscription()
+    {
+        if (_isListeningPetSkeletonDataStateChanged || GameEntry.GameAssets == null)
+        {
+            return;
+        }
+
+        GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
+        GameEntry.GameAssets.PetSkeletonDataStateChanged += OnPetSkeletonDataStateChanged;
+        _isListeningPetSkeletonDataStateChanged = true;
+    }
+
+    private void ReleasePetSkeletonDataStateSubscription()
+    {
+        if (!_isListeningPetSkeletonDataStateChanged || GameEntry.GameAssets == null)
+        {
+            _isListeningPetSkeletonDataStateChanged = false;
+            return;
+        }
+
+        GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
+        _isListeningPetSkeletonDataStateChanged = false;
+    }
+
     /// <summary>
-    /// 让 SkeletonGraphic 播放指定待机动画。
-    /// 如果当前 0 轨已经在播同名动画，则直接跳过，避免重复 SetAnimation。
+    /// SkeletonData 加载状态变化回调：仅刷新被命中的可见条目和当前详情。
     /// </summary>
-    /// <param name="graphic">目标 SkeletonGraphic。</param>
-    /// <param name="animationName">要播放的动画名。</param>
+    private void OnPetSkeletonDataStateChanged(string skeletonDataPath)
+    {
+        if (string.IsNullOrWhiteSpace(skeletonDataPath))
+        {
+            return;
+        }
+
+        bool isLoaded = GameEntry.GameAssets != null
+            && GameEntry.GameAssets.TryGetPetSkeletonDataAsset(skeletonDataPath, out SkeletonDataAsset skeletonDataAsset)
+            && skeletonDataAsset != null;
+        if (isLoaded)
+        {
+            _requestedUiSkeletonDataPaths.Remove(skeletonDataPath);
+        }
+
+        for (int i = 0; i < _petEntries.Count; i++)
+        {
+            PetItemEntry entry = _petEntries[i];
+            if (entry == null
+                || entry.DataRow == null
+                || !string.Equals(entry.DataRow.UiSkeletonDataPath, skeletonDataPath, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(entry.DataRow.Code);
+            ApplyPetGraphic(entry.PetRoot, ref entry.PetGraphic, entry.DataRow, isUnlocked);
+        }
+
+        if (_detailView.CurrentDataRow != null
+            && string.Equals(_detailView.CurrentDataRow.UiSkeletonDataPath, skeletonDataPath, StringComparison.Ordinal))
+        {
+            bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(_detailView.CurrentDataRow.Code);
+            ApplyPetGraphic(_detailView.PetRoot, ref _detailView.PetGraphic, _detailView.CurrentDataRow, isUnlocked);
+        }
+    }
+
     private static void PlayAnimation(SkeletonGraphic graphic, string animationName)
     {
         if (graphic == null || graphic.AnimationState == null || string.IsNullOrWhiteSpace(animationName))
@@ -1313,10 +1427,8 @@ public sealed class PetTJUIForm : UIFormLogic
     }
 
     /// <summary>
-    /// 配置运行时创建的 SkeletonGraphic 的 RectTransform。
-    /// 宠物图鉴的所有角色都要求底边对齐，所以锚点和 pivot 都固定在底部中心。
+    /// 把 SkeletonGraphic 的 RectTransform 锚到底部中心，与图鉴角色站位风格保持一致。
     /// </summary>
-    /// <param name="rectTransform">要配置的 RectTransform。</param>
     private static void ConfigureGraphicRect(RectTransform rectTransform)
     {
         if (rectTransform == null)
@@ -1332,12 +1444,6 @@ public sealed class PetTJUIForm : UIFormLogic
         rectTransform.localScale = Vector3.one;
     }
 
-    /// <summary>
-    /// 安全切换 SkeletonGraphic 的激活状态。
-    /// 跳过空引用和重复 SetActive，避免无意义状态切换。
-    /// </summary>
-    /// <param name="graphic">目标 SkeletonGraphic。</param>
-    /// <param name="isActive">目标显隐状态。</param>
     private static void SetGraphicActive(SkeletonGraphic graphic, bool isActive)
     {
         if (graphic == null || graphic.gameObject.activeSelf == isActive)
@@ -1349,20 +1455,8 @@ public sealed class PetTJUIForm : UIFormLogic
     }
 
     /// <summary>
-    /// 对象销毁时释放事件监听。
-    /// OnClose 正常路径会先释放一次，这里再做兜底，保证异常销毁时也不残留委托。
+    /// 在目标对象上取 Button，没有就补一个；背景遮罩点击关闭时不需要 Transition 动画。
     /// </summary>
-    private void OnDestroy()
-    {
-        ReleasePetSkeletonDataStateSubscription();
-    }
-
-    /// <summary>
-    /// 在目标对象上取 Button，没有就补一个。
-    /// 背景遮罩只负责点击关闭，因此这里统一关闭过渡动画，避免遮罩闪烁。
-    /// </summary>
-    /// <param name="gameObject">目标节点。</param>
-    /// <returns>可用的 Button 组件。</returns>
     private static Button GetOrAddButton(GameObject gameObject)
     {
         if (gameObject == null)
@@ -1381,4 +1475,6 @@ public sealed class PetTJUIForm : UIFormLogic
         button.targetGraphic = gameObject.GetComponent<Graphic>();
         return button;
     }
+
+    #endregion
 }

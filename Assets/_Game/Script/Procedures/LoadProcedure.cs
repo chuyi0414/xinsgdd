@@ -26,6 +26,10 @@ public class LoadProcedure : ProcedureBase
     /// </summary>
     protected override void OnEnter(ProcedureOwner procedureOwner)
     {
+        // P0 缓存验证打点：进入加载前的微信文件缓存基线。
+        // 真机首启 diskBundles 应该接近 0，二启应该明显大于 0；编辑器/非微信平台 no-op。
+        WechatBundleCacheUtility.LogCacheStats("LoadProcedure.OnEnter");
+
         SubscribeDataTableStateEvents();
         SubscribeAssetPreloadEvents();
         _loadUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.LoadUIForm, UIFormDefine.BJGroup);
@@ -40,6 +44,10 @@ public class LoadProcedure : ProcedureBase
     /// </summary>
     protected override void OnLeave(ProcedureOwner procedureOwner, bool isShutdown)
     {
+        // P0 缓存验证打点：加载完成后的微信文件缓存增量。
+        // 首启 diskBundles 会从 0 增长到本次实际下载数；二启与 OnEnter 数值持平 = 全部命中缓存。
+        WechatBundleCacheUtility.LogCacheStats("LoadProcedure.OnLeave");
+
         UnsubscribeDataTableStateEvents();
         UnsubscribeAssetPreloadEvents();
 

@@ -107,23 +107,11 @@ MonoBehaviour:
     m_SerializedLabels:
     - CHW_1005
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2989aa915ff63bf408a7cdc5af03c512
-    m_Address: Prefabs/UI/Pet/PetTJUIForm
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Pet_TuJian
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2f0120c50502b454891d8f192130767c
     m_Address: Pet/CHW_1003/CHW_1003.skel
     m_ReadOnly: 0
     m_SerializedLabels:
     - CHW_1003
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3100617ad27d35745a91551a3fba5480
-    m_Address: Pet/UI/UI_Chanchu_004
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Pet_TuJian
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 34cfb06ef500e5741bfbad43bbcb0a9a
     m_Address: Pet/CHW_1002/CHW_1002.atlas
@@ -160,12 +148,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - CHW_1005
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3c23c68d77c0b5047a121f63165454c2
-    m_Address: Pet/UI/UI_Chongwu_003
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Pet_TuJian
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3d13ac870341c15478c3a04e1e5044f7
     m_Address: Assets/_Game/Resources_moved/Pet/CHW_5001
@@ -214,12 +196,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Pet_DuoDuo
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4992a2cb8c92140458fb3da98e2ee710
-    m_Address: Pet/UI/UI_Chanchu_001
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Pet_TuJian
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4a00092616fa2c046bbe13514bb79f2f
     m_Address: Pet/Duoduoshou/BOOS_Duoduoshou_001_SkeletonData
@@ -304,12 +280,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Pet_PaPaGui
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6c294cde9f45bb54fbaa038000fc6ee1
-    m_Address: Pet/UI/UI_Chanchu_005
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Pet_TuJian
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6c4d9e6e2efb41d46854bd92ee8287cb
     m_Address: Pet/CHW_1001/CHW_1001_SkeletonData
     m_ReadOnly: 0
@@ -375,18 +345,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - pet_lxy
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 92250de248f0b3b4dbb67c8a1e116fb8
-    m_Address: Pet/UI/UI_Shuiguotujian_004
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Pet_TuJian
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 929ed0c1499388047b3f46a8bb4e12c7
-    m_Address: Pet/UI/UI_Chongwu_002
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Pet_TuJian
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 949a8669169a12d4a945444cf6d11a51
     m_Address: Pet/LuLu/GW_Lulu_1001_SkeletonDataUI
@@ -462,18 +420,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - CHW_4004
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a304f3d4cf93ef34f97cdb33345f08c8
-    m_Address: Pet/UI/UI_Chongwu_004
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Pet_TuJian
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a6eac3ae04e58184b96af915785adb9d
-    m_Address: Pet/UI/UI_Chanchu_002
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Pet_TuJian
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: aa6bb5121a4559c46bd266c3d1284c7e
     m_Address: Pet/LuLu/GW_Lulu_1001.atlas
     m_ReadOnly: 0
@@ -515,12 +461,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - CHW_1003
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b31fe9ffbc7ab8349aec3d28623a7e90
-    m_Address: Pet/UI/UI_Chanchu_003
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Pet_TuJian
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b44c91d7bcb03ec439b125d6234244a2
     m_Address: Assets/_Game/Resources_moved/Pet/CHW_5002
@@ -569,12 +509,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Pet_LuLu
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c0df85a9843fa364790a032b356c2bad
-    m_Address: Pet/UI/UI_Shuiguotujian_003
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Pet_TuJian
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c3b31ab21de584c4e820c52bc0d3268d
     m_Address: Pet/Shuxiaoxiao/GW_Shuxiaoxiao_1002_SkeletonData

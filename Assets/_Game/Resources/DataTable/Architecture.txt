@@ -12,10 +12,9 @@
 15	arch_diet_3	Diet	3	Arts/Table/Zhuozi_LV3	Arts/Table/Zhuozi_LV3	饮食区3级
 16	arch_diet_4	Diet	4	Arts/Table/Zhuozi_LV4	Arts/Table/Zhuozi_LV4	饮食区4级
 17	arch_diet_5	Diet	5	Arts/Table/Zhuozi_LV5	Arts/Table/Zhuozi_LV5	饮食区5级
-22	arch_diet_10	Diet	10	Arts/Architecture/Indicator/10	Arts/Architecture/Entity/10	饮食区10级（满级）
-23	arch_fruiter_0	Fruiter	0	Arts/Architecture/Fuhua_LV0	Arts/Architecture/Fuhua_LV0	农场区0级（未解锁）
-24	arch_fruiter_1	Fruiter	1	Arts/Architecture/1	Arts/Architecture/1	农场区1级
-25	arch_fruiter_2	Fruiter	2	Arts/Architecture/Fruiter/Indicator/2	Arts/Architecture/Fruiter/Entity/2	农场区2级
-26	arch_fruiter_3	Fruiter	3	Arts/Architecture/Fruiter/Indicator/3	Arts/Architecture/Fruiter/Entity/3	农场区3级
-27	arch_fruiter_4	Fruiter	4	Arts/Architecture/Fruiter/Indicator/4	Arts/Architecture/Fruiter/Entity/4	农场区4级
-28	arch_fruiter_5	Fruiter	5	Arts/Architecture/Fruiter/Indicator/5	Arts/Architecture/Fruiter/Entity/5	农场区5级
+23	arch_fruiter_0	Fruiter	0	Arts/Orchard/Guoshu_LV1	Arts/Orchard/Guoshu_LV0	农场区0级（未解锁）
+24	arch_fruiter_1	Fruiter	1	Arts/Orchard/Guoshu_LV2	Arts/Orchard/Guoshu_LV1	农场区1级
+25	arch_fruiter_2	Fruiter	2	Arts/Orchard/Guoshu_LV3	Arts/Orchard/Guoshu_LV2	农场区2级
+26	arch_fruiter_3	Fruiter	3	Arts/Orchard/Guoshu_LV4	Arts/Orchard/Guoshu_LV3	农场区3级
+27	arch_fruiter_4	Fruiter	4	Arts/Orchard/Guoshu_LV5	Arts/Orchard/Guoshu_LV4	农场区4级
+28	arch_fruiter_5	Fruiter	5	Arts/Orchard/Guoshu_LV5	Arts/Orchard/Guoshu_LV5	农场区5级

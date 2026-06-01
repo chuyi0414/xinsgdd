@@ -14,9 +14,10 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
     private static readonly string[] ColumnSplitSeparator = { "\t" };
 
     /// <summary>
-    /// 数据表固定列数（Id / PetId / Code / Name / Grade / Weight / CoinValue / RewardStars / Description）。
+    /// 数据表固定列数（Id / PetId / Code / Name / Grade / Weight / CoinValue / RewardStars / IconPath / Description）。
+    /// IconPath 允许为空字符串：为空时 GameAssetModule 不会发起加载，UI 会回退到预制体默认图标。
     /// </summary>
-    private const int ColumnCount = 9;
+    private const int ColumnCount = 10;
 
     /// <summary>
     /// 合法产出 Code 的前缀。
@@ -69,6 +70,13 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
     /// 0 表示拾取不发星星；与 ArchitectureSlotDataRow.RewardStars / ArchitectureUpgradeDataRow.RewardStars 同语义。
     /// </summary>
     public int RewardStars { get; private set; }
+
+    /// <summary>
+    /// 产出物图标资源路径。
+    /// 允许为空字符串：表示当前产出物未配置图标，UI 会回退到 OutputBtn 预制体的默认图。
+    /// 资源缺失或加载失败时 GameAssetModule 静默忽略，不阻塞主流程。
+    /// </summary>
+    public string IconPath { get; private set; }
 
     /// <summary>
     /// 备注描述。
@@ -146,8 +154,10 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        // [6] CoinValue — 必须为正整数
-        if (!int.TryParse(columns[6], out int coinValue) || coinValue <= 0)
+        // [6] CoinValue — 允许为 0（免费拾取，如初级产出物），但禁止负数。
+        // 设计语义：金币价值 0 代表“拾取不卖钱”，只用于解锁/发星；负数才会让 PlayerRuntimeModule.AddGold 反向扣金币。
+        // 注意：策划表里写法是 "0000" 这类前导零字符串，int.TryParse 能正确解析为 0，无需特殊处理。
+        if (!int.TryParse(columns[6], out int coinValue) || coinValue < 0)
         {
             Log.Warning("PetProduceDataRow parse failed because CoinValue '{0}' is invalid, code '{1}'.",
                 columns[6], code);
@@ -162,6 +172,11 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
+        // [8] IconPath — 允许为空字符串。
+        // 设计上：IconPath 留空表示该产出物当前未配图，UI 会回退到 OutputBtn 预制体里的默认图标；
+        // 因此这里不能像 FruitDataRow 那样硬 fail，否则一行未填图会拖垮整张 PetProduce 数据表加载。
+        string iconPath = columns[8].Trim();
+
         // 所有校验通过，写入字段
         _id = id;
         PetId = petId;
@@ -171,7 +186,8 @@ public sealed class PetProduceDataRow : DataRowBase, ICodeDataRow
         Weight = weight;
         CoinValue = coinValue;
         RewardStars = rewardStars;
-        Description = columns[8].Trim();
+        IconPath = iconPath;
+        Description = columns[9].Trim();
         return true;
     }
 

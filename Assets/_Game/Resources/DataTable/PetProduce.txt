@@ -1,42 +1,62 @@
-#Id	PetId	Code	Name	Grade	Weight	CoinValue	RewardStars	Description
-#唯一编号	关联宠物Id	机器码	产出物品名称	产出等级(Primary初级|Intermediate中级|Advanced高级)	同宠物产出池抽取权重	金币价值	获得星星	备注描述
-1	1	petprod_slime_mucus	史莱姆粘液	Primary	50	10000	1	史莱姆的初级产出物
-2	1	petprod_slime_crown	史莱姆王冠	Intermediate	30	10000	1	史莱姆的中级产出物
-3	1	petprod_slime_heart	史莱姆之心	Advanced	5	10000	1	史莱姆的高级产出物
-4	2	petprod_tree_branch	树小小树枝	Primary	50	20000	2	树小小的初级产出物
-5	2	petprod_tree_gem	树小小树冠宝石	Intermediate	30	20000	2	树小小的中级产出物
-6	2	petprod_tree_lifesource	树小小生命之源	Advanced	5	20000	2	树小小的高级产出物
-7	3	petprod_turtle_apple	爬爬龟苹果	Primary	50	30000	3	爬爬龟的初级产出物
-8	3	petprod_turtle_resonance	爬爬龟龟甲共鸣石	Intermediate	30	30000	3	爬爬龟的中级产出物
-9	3	petprod_turtle_defensegem	爬爬龟防御宝石	Advanced	5	30000	3	爬爬龟的高级产出物
-10	4	petprod_duo_fur	多多兽皮毛	Primary	50	40000	4	多多兽的初级产出物
-11	4	petprod_duo_eye	多多兽的眼球	Intermediate	30	40000	4	多多兽的中级产出物
-12	4	petprod_duo_magicsource	多多兽变异魔法本源	Advanced	5	40000	4	多多兽的高级产出物
-13	5	petprod_sheep_wool	咩咩羊绒毛	Primary	50	50000	5	咩咩羊的初级产出物
-14	5	petprod_sheep_staff	咩咩羊法杖	Intermediate	30	50000	5	咩咩羊的中级产出物
-15	5	petprod_sheep_healheart	咩咩羊治愈之心	Advanced	5	50000	5	咩咩羊的高级产出物
-16	6	petprod_bee_honey	蜂小蜂蜂蜜	Primary	50	10000	1	蜂小蜂的初级产出物
-17	7	petprod_carrot	萝小紫胡萝卜	Primary	50	10000	1	萝小紫的初级产出物
-18	8	petprod_grass	草史莱姆草	Primary	50	10000	1	草史莱姆的初级产出物
-19	9	petprod_fire	火史莱姆火焰	Primary	50	10000	1	火史莱姆的初级产出物
-20	10	petprod_slime_jelly	黏黏怪果冻	Primary	50	10000	1	黏黏怪的初级产出物
-21	11	petprod_duck_feather	蓝小鸭羽毛	Primary	50	20000	2	蓝小鸭的初级产出物
-22	12	petprod_chick_feather	黄小鸡羽毛	Primary	50	20000	2	黄小鸡的初级产出物
-23	13	petprod_cactus_flower	仙人掌花	Primary	50	20000	2	仙人掌球的初级产出物
-24	14	petprod_vanilla_flower	香草花	Primary	50	20000	2	香草精灵的初级产出物
-25	15	petprod_strawberry	草莓精灵的祝福	Primary	50	20000	2	草莓精灵的初级产出物
-26	16	petprod_caterpillar_hair	绿毛虫液体	Primary	50	30000	3	绿毛虫的初级产出物
-27	17	petprod_eagle_feather	猫小鹰羽毛	Primary	50	30000	3	猫小鹰的初级产出物
-28	18	petprod_redshell	红壳	Primary	50	30000	3	红壳菜虫的初级产出物
-29	19	petprod_cactus_needle	仙人掌刺	Primary	50	30000	3	仙人掌球的初级产出物
-30	20	petprod_duck_scarf	围脖鸭围脖	Primary	50	30000	3	围脖鸭的初级产出物
-31	21	petprod_rat_tail	偷偷鼠尾巴	Primary	50	40000	4	偷偷鼠的初级产出物
-32	22	petprod_bear_claw	毛毛熊熊爪	Primary	50	40000	4	毛毛熊的初级产出物
-33	23	petprod_mushroom_cap	泥泥菇蘑菇	Primary	50	40000	4	泥泥菇的初级产出物
-34	24	petprod_fluffy_spore	蓬蓬菇孢	Primary	50	40000	4	蓬蓬菇的初级产出物
-35	25	petprod_tree_essence	树精精树精华	Primary	50	40000	4	树精精的初级产出物
-36	26	petprod_banana	香蕉猴香蕉	Primary	50	50000	5	香蕉猴的初级产出物
-37	27	petprod_fox_tail	法杖狐的法杖	Primary	50	50000	5	法杖狐的初级产出物
-38	28	petprod_hamster_wheel	豚豚鼠的泡泡枪	Primary	50	50000	5	豚豚鼠的初级产出物
-39	29	petprod_hammer	锤锤牛的锤子	Primary	50	50000	5	锤锤牛的初级产出物
-40	30	petprod_shield	盾盾猪的盾牌	Primary	50	50000	5	盾盾猪的初级产出物
+#Id	PetId	Code	Name	Grade	Weight	CoinValue	RewardStars	IconPath	Description
+#唯一编号	关联宠物Id	机器码	产出物品名称	产出等级(Primary初级|Intermediate中级|Advanced高级)	同宠物产出池抽取权重	金币价值	获得星星	图标资源路径(可为空,空时使用预制体默认图)	备注描述
+1	1	petprod_slime_mucus	史莱姆粘液	Primary	75	2000	0	Arts/Pet/CHW_1001_01	史莱姆的初级产出物
+2	1	petprod_slime_heart	史莱姆之心	Advanced	25	4000	1	Arts/Pet/CHW_1001_02	史莱姆的高级产出物
+3	2	petprod_tree_branch	树枝宝石	Primary	75	4000	0	Arts/Pet/CHW_2001_01	树小小的初级产出物
+4	2	petprod_tree_lifesource	金树枝	Advanced	25	6000	1	Arts/Pet/CHW_2001_02	树小小的高级产出物
+5	3	petprod_turtle_apple	金苹果	Primary	75	6000	0	Arts/Pet/CHW_3001_01	爬爬龟的初级产出物
+6	3	petprod_turtle_defensegem	防御宝石	Advanced	25	8000	1	Arts/Pet/CHW_3001_02	爬爬龟的高级产出物
+7	4	petprod_duo_fur	力量结晶	Primary	75	8000	0	Arts/Pet/CHW_4001_01	多多兽的初级产出物
+8	4	petprod_duo_magicsource	力量奇异果	Advanced	25	10000	1	Arts/Pet/CHW_4001_02	多多兽的高级产出物
+9	5	petprod_sheep_wool	木法杖	Primary	75	10000	0	Arts/Pet/CHW_5001_01	咩咩羊的初级产出物
+10	5	petprod_sheep_healheart	治愈之心	Advanced	25	12000	1	Arts/Pet/CHW_5001_02	咩咩羊的高级产出物
+11	6	petprod_bee_honey	守护之花	Primary	75	2000	0	Arts/Pet/CHW_1002_01	蜂小蜂的初级产出物
+12	6	petprod_bee_stinger	魔法蜂巢	Advanced	25	4000	1	Arts/Pet/CHW_1002_02	蜂小蜂的高级产出物
+13	7	petprod_radish	紫色萝卜	Primary	75	2000	0	Arts/Pet/CHW_1003_01	萝小紫的初级产出物
+14	7	petprod_radish_heart	绿叶皇冠	Advanced	25	4000	1	Arts/Pet/CHW_1003_02	萝小紫的高级产出物
+15	8	petprod_grass	植物权杖	Primary	75	2000	0	Arts/Pet/CHW_1004_01	草史莱姆的初级产出物
+16	8	petprod_grass_seed	植物之心	Advanced	25	4000	1	Arts/Pet/CHW_1004_02	草史莱姆的高级产出物
+17	9	petprod_fire	赤炎宝石	Primary	75	2000	0	Arts/Pet/CHW_1005_01	火史莱姆的初级产出物
+18	9	petprod_fire_ember	火焰核心	Advanced	25	4000	1	Arts/Pet/CHW_1005_02	火史莱姆的高级产出物
+19	10	petprod_slime_jelly	一瓶黏液	Primary	75	2000	0	Arts/Pet/CHW_1006_01	黏黏怪的初级产出物
+20	10	petprod_slime_core	一罐黏液	Advanced	25	4000	1	Arts/Pet/CHW_1006_02	黏黏怪的高级产出物
+21	11	petprod_duck_feather	小鸭徽章	Primary	75	4000	0	Arts/Pet/CHW_2002_01	蓝小鸭的初级产出物
+22	11	petprod_duck_heart	金鸭蛋	Advanced	25	6000	1	Arts/Pet/CHW_2002_02	蓝小鸭的高级产出物
+23	12	petprod_chick_feather	小鸡徽章	Primary	75	4000	0	Arts/Pet/CHW_2003_01	黄小鸡的初级产出物
+24	12	petprod_chick_heart	金鸡蛋	Advanced	25	6000	1	Arts/Pet/CHW_2003_02	黄小鸡的高级产出物
+25	13	petprod_cactus_flower	金种子	Primary	75	4000	0	Arts/Pet/CHW_2004_01	大嘴草的初级产出物
+26	13	petprod_cactus_heart	金汁液	Advanced	25	6000	1	Arts/Pet/CHW_2004_02	大嘴草的高级产出物
+27	14	petprod_vanilla_flower	香果树枝	Primary	75	4000	0	Arts/Pet/CHW_2005_01	香草精灵的初级产出物
+28	14	petprod_vanilla_heart	小果灯	Advanced	25	6000	1	Arts/Pet/CHW_2005_02	香草精灵的高级产出物
+29	15	petprod_strawberry	金钥匙	Primary	75	4000	0	Arts/Pet/CHW_2006_01	星星精灵的初级产出物
+30	15	petprod_strawberry_heart	金晶晶	Advanced	25	6000	1	Arts/Pet/CHW_2006_02	星星精灵的高级产出物
+31	16	petprod_caterpillar_hair	星星宝石	Primary	75	6000	0	Arts/Pet/CHW_3002_01	绿毛虫的初级产出物
+32	16	petprod_caterpillar_heart	家园之心	Advanced	25	8000	1	Arts/Pet/CHW_3002_02	绿毛虫的高级产出物
+33	17	petprod_eagle_feather	月夜之眼	Primary	75	6000	0	Arts/Pet/CHW_3003_01	猫小鹰的初级产出物
+34	17	petprod_eagle_heart	紫夜明珠	Advanced	25	8000	1	Arts/Pet/CHW_3003_02	猫小鹰的高级产出物
+35	18	petprod_redshell	红水晶	Primary	75	6000	0	Arts/Pet/CHW_3004_01	红壳菜虫的初级产出物
+36	18	petprod_redshell_heart	虫虫皇冠	Advanced	25	8000	1	Arts/Pet/CHW_3004_02	红壳菜虫的高级产出物
+37	19	petprod_cactus_needle	仙人掌花	Primary	75	6000	0	Arts/Pet/CHW_3005_01	仙人掌球的初级产出物
+38	19	petprod_cactus_needle_heart	仙人掌	Advanced	25	8000	1	Arts/Pet/CHW_3005_02	仙人掌球的高级产出物
+39	20	petprod_duck_scarf	破碎蛋壳	Primary	75	6000	0	Arts/Pet/CHW_3006_01	白小鹅的初级产出物
+40	20	petprod_duck_scarf_heart	金色羽毛	Advanced	25	8000	1	Arts/Pet/CHW_3006_02	白小鹅的高级产出物
+41	21	petprod_rat_tail	幸运四叶草	Primary	75	8000	0	Arts/Pet/CHW_4002_01	偷偷鼠的初级产出物
+42	21	petprod_rat_tail_heart	偷偷鼠宝藏	Advanced	25	10000	1	Arts/Pet/CHW_4002_02	偷偷鼠的高级产出物
+43	22	petprod_bear_claw	魔法石	Primary	75	8000	0	Arts/Pet/CHW_4003_01	毛毛熊的初级产出物
+44	22	petprod_bear_claw_heart	狂暴之心	Advanced	25	10000	1	Arts/Pet/CHW_4003_02	毛毛熊的高级产出物
+45	23	petprod_mushroom	绿蘑菇丛	Primary	75	8000	0	Arts/Pet/CHW_4004_01	泥泥菇的初级产出物
+46	23	petprod_mushroom_heart	魔法菇	Advanced	25	10000	1	Arts/Pet/CHW_4004_02	泥泥菇的高级产出物
+47	24	petprod_puff_mushroom	紫蘑菇丛	Primary	75	8000	0	Arts/Pet/CHW_4005_01	蓬蓬菇的初级产出物
+48	24	petprod_puff_mushroom_heart	力量菇	Advanced	25	10000	1	Arts/Pet/CHW_4005_02	蓬蓬菇的高级产出物
+49	25	petprod_tree_heart	自然之心	Primary	75	8000	0	Arts/Pet/CHW_4006_01	树精精的初级产出物
+50	25	petprod_tree_heart_heart	远古精魄	Advanced	25	10000	1	Arts/Pet/CHW_4006_02	树精精的高级产出物
+51	26	petprod_banana	多多兽之眼	Primary	75	10000	0	Arts/Pet/CHW_5002_01	香蕉猴的初级产出物
+52	26	petprod_banana_heart	射手之徽	Advanced	25	12000	1	Arts/Pet/CHW_5002_02	香蕉猴的高级产出物
+53	27	petprod_wand	魔法树枝	Primary	75	10000	0	Arts/Pet/CHW_5003_01	法杖狐的初级产出物
+54	27	petprod_wand_heart	智者帽子	Advanced	25	12000	1	Arts/Pet/CHW_5003_02	法杖狐的高级产出物
+55	28	petprod_plane	射手眼镜	Primary	75	10000	0	Arts/Pet/CHW_5004_01	豚豚鼠的初级产出物
+56	28	petprod_plane_heart	泡泡枪	Advanced	25	12000	1	Arts/Pet/CHW_5004_02	豚豚鼠的高级产出物
+57	29	petprod_hammer	铁锤	Primary	75	10000	0	Arts/Pet/CHW_5005_01	锤锤牛的初级产出物
+58	29	petprod_hammer_heart	蛮牛之心	Advanced	25	12000	1	Arts/Pet/CHW_5005_02	锤锤牛的高级产出物
+59	30	petprod_shield	骨项链	Primary	75	10000	0	Arts/Pet/CHW_5006_01	盾盾猪的初级产出物
+60	30	petprod_shield_heart	破盾之锤	Advanced	25	12000	1	Arts/Pet/CHW_5006_02	盾盾猪的高级产出物

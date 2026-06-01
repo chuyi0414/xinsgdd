@@ -339,7 +339,11 @@ public sealed partial class PlayerRuntimeModule
             || !GameEntry.DataTables.IsAvailable<ArchitectureDataRow>()
             || !GameEntry.DataTables.IsAvailable<SavingPotDataRow>())
         {
-            Log.Warning("PlayerRuntimeModule 无法初始化，所需数据表不可用。");
+            // 【设计语义】依赖表尚未注册完成属于查询型 API（IsFruitUnlocked / IsPetUnlocked 等）
+            // 在 LoadProcedure 早期被触发的预期场景，并非真错误，故静默返回 false。
+            // 真错误（依赖就绪但表内为空 / 缓存重建失败）由下方分支继续以 Warning 暴露。
+            // 主动驱动初始化的调用方（MainProcedure、TryWarmupPlayerRuntimeState 等）
+            // 必然在依赖表就绪之后才会进入此函数，不会触发本分支。
             return false;
         }
 

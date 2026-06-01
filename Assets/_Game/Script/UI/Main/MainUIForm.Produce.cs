@@ -264,6 +264,32 @@ public partial class MainUIForm
     }
 
     /// <summary>
+    /// 把缓存的产出物图标应用到按钮上。
+    /// 设计语义：
+    /// 1. 若 GameAssetModule 缓存命中（PetProduce.IconPath 已成功预加载）→ 显示策划配的图；
+    /// 2. 缓存未命中（IconPath 留空 / 资源缺失 / 加载失败）→ SetIcon(null) 让 OutputProduceItem 自动回退到预制体默认图，绝不卡进程；
+    /// 3. 池化复用：每次 Bind 后必须强制 SetIcon 一次，避免上一份 sprite 串到本次产出物上。
+    /// </summary>
+    /// <param name="produceItem">本次出场的产出物按钮。</param>
+    /// <param name="produceCode">产出物 Code。</param>
+    private void ApplyProduceItemIcon(OutputProduceItem produceItem, string produceCode)
+    {
+        if (produceItem == null)
+        {
+            return;
+        }
+
+        Sprite produceSprite = null;
+        if (GameEntry.GameAssets != null)
+        {
+            // 命中失败时 produceSprite 保持 null，由 SetIcon 内部回退到预制体默认图。
+            GameEntry.GameAssets.TryGetProduceSprite(produceCode, out produceSprite);
+        }
+
+        produceItem.SetIcon(produceSprite);
+    }
+
+    /// <summary>
     /// 显示产出物首次解锁 Toast。
     /// </summary>
     /// <param name="produceDataRow">本次首次解锁的产出物配置行。</param>
@@ -370,6 +396,7 @@ public partial class MainUIForm
         }
 
         produceItem.Bind(produceCode, OnOutputProduceItemCollected);
+        ApplyProduceItemIcon(produceItem, produceCode);
         produceItem.PlaySpawnAnimation(startLocalPos, endLocalPos);
         _activeProduceItems.Add(produceItem);
         GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
@@ -561,6 +588,7 @@ public partial class MainUIForm
         }
 
         produceItem.Bind(produceCode, OnOutputProduceItemCollected);
+        ApplyProduceItemIcon(produceItem, produceCode);
         RectTransform produceRectTransform = produceItem.CachedRectTransform;
         if (produceRectTransform != null)
         {

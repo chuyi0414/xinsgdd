@@ -31,6 +31,12 @@ public sealed class OutputProduceItem : MonoBehaviour
     private Image _rootImage;
 
     /// <summary>
+    /// 预制体上图标 Image 的初始 Sprite，用于在缺失资源时回退显示。
+    /// 在 Awake 缓存一次，确保 Bind 时即便 sprite=null 也不会清空预制体默认图。
+    /// </summary>
+    private Sprite _defaultIconSprite;
+
+    /// <summary>
     /// 本次绑定的产出物 Code。
     /// </summary>
     private string _produceCode;
@@ -111,6 +117,24 @@ public sealed class OutputProduceItem : MonoBehaviour
     }
 
     /// <summary>
+    /// 设置产出物图标。
+    /// 传 null 会回退到预制体默认图（避免回收复用后残留上次的图）。
+    /// 调用方语义：拿不到 sprite 直接传 null，UI 自然回退；不应在外层做空判跳过，否则池化复用可能串图。
+    /// </summary>
+    /// <param name="sprite">外部加载完成的产出物图标精灵；为空时回退默认图。</param>
+    public void SetIcon(Sprite sprite)
+    {
+        CacheReferences();
+        if (_rootImage == null)
+        {
+            return;
+        }
+
+        // 没拿到 sprite -> 用启动时缓存的预制体默认图，确保不会出现“透明按钮”。
+        _rootImage.sprite = sprite != null ? sprite : _defaultIconSprite;
+    }
+
+    /// <summary>
     /// 播放出生动画：从起点移动到终点。
     /// </summary>
     /// <param name="startLocalPos">起始 UI 局部坐标。</param>
@@ -180,6 +204,11 @@ public sealed class OutputProduceItem : MonoBehaviour
         if (_rootImage == null)
         {
             _rootImage = GetComponent<Image>();
+            // 首次缓存 Image 时同步快照预制体默认图，后续 SetIcon(null) 可以回退到这张图。
+            if (_rootImage != null && _defaultIconSprite == null)
+            {
+                _defaultIconSprite = _rootImage.sprite;
+            }
         }
     }
 
