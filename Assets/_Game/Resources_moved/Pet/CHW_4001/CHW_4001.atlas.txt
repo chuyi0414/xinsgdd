@@ -1,103 +1,103 @@
 
 CHW_4001.png
-size: 709,201
+size: 338,388
 format: RGBA8888
 filter: Linear,Linear
 repeat: none
 1c1
-  rotate: true
-  xy: 408, 24
+  rotate: false
+  xy: 146, 4
   size: 94, 172
   orig: 94, 172
   offset: 0, 0
   index: -1
 1c10
-  rotate: false
-  xy: 252, 3
+  rotate: 180
+  xy: 260, 71
   size: 77, 57
   orig: 77, 57
   offset: 0, 0
   index: -1
 1c11
-  rotate: true
-  xy: 408, 120
+  rotate: false
+  xy: 193, 190
   size: 79, 198
   orig: 79, 198
   offset: 0, 0
   index: -1
 1c12
-  rotate: true
-  xy: 612, 6
+  rotate: false
+  xy: 273, 287
   size: 60, 63
   orig: 60, 63
   offset: 0, 0
   index: -1
 1c13
-  rotate: false
-  xy: 612, 68
+  rotate: 180
+  xy: 232, 120
   size: 64, 69
   orig: 64, 69
   offset: 0, 0
   index: -1
 1c14
   rotate: false
-  xy: 252, 62
+  xy: 0, 1
   size: 154, 137
   orig: 165, 137
   offset: 11, 0
   index: -1
 1c2
-  rotate: true
-  xy: 677, 9
+  rotate: false
+  xy: 274, 352
   size: 57, 25
   orig: 65, 34
   offset: 4, 4
   index: -1
 1c3
   rotate: false
-  xy: 582, 33
+  xy: 0, 357
   size: 14, 10
   orig: 22, 18
   offset: 4, 4
   index: -1
 1c4
   rotate: false
-  xy: 397, 2
+  xy: 0, 369
   size: 32, 20
   orig: 36, 22
   offset: 2, 2
   index: -1
 1c5
-  rotate: false
-  xy: 331, 4
+  rotate: true
+  xy: 238, 5
   size: 64, 56
   orig: 72, 65
   offset: 4, 5
   index: -1
 1c6
   rotate: true
-  xy: 582, 45
+  xy: 297, 3
   size: 73, 28
   orig: 73, 30
   offset: 0, 0
   index: -1
 1c7
-  rotate: false
-  xy: 608, 139
+  rotate: true
+  xy: 261, 191
   size: 94, 60
   orig: 94, 61
   offset: 0, 0
   index: -1
 1c8
-  rotate: true
-  xy: 678, 78
+  rotate: false
+  xy: 165, 177
   size: 59, 29
   orig: 59, 29
   offset: 0, 0
   index: -1
 1c9
-  rotate: true
-  xy: 2, 4
+  rotate: false
+  xy: 0, 140
   size: 195, 248
   orig: 195, 248
   offset: 0, 0

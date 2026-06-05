@@ -78,6 +78,19 @@ public partial class MainUIForm
     private bool _isPetPlacementLayoutDirty = true;
 
     /// <summary>
+    /// 当前是否有一次延迟执行的场地同步请求。
+    /// 主界面首次打开时必须等 UIForm 完成 OnOpen 并把控制权交还 PlayerLoop 后再批量 ShowEntity，
+    /// 避免微信 WebGL 在 UI 实例化栈内继续触发实体实例化造成 PlayerLoop 重入。
+    /// </summary>
+    private bool _isPetPlacementSyncDeferred;
+
+    /// <summary>
+    /// 场地同步请求剩余延迟帧数。
+    /// 初始值为 1，表示至少跨过一次 MainUIForm.OnUpdate 后再真正同步 marker 到实体模块。
+    /// </summary>
+    private int _petPlacementSyncDelayFrames;
+
+    /// <summary>
     /// 根 Canvas 缓存，用于获取 UI 相机。
     /// </summary>
     private Canvas _rootCanvas;
@@ -241,9 +254,7 @@ public partial class MainUIForm
 
         MarkPetPlacementLayoutDirty();
         MarkPetFoodBubbleRosterDirty();
-        SyncPetPlacementMarkersToEntities();
-        RebuildPetFoodBubbleRosterIfNeeded();
-        UpdatePetFoodBubblePositions();
+        RequestDeferredPetPlacementSync();
     }
 
     /// <summary>
@@ -253,9 +264,7 @@ public partial class MainUIForm
     {
         MarkPetPlacementLayoutDirty();
         MarkPetFoodBubbleRosterDirty();
-        SyncPetPlacementMarkersToEntities();
-        RebuildPetFoodBubbleRosterIfNeeded();
-        UpdatePetFoodBubblePositions();
+        RequestDeferredPetPlacementSync();
     }
 
     /// <summary>
@@ -284,6 +293,8 @@ public partial class MainUIForm
         _isPetPlacementViewReady = false;
         _isPetPlacementLayoutDirty = true;
         _isPetFoodBubbleRosterDirty = true;
+        _isPetPlacementSyncDeferred = false;
+        _petPlacementSyncDelayFrames = 0;
     }
 
     /// <summary>
@@ -292,6 +303,21 @@ public partial class MainUIForm
     /// </summary>
     private void UpdatePetPlacementView()
     {
+        if (_isPetPlacementSyncDeferred)
+        {
+            if (_petPlacementSyncDelayFrames > 0)
+            {
+                _petPlacementSyncDelayFrames--;
+                return;
+            }
+
+            _isPetPlacementSyncDeferred = false;
+            SyncPetPlacementMarkersToEntities();
+            RebuildPetFoodBubbleRosterIfNeeded();
+            UpdatePetFoodBubblePositions();
+            return;
+        }
+
         RebuildPetFoodBubbleRosterIfNeeded();
         UpdatePetFoodBubblePositions();
 
@@ -392,6 +418,21 @@ public partial class MainUIForm
         }
 
         return markerTransforms;
+    }
+
+    /// <summary>
+    /// 请求延迟同步 UI marker 到场地实体模块。
+    /// 这里不立即调用 SyncPetPlacementMarkersToEntities，是为了把批量实体显示从 UI 打开调用栈中拆出去。
+    /// </summary>
+    private void RequestDeferredPetPlacementSync()
+    {
+        if (!_isPetPlacementViewReady)
+        {
+            return;
+        }
+
+        _isPetPlacementSyncDeferred = true;
+        _petPlacementSyncDelayFrames = 1;
     }
 
     /// <summary>

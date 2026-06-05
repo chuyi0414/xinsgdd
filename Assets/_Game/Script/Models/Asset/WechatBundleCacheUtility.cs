@@ -32,6 +32,24 @@ public static class WechatBundleCacheUtility
     }
 
     /// <summary>
+    /// 打印托管堆与 Unity 总内存分配/保留量。
+    /// 每处关键流程节点打一次，对比差值即可判断内存峰值来源。
+    /// </summary>
+    /// <param name="tag">日志前缀标记。</param>
+    public static void LogWasmMemory(string tag)
+    {
+        long managed = System.GC.GetTotalMemory(false);
+        long totalAllocated = (long)UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
+        long totalReserved = (long)UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong();
+        Log.Info(string.Format(
+            "[WASM MEM][{0}] managed={1:F1}MB allocated={2:F1}MB reserved={3:F1}MB",
+            tag,
+            managed / 1048576.0,
+            totalAllocated / 1048576.0,
+            totalReserved / 1048576.0));
+    }
+
+    /// <summary>
     /// 清空微信小游戏文件缓存（包含 AssetBundle、纹理等所有 __GAME_FILE_CACHE 内容）。
     /// 仅在版本切换或资源损坏检测到不一致时调用，常规启动绝对不要调，否则下次冷启会触发整包重下。
     /// 该调用是异步的，不会阻塞当前帧；本次启动依旧走老缓存，下次启动开始走新版本资源。

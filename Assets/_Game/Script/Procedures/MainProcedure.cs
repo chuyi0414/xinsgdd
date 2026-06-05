@@ -61,8 +61,11 @@ public class MainProcedure : ProcedureBase
         else
         {
             // 正常进入：先监听打开成功事件，确保主界面真正显示后再关闭加载界面。
+            WechatBundleCacheUtility.LogWasmMemory("MainProcedure.OnEnter");
+            Log.Info("[MainProcedure] 即将打开 MainUIForm ...");
             SubscribeOpenSuccessEvent();
             _mainUIFormId = GameEntry.UI.OpenUIForm(UIFormDefine.MainUIForm, UIFormDefine.MainGroup);
+            Log.Info("[MainProcedure] MainUIForm 打开完成，serialId={0}", _mainUIFormId);
         }
 
         base.OnEnter(procedureOwner);

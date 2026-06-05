@@ -140,11 +140,11 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  skeletonDataAsset: {fileID: 11400000, guid: 949a8669169a12d4a945444cf6d11a51, type: 2}
+  skeletonDataAsset: {fileID: 11400000, guid: 6c4d9e6e2efb41d46854bd92ee8287cb, type: 2}
   initialSkinName: default
   initialFlipX: 1
   initialFlipY: 0
-  startingAnimation: Jump
+  startingAnimation: move
   startingLoop: 1
   timeScale: 1
   freeze: 0

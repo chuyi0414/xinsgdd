@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityGameFramework.Runtime;
 
 /// <summary>
@@ -8,10 +9,16 @@ using UnityGameFramework.Runtime;
 public sealed class IncubatorEntityLogic : EntityLogic
 {
     /// <summary>
-    /// 孵化器渲染顺序。
-    /// 必须低于蛋实体，保证蛋总是显示在孵化器上层。
+    /// 建筑未解锁时的渲染顺序。
+    /// 低于蛋实体(EggSortingOrder=10)，保证蛋压在未解锁建筑上方。
     /// </summary>
-    private const int IncubatorSortingOrder = 0;
+    private const int LockedSortingOrder = 10;
+
+    /// <summary>
+    /// 孵化器解锁后的渲染顺序。
+    /// 略低于餐桌/果园(20)，保证宠物窝视觉上处在场景中间层。
+    /// </summary>
+    private const int UnlockedSortingOrder = 19;
 
     /// <summary>
     /// 孵化器的精灵渲染器缓存。
@@ -25,6 +32,13 @@ public sealed class IncubatorEntityLogic : EntityLogic
     /// </summary>
     [SerializeField]
     private Transform _petGenericPoint;
+
+    /// <summary>
+    /// 孵化器实体的排序组组件。
+    /// 由 Inspector 手动拖入，统一控制孵化器所有子渲染器的排序层级。
+    /// </summary>
+    [SerializeField]
+    private SortingGroup _sortingGroup;
 
     /// <summary>
     /// 孵化器 prefab 上配置的默认颜色。
@@ -43,6 +57,12 @@ public sealed class IncubatorEntityLogic : EntityLogic
     /// 只在第一次拿到 SpriteRenderer 时记录，后续始终恢复这一份原始颜色。
     /// </summary>
     private bool _hasCachedDefaultColor;
+
+    /// <summary>
+    /// 当前孵化器是否已解锁。
+    /// 未解锁时碰撞触发器不修改宠物层级。
+    /// </summary>
+    private bool _isUnlocked;
 
     /// <summary>
     /// 初始化并缓存常用组件。
@@ -74,6 +94,11 @@ public sealed class IncubatorEntityLogic : EntityLogic
     /// <param name="other">进入触发区的碰撞体。</param>
     private void OnTriggerEnter2D(Collider2D other)
     {
+        if (!_isUnlocked)
+        {
+            return;
+        }
+
         PetEntityLogic petEntityLogic = other.GetComponentInParent<PetEntityLogic>();
         if (petEntityLogic == null)
         {
@@ -91,6 +116,11 @@ public sealed class IncubatorEntityLogic : EntityLogic
     /// <param name="other">离开触发区的碰撞体。</param>
     private void OnTriggerExit2D(Collider2D other)
     {
+        if (!_isUnlocked)
+        {
+            return;
+        }
+
         PetEntityLogic petEntityLogic = other.GetComponentInParent<PetEntityLogic>();
         if (petEntityLogic == null)
         {
@@ -114,6 +144,7 @@ public sealed class IncubatorEntityLogic : EntityLogic
 
         CacheReferences();
         SetWorldPosition(entityData.WorldPosition);
+        _isUnlocked = entityData.IsUnlocked;
 
         // 未解锁时替换为 Level 0 占位精灵；已解锁时根据等级加载对应精灵。
         if (!entityData.IsUnlocked)
@@ -123,6 +154,13 @@ public sealed class IncubatorEntityLogic : EntityLogic
         else
         {
             ApplyLevelSprite(PlayerRuntimeModule.ArchitectureCategory.Hatch, entityData.Level);
+        }
+
+        if (_sortingGroup != null)
+        {
+            _sortingGroup.sortingOrder = entityData.IsUnlocked
+                ? UnlockedSortingOrder
+                : LockedSortingOrder;
         }
     }
 
@@ -224,13 +262,16 @@ public sealed class IncubatorEntityLogic : EntityLogic
             }
         }
 
+        if (_sortingGroup == null)
+        {
+            _sortingGroup = GetComponent<SortingGroup>();
+        }
+
         if (_spriteRenderer == null)
         {
             Log.Warning("IncubatorEntityLogic can not find SpriteRenderer.");
             return;
         }
-
-        _spriteRenderer.sortingOrder = IncubatorSortingOrder;
         if (_hasCachedDefaultColor)
         {
             _spriteRenderer.color = _defaultColor;

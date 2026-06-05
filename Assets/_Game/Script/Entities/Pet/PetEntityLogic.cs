@@ -3,6 +3,7 @@ using DG.Tweening;
 using Spine;
 using Spine.Unity;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityGameFramework.Runtime;
 
 /// <summary>
@@ -28,15 +29,22 @@ public sealed class PetEntityLogic : EntityLogic
     private const int PetNormalSortingOrder = 20;
 
     /// <summary>
-    /// 宠物在孵化器内时的渲染顺序。
-    /// 低于孵化器(IncubatorSortingOrder=0)，保证孵化器框架覆盖宠物。
+    /// 宠物进入孵化区时的渲染顺序。
+    /// 低于蛋实体(EggSortingOrder=10)，保证蛋压在宠物上方；低于正常值 20，保证宠物走到孵化器内部时视觉上被遮挡。
     /// </summary>
-    private const int PetBehindIncubatorSortingOrder = 0;
+    private const int PetBehindIncubatorSortingOrder = 10;
 
     /// <summary>
     /// Spine 动画组件。
     /// </summary>
     private SkeletonAnimation _skeletonAnimation;
+
+    /// <summary>
+    /// 宠物实体的排序组组件。
+    /// 由 Inspector 手动拖入，统一控制宠物所有子渲染器的排序层级。
+    /// </summary>
+    [SerializeField]
+    private SortingGroup _sortingGroup;
 
     /// <summary>
     /// 当前已经应用到实体上的宠物 Code。
@@ -60,6 +68,12 @@ public sealed class PetEntityLogic : EntityLogic
     /// 初始状态为空；资源成功或失败回调到达后用它过滤无关宠物资源事件。
     /// </summary>
     private string _pendingSkeletonDataPath;
+
+    /// <summary>
+    /// 当前正在等待加载完成的实体材质资源路径。
+    /// 初始状态为空；材质加载完成回调中用它过滤无关材质资源事件。
+    /// </summary>
+    private string _pendingEntityMaterialPath;
 
     /// <summary>
     /// Spine Skeleton 初始化后的默认 ScaleX。
@@ -155,6 +169,7 @@ public sealed class PetEntityLogic : EntityLogic
         _pendingPetCode = null;
         _requestedPetCode = null;
         _pendingSkeletonDataPath = null;
+        _pendingEntityMaterialPath = null;
         ClearRewardAnimationCallback();
         StopMoveTween();
         base.OnHide(isShutdown, userData);
@@ -328,18 +343,19 @@ public sealed class PetEntityLogic : EntityLogic
         {
             _skeletonAnimation = GetComponentInChildren<SkeletonAnimation>(true);
 
-            // 首次缓存时设置排序层与渲染顺序。
-            // 改为与孵化器/蛋同处 Default 层，靠 sortingOrder 动态控制前后。
+            // 首次缓存时设置排序组层级。
+            // 与孵化器/蛋同处 Default 层，靠 SortingGroup.sortingOrder 动态控制前后。
             // 默认 PetNormalSortingOrder=20（走在蛋上方），
-            // 进入孵化器触发区时由 IncubatorEntityLogic 调用 SetBehindIncubator 降为 -10。
-            if (_skeletonAnimation != null)
+            // 进入孵化器触发区时由 IncubatorEntityLogic 调用 SetBehindIncubator 降为 10。
+            if (_sortingGroup == null)
             {
-                MeshRenderer meshRenderer = _skeletonAnimation.GetComponent<MeshRenderer>();
-                if (meshRenderer != null)
-                {
-                    meshRenderer.sortingLayerName = "Default";
-                    meshRenderer.sortingOrder = PetNormalSortingOrder;
-                }
+                _sortingGroup = GetComponent<SortingGroup>();
+            }
+
+            if (_sortingGroup != null)
+            {
+                _sortingGroup.sortingLayerName = "Default";
+                _sortingGroup.sortingOrder = PetNormalSortingOrder;
             }
         }
 
@@ -359,25 +375,21 @@ public sealed class PetEntityLogic : EntityLogic
     /// <summary>
     /// 设置宠物是否渲染在孵化器后方。
     /// 由 IncubatorEntityLogic 的触发器调用：
-    /// 宠物进入孵化区触发器 → behind=true，sortingOrder 降为 -10，被孵化器覆盖；
+    /// 宠物进入孵化区触发器 → behind=true，sortingOrder 降为 0，被孵化器覆盖；
     /// 宠物离开孵化区触发器 → behind=false，sortingOrder 恢复 20，走在蛋上方。
     /// </summary>
     /// <param name="behind">true=退到孵化器后方；false=恢复正常层级。</param>
     public void SetBehindIncubator(bool behind)
     {
         CacheComponents();
-        if (_skeletonAnimation == null)
+        if (_sortingGroup == null)
         {
             return;
         }
 
-        MeshRenderer meshRenderer = _skeletonAnimation.GetComponent<MeshRenderer>();
-        if (meshRenderer != null)
-        {
-            meshRenderer.sortingOrder = behind
-                ? PetBehindIncubatorSortingOrder
-                : PetNormalSortingOrder;
-        }
+        _sortingGroup.sortingOrder = behind
+            ? PetBehindIncubatorSortingOrder
+            : PetNormalSortingOrder;
     }
 
     /// <summary>
@@ -422,6 +434,7 @@ public sealed class PetEntityLogic : EntityLogic
         _pendingPetCode = null;
         _requestedPetCode = null;
         _pendingSkeletonDataPath = null;
+        _pendingEntityMaterialPath = null;
         SetSkeletonVisible(true);
 
         if (_skeletonAnimation.skeletonDataAsset != skeletonDataAsset || !string.Equals(_currentPetCode, petCode, System.StringComparison.Ordinal))
@@ -435,18 +448,66 @@ public sealed class PetEntityLogic : EntityLogic
 
             _skeletonAnimation.skeletonDataAsset = skeletonDataAsset;
             _skeletonAnimation.initialSkinName = "default";
+
+            // 尝试加载实体自定义材质：用 Spine 内置 CustomMaterialOverride 替换所有 atlas 默认材质。
+            bool hasCustomOverride = false;
+            if (!string.IsNullOrWhiteSpace(petDataRow.EntityMaterialPath)
+                && GameEntry.GameAssets != null)
+            {
+                if (GameEntry.GameAssets.TryGetPetMaterial(petDataRow.EntityMaterialPath, out Material entityMaterial)
+                    && entityMaterial != null)
+                {
+                    _skeletonAnimation.CustomMaterialOverride.Clear();
+                    for (int i = 0; i < skeletonDataAsset.atlasAssets.Length; i++)
+                    {
+                        AtlasAssetBase atlasAsset = skeletonDataAsset.atlasAssets[i];
+                        if (atlasAsset == null || atlasAsset.Materials == null)
+                        {
+                            continue;
+                        }
+
+                        foreach (Material originalMaterial in atlasAsset.Materials)
+                        {
+                            if (originalMaterial != null)
+                            {
+                                _skeletonAnimation.CustomMaterialOverride[originalMaterial] = entityMaterial;
+                            }
+                        }
+                    }
+
+                    hasCustomOverride = true;
+                }
+                else
+                {
+                    // 材质尚未缓存，发起按需加载；当前帧先用 atlas 默认材质显示。
+                    _pendingEntityMaterialPath = petDataRow.EntityMaterialPath;
+                    GameEntry.GameAssets.RequestPetEntityMaterial(petDataRow);
+                }
+            }
+
+            if (!hasCustomOverride)
+            {
+                _skeletonAnimation.CustomMaterialOverride.Clear();
+            }
+
             _skeletonAnimation.Initialize(true);
             // Spine 默认要等到下一次 LateUpdate 才把 Atlas 页材质同步到 MeshRenderer.sharedMaterials。
             // 这里手动 LateUpdate 一次，强制把新材质立即写入，
             // 避免本帧 Camera Render 时仍使用上一只宠物残留的 sharedMaterials 引用造成材质错配。
             _skeletonAnimation.LateUpdate();
-            // 经诊断：Spine LateUpdate 写入 MeshRenderer.sharedMaterials 的 Material 实例与
-            // SkeletonDataAsset.atlasAssets[i].Materials 实际持有的资产实例存在不一致，
-            // 表现为 Inspector 显示同名材质但运行时渲染粉色 / 透明，手动 drag 资产即可修复。
-            // 因此在 LateUpdate 之后再做一次"显式以 atlas 资产 Material 覆盖 sharedMaterials"，
-            // 等价于 Inspector 手动拖入 .mat 资产的操作，保证 MeshRenderer 引用的就是 atlas 资产本体。
-            ForceAssignAtlasMaterialsToRenderer(skeletonDataAsset);
-            LogPetMaterialDiagnostics(petCode, skeletonDataAsset);
+
+            // 仅在未使用 CustomMaterialOverride 时，才做 ForceAssignAtlasMaterialsToRenderer 兜底。
+            // CustomMaterialOverride 已覆盖全部 atlas 材质时，Spine LateUpdate 会直接写入覆盖后的材质。
+            if (!hasCustomOverride)
+            {
+                ForceAssignAtlasMaterialsToRenderer(skeletonDataAsset);
+            }
+            else
+            {
+                // 有自定义材质时仍需诊断日志确认装配状态。
+                LogPetMaterialDiagnostics(petCode, skeletonDataAsset);
+            }
+
             CacheDefaultSkeletonScaleX();
             _currentPetCode = petCode;
         }
@@ -468,10 +529,12 @@ public sealed class PetEntityLogic : EntityLogic
 
         GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
         GameEntry.GameAssets.PetSkeletonDataStateChanged += OnPetSkeletonDataStateChanged;
+        GameEntry.GameAssets.PetMaterialStateChanged -= OnPetMaterialStateChanged;
+        GameEntry.GameAssets.PetMaterialStateChanged += OnPetMaterialStateChanged;
     }
 
     /// <summary>
-    /// 取消宠物 SkeletonData 加载状态监听。
+    /// 取消宠物 SkeletonData 与材质加载状态监听。
     /// 实体隐藏或资源补齐后调用，防止对象池复用时旧宠物 Code 的回调污染新实体。
     /// </summary>
     private void ReleaseGameAssetPreloadStateSubscription()
@@ -482,6 +545,7 @@ public sealed class PetEntityLogic : EntityLogic
         }
 
         GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
+        GameEntry.GameAssets.PetMaterialStateChanged -= OnPetMaterialStateChanged;
     }
 
     /// <summary>
@@ -515,6 +579,31 @@ public sealed class PetEntityLogic : EntityLogic
         _requestedPetCode = null;
         _pendingSkeletonDataPath = null;
         ReleaseGameAssetPreloadStateSubscription();
+    }
+
+    /// <summary>
+    /// 宠物材质加载状态变化回调。
+    /// 当按需请求的实体材质加载完成后，重新执行 ApplyPetVisual 把自定义材质应用到 SkeletonAnimation。
+    /// </summary>
+    /// <param name="materialPath">发生变化的材质资源路径。</param>
+    private void OnPetMaterialStateChanged(string materialPath)
+    {
+        if (string.IsNullOrWhiteSpace(_pendingPetCode) || string.IsNullOrWhiteSpace(_pendingEntityMaterialPath))
+        {
+            return;
+        }
+
+        if (!string.Equals(_pendingEntityMaterialPath, materialPath, System.StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        string pendingPetCode = _pendingPetCode;
+        ApplyPetVisual(pendingPetCode);
+        if (string.IsNullOrWhiteSpace(_pendingPetCode))
+        {
+            ReleaseGameAssetPreloadStateSubscription();
+        }
     }
 
     /// <summary>

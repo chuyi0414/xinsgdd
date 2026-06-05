@@ -223,9 +223,15 @@ public sealed class PetTJUIForm : UIFormLogic
     private CatalogMode _currentMode = CatalogMode.Pet;
 
     /// <summary>
-    /// 已经由本界面发起过按需请求的 UI SkeletonData 路径集合（避免对同一资源重复发射加载请求）。
+    /// 已经由本界面发起过按需请求的 SkeletonData 路径集合（避免对同一资源重复发射加载请求）。
+    /// 实体和 UI 共用 EntitySkeletonDataPath，不再区分 entity/ui 请求集合。
     /// </summary>
-    private readonly HashSet<string> _requestedUiSkeletonDataPaths = new HashSet<string>(StringComparer.Ordinal);
+    private readonly HashSet<string> _requestedSkeletonDataPaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 已经由本界面发起过按需请求的 UI 材质路径集合（避免对同一材质重复发射加载请求）。
+    /// </summary>
+    private readonly HashSet<string> _requestedUiMaterialPaths = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>Output1 默认 sprite 缓存。</summary>
     private Sprite _detailOutput1DefaultSprite;
@@ -276,6 +282,14 @@ public sealed class PetTJUIForm : UIFormLogic
         SwitchMode(CatalogMode.Pet, forceRefresh: true);
         HidePetDetail();
         HideProduceDetail();
+        ScrollContentToTop();
+
+        // OnOpen 每次打开都重新订阅（OnClose 会退订，而 OnInit 只跑一次）。
+        if (GameEntry.GameAssets != null)
+        {
+            GameEntry.GameAssets.ProduceSpriteLoaded -= OnProduceSpriteLoaded;
+            GameEntry.GameAssets.ProduceSpriteLoaded += OnProduceSpriteLoaded;
+        }
     }
 
     /// <summary>
@@ -286,7 +300,12 @@ public sealed class PetTJUIForm : UIFormLogic
     protected override void OnClose(bool isShutdown, object userData)
     {
         ReleasePetSkeletonDataStateSubscription();
-        _requestedUiSkeletonDataPaths.Clear();
+        if (GameEntry.GameAssets != null)
+        {
+            GameEntry.GameAssets.ProduceSpriteLoaded -= OnProduceSpriteLoaded;
+        }
+        _requestedSkeletonDataPaths.Clear();
+        _requestedUiMaterialPaths.Clear();
         base.OnClose(isShutdown, userData);
     }
 
@@ -294,6 +313,10 @@ public sealed class PetTJUIForm : UIFormLogic
     private void OnDestroy()
     {
         ReleasePetSkeletonDataStateSubscription();
+        if (GameEntry.GameAssets != null)
+        {
+            GameEntry.GameAssets.ProduceSpriteLoaded -= OnProduceSpriteLoaded;
+        }
     }
 
     #region 引用就绪校验
@@ -450,6 +473,76 @@ public sealed class PetTJUIForm : UIFormLogic
     }
 
     #endregion
+
+    /// <summary>
+    /// 产出物图标懒加载完成回调。
+    /// 找到对应的列表条目并刷新图标；如果当前详情面板打开且匹配该产出物，一并刷新。
+    /// </summary>
+    /// <param name=\"produceCode\">加载完成的产出物 Code。</param>
+    private void OnProduceSpriteLoaded(string produceCode)
+    {
+        if (string.IsNullOrWhiteSpace(produceCode))
+        {
+            return;
+        }
+
+        // 刷新产出物列表中对应该 Code 的条目（不管 DataRow 是否已绑定，按 _allProduceRows 查）。
+        if (_allProduceRows != null && _produceEntries != null)
+        {
+            for (int i = 0; i < _allProduceRows.Length && i < _produceEntries.Count; i++)
+            {
+                if (!string.Equals(_allProduceRows[i].Code, produceCode, System.StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                ProduceItemEntry entry = _produceEntries[i];
+                if (entry != null && entry.Icon != null)
+                {
+                    Sprite iconSprite = TryGetProduceSprite(_allProduceRows[i]);
+                    if (iconSprite != null)
+                    {
+                        SetSpriteIfChanged(entry.Icon, iconSprite);
+                        if (!entry.Icon.enabled)
+                        {
+                            entry.Icon.enabled = true;
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
+        // 同时刷新宠物详情面板的 Output1 / Output2。
+        RefreshPetDetailOutputsForProduceCode(produceCode);
+    }
+
+    /// <summary>
+    /// 产出物图标加载完成后，刷新宠物详情面板中对应的 Output 图标。
+    /// </summary>
+    private void RefreshPetDetailOutputsForProduceCode(string produceCode)
+    {
+        if (string.IsNullOrWhiteSpace(produceCode) || _detailView.Root == null || !_detailView.Root.activeSelf)
+        {
+            return;
+        }
+
+        PetProduceSlot slot = default;
+        if (_detailView.CurrentDataRow != null)
+        {
+            _produceSlotsByPetId.TryGetValue(_detailView.CurrentDataRow.Id, out slot);
+        }
+
+        if (slot.Primary != null && string.Equals(slot.Primary.Code, produceCode, System.StringComparison.Ordinal))
+        {
+            ApplyOutputIcon(_imgDetailOutput1, slot.Primary, ref _detailOutput1DefaultSprite, ref _hasCachedOutput1DefaultSprite);
+        }
+
+        if (slot.Advanced != null && string.Equals(slot.Advanced.Code, produceCode, System.StringComparison.Ordinal))
+        {
+            ApplyOutputIcon(_imgDetailOutput2, slot.Advanced, ref _detailOutput2DefaultSprite, ref _hasCachedOutput2DefaultSprite);
+        }
+    }
 
     #region 列表构建
 
@@ -727,6 +820,7 @@ public sealed class PetTJUIForm : UIFormLogic
         if (_content != null)
         {
             LayoutRebuilder.ForceRebuildLayoutImmediate(_content);
+            Canvas.ForceUpdateCanvases();
         }
     }
 
@@ -837,7 +931,12 @@ public sealed class PetTJUIForm : UIFormLogic
         {
             // 始终用 IconPath sprite；命中失败回退预制体默认图。
             Sprite iconSprite = TryGetProduceSprite(row);
+            bool hasSprite = iconSprite != null || entry.DefaultIconSprite != null;
             SetSpriteIfChanged(entry.Icon, iconSprite != null ? iconSprite : entry.DefaultIconSprite);
+            if (entry.Icon.enabled != hasSprite)
+            {
+                entry.Icon.enabled = hasSprite;
+            }
 
             Color target = isUnlocked ? UnlockedProduceColor : LockedProduceColor;
             if (entry.Icon.color != target)
@@ -933,6 +1032,10 @@ public sealed class PetTJUIForm : UIFormLogic
             _produceSlotsByPetId.TryGetValue(row.Id, out slot);
         }
 
+        // 触发懒加载：产出物图标可能尚未缓存，提前发起加载。
+        if (slot.Primary != null) GameEntry.GameAssets.LoadProduceSprite(slot.Primary.Code);
+        if (slot.Advanced != null) GameEntry.GameAssets.LoadProduceSprite(slot.Advanced.Code);
+
         ApplyOutputIcon(_imgDetailOutput1, slot.Primary, ref _detailOutput1DefaultSprite, ref _hasCachedOutput1DefaultSprite);
         ApplyOutputIcon(_imgDetailOutput2, slot.Advanced, ref _detailOutput2DefaultSprite, ref _hasCachedOutput2DefaultSprite);
     }
@@ -970,7 +1073,12 @@ public sealed class PetTJUIForm : UIFormLogic
 
         // 始终显配置 sprite；缓存命中失败回退默认图。
         Sprite iconSprite = TryGetProduceSprite(produceRow);
+        bool hasSprite = iconSprite != null || defaultSprite != null;
         SetSpriteIfChanged(image, iconSprite != null ? iconSprite : defaultSprite);
+        if (image.enabled != hasSprite)
+        {
+            image.enabled = hasSprite;
+        }
 
         bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsProduceUnlocked(produceRow.Code);
         Color target = isUnlocked ? UnlockedProduceColor : LockedProduceColor;
@@ -1133,6 +1241,7 @@ public sealed class PetTJUIForm : UIFormLogic
     {
         UIInteractionSound.PlayClick();
         SwitchMode(CatalogMode.Pet, forceRefresh: false);
+        ScrollContentToTop();
     }
 
     /// <summary>产出物图鉴 Tab 按钮点击：切到产出物模式。</summary>
@@ -1140,6 +1249,25 @@ public sealed class PetTJUIForm : UIFormLogic
     {
         UIInteractionSound.PlayClick();
         SwitchMode(CatalogMode.Produce, forceRefresh: false);
+        ScrollContentToTop();
+    }
+
+    /// <summary>
+    /// 将列表内容滚动到顶部。
+    /// 通过 _content 向上查找 ScrollRect，设置 verticalNormalizedPosition = 1。
+    /// </summary>
+    private void ScrollContentToTop()
+    {
+        if (_content == null)
+        {
+            return;
+        }
+
+        ScrollRect scrollRect = _content.GetComponentInParent<ScrollRect>();
+        if (scrollRect != null)
+        {
+            scrollRect.verticalNormalizedPosition = 1f;
+        }
     }
 
     #endregion
@@ -1205,7 +1333,7 @@ public sealed class PetTJUIForm : UIFormLogic
         }
     }
 
-    /// <summary>从 GameAssetModule 取产出物 IconPath 缓存图。</summary>
+    /// <summary>从 GameAssetModule 取产出物 IconPath 缓存图；未命中时触发懒加载。</summary>
     private static Sprite TryGetProduceSprite(PetProduceDataRow row)
     {
         if (row == null || string.IsNullOrWhiteSpace(row.Code) || GameEntry.GameAssets == null)
@@ -1213,8 +1341,14 @@ public sealed class PetTJUIForm : UIFormLogic
             return null;
         }
 
-        GameEntry.GameAssets.TryGetProduceSprite(row.Code, out Sprite sprite);
-        return sprite;
+        if (GameEntry.GameAssets.TryGetProduceSprite(row.Code, out Sprite sprite) && sprite != null)
+        {
+            return sprite;
+        }
+
+        // 未命中缓存 → 触发按需懒加载；本次使用默认图，下次刷新即命中缓存。
+        GameEntry.GameAssets.LoadProduceSprite(row.Code);
+        return null;
     }
 
     /// <summary>把品质枚举转中文。</summary>
@@ -1252,7 +1386,8 @@ public sealed class PetTJUIForm : UIFormLogic
     #region SkeletonGraphic 处理
 
     /// <summary>
-    /// 把宠物 Spine 显示到目标挂点；优先复用已存在的 SkeletonGraphic。
+    /// 把宠物 Spine 显示到目标挂点。
+    /// Pet 节点子物体自带 SkeletonGraphic，这里只负责替换 skeletonDataAsset 与材质，不做创建销毁。
     /// </summary>
     private void ApplyPetGraphic(Transform host, ref SkeletonGraphic graphic, PetDataRow row, bool isUnlocked)
     {
@@ -1261,63 +1396,79 @@ public sealed class PetTJUIForm : UIFormLogic
             return;
         }
 
-        if (row == null || GameEntry.GameAssets == null)
-        {
-            SetGraphicActive(graphic, false);
-            return;
-        }
-
-        if (!GameEntry.GameAssets.TryGetPetSkeletonDataAsset(row.UiSkeletonDataPath, out SkeletonDataAsset skeletonDataAsset) || skeletonDataAsset == null)
-        {
-            RequestPetUiSkeletonDataIfNeeded(row);
-            SetGraphicActive(graphic, false);
-            return;
-        }
-
-        if (skeletonDataAsset.atlasAssets == null
-            || skeletonDataAsset.atlasAssets.Length == 0
-            || skeletonDataAsset.atlasAssets[0] == null
-            || skeletonDataAsset.atlasAssets[0].PrimaryMaterial == null)
-        {
-            Log.Warning("PetTJUIForm can not create skeleton graphic because atlas material is invalid, path '{0}'.", row.UiSkeletonDataPath);
-            SetGraphicActive(graphic, false);
-            return;
-        }
-
-        // 严禁 new Material；统一用 SkeletonDataAsset 自带的 PrimaryMaterial，否则会出现长期材质泄漏。
-        Material material = skeletonDataAsset.atlasAssets[0].PrimaryMaterial;
-        bool createdGraphic = false;
+        // 首次调用时从 host 子级取预制体自带的 SkeletonGraphic。
         if (graphic == null)
         {
-            graphic = SkeletonGraphic.NewSkeletonGraphicGameObject(skeletonDataAsset, host, material);
-            graphic.gameObject.name = "RuntimeSkeletonGraphic";
-            graphic.gameObject.layer = host.gameObject.layer;
-            graphic.raycastTarget = false;
-            graphic.initialSkinName = "default";
-            ConfigureGraphicRect(graphic.rectTransform);
-            createdGraphic = true;
-        }
-        else if (graphic.transform.parent != host)
-        {
-            graphic.transform.SetParent(host, false);
-            graphic.gameObject.layer = host.gameObject.layer;
-            ConfigureGraphicRect(graphic.rectTransform);
+            graphic = host.GetComponentInChildren<SkeletonGraphic>(true);
         }
 
-        bool needsInitialize = createdGraphic || graphic.skeletonDataAsset != skeletonDataAsset || !graphic.IsValid;
+        if (graphic == null)
+        {
+            return;
+        }
+
+        if (row == null || GameEntry.GameAssets == null)
+        {
+            graphic.gameObject.SetActive(false);
+            return;
+        }
+
+        if (!GameEntry.GameAssets.TryGetPetSkeletonDataAsset(row.EntitySkeletonDataPath, out SkeletonDataAsset skeletonDataAsset) || skeletonDataAsset == null)
+        {
+            RequestPetUiSkeletonDataIfNeeded(row);
+            graphic.gameObject.SetActive(false);
+            return;
+        }
+
+        // 材质优先级：UiMaterialPath 自定义材质 > atlas 默认 PrimaryMaterial。
+        // 【关键】严禁在 Viewport Mask 区域内使用非 _Stencil 材质回退显示。
+        //        atlas PrimaryMaterial 使用实体 shader，不支持 UI stencil 裁剪，
+        //        即使用 SetActive 隐藏再显示，Initialize 中间态网格仍可能被渲染一帧，
+        //        导致宠物 Spine 闪现到 Viewport 之外。
+        //        UiMaterialPath 材质未就绪时必须保持 SkeletonGraphic 隐藏，等材质回调刷新。
+        Material material = null;
+
+        if (!string.IsNullOrWhiteSpace(row.UiMaterialPath)
+            && GameEntry.GameAssets != null
+            && GameEntry.GameAssets.TryGetPetMaterial(row.UiMaterialPath, out Material uiMaterial)
+            && uiMaterial != null)
+        {
+            material = uiMaterial;
+        }
+
+        // 配置了 UiMaterialPath 但材质未缓存：发起按需请求，保持隐藏，等材质回调刷新。
+        if (material == null && !string.IsNullOrWhiteSpace(row.UiMaterialPath))
+        {
+            RequestPetUiMaterialIfNeeded(row);
+            graphic.gameObject.SetActive(false);
+            return;
+        }
+
+        // UiMaterialPath 为空时才回退到 atlas 默认材质。
+        if (material == null)
+        {
+            if (skeletonDataAsset.atlasAssets == null
+                || skeletonDataAsset.atlasAssets.Length == 0
+                || skeletonDataAsset.atlasAssets[0] == null
+                || skeletonDataAsset.atlasAssets[0].PrimaryMaterial == null)
+            {
+                Log.Warning("PetTJUIForm can not find atlas material, path '{0}'.", row.EntitySkeletonDataPath);
+                graphic.gameObject.SetActive(false);
+                return;
+            }
+
+            material = skeletonDataAsset.atlasAssets[0].PrimaryMaterial;
+        }
+
+        graphic.gameObject.SetActive(true);
+
+        bool needsInitialize = graphic.skeletonDataAsset != skeletonDataAsset || !graphic.IsValid;
         graphic.material = material;
         if (needsInitialize)
         {
             graphic.skeletonDataAsset = skeletonDataAsset;
             graphic.initialSkinName = "default";
             graphic.Initialize(true);
-            graphic.MatchRectTransformWithBounds();
-            ConfigureGraphicRect(graphic.rectTransform);
-        }
-
-        if (!graphic.gameObject.activeSelf)
-        {
-            graphic.gameObject.SetActive(true);
         }
 
         PlayAnimation(graphic, row.IdleAnimationName);
@@ -1326,21 +1477,45 @@ public sealed class PetTJUIForm : UIFormLogic
 
     private void RequestPetUiSkeletonDataIfNeeded(PetDataRow row)
     {
-        if (row == null || string.IsNullOrWhiteSpace(row.UiSkeletonDataPath) || GameEntry.GameAssets == null)
+        if (row == null || string.IsNullOrWhiteSpace(row.EntitySkeletonDataPath) || GameEntry.GameAssets == null)
         {
             return;
         }
 
-        if (GameEntry.GameAssets.TryGetPetSkeletonDataAsset(row.UiSkeletonDataPath, out SkeletonDataAsset cachedSkeletonDataAsset) && cachedSkeletonDataAsset != null)
+        if (GameEntry.GameAssets.TryGetPetSkeletonDataAsset(row.EntitySkeletonDataPath, out SkeletonDataAsset cachedSkeletonDataAsset) && cachedSkeletonDataAsset != null)
         {
-            _requestedUiSkeletonDataPaths.Remove(row.UiSkeletonDataPath);
+            _requestedSkeletonDataPaths.Remove(row.EntitySkeletonDataPath);
             return;
         }
 
         EnsurePetSkeletonDataStateSubscription();
-        if (_requestedUiSkeletonDataPaths.Add(row.UiSkeletonDataPath))
+        if (_requestedSkeletonDataPaths.Add(row.EntitySkeletonDataPath))
         {
-            GameEntry.GameAssets.RequestPetUiSkeletonDataAsset(row);
+            GameEntry.GameAssets.RequestPetSkeletonDataAsset(row);
+        }
+    }
+
+    /// <summary>
+    /// 按需请求宠物 UI 材质。
+    /// </summary>
+    /// <param name="row">当前宠物表行。</param>
+    private void RequestPetUiMaterialIfNeeded(PetDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.UiMaterialPath) || GameEntry.GameAssets == null)
+        {
+            return;
+        }
+
+        if (GameEntry.GameAssets.TryGetPetMaterial(row.UiMaterialPath, out Material cachedMaterial) && cachedMaterial != null)
+        {
+            _requestedUiMaterialPaths.Remove(row.UiMaterialPath);
+            return;
+        }
+
+        EnsurePetSkeletonDataStateSubscription();
+        if (_requestedUiMaterialPaths.Add(row.UiMaterialPath))
+        {
+            GameEntry.GameAssets.RequestPetUiMaterial(row);
         }
     }
 
@@ -1353,6 +1528,8 @@ public sealed class PetTJUIForm : UIFormLogic
 
         GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
         GameEntry.GameAssets.PetSkeletonDataStateChanged += OnPetSkeletonDataStateChanged;
+        GameEntry.GameAssets.PetMaterialStateChanged -= OnPetMaterialStateChanged;
+        GameEntry.GameAssets.PetMaterialStateChanged += OnPetMaterialStateChanged;
         _isListeningPetSkeletonDataStateChanged = true;
     }
 
@@ -1365,6 +1542,7 @@ public sealed class PetTJUIForm : UIFormLogic
         }
 
         GameEntry.GameAssets.PetSkeletonDataStateChanged -= OnPetSkeletonDataStateChanged;
+        GameEntry.GameAssets.PetMaterialStateChanged -= OnPetMaterialStateChanged;
         _isListeningPetSkeletonDataStateChanged = false;
     }
 
@@ -1383,7 +1561,7 @@ public sealed class PetTJUIForm : UIFormLogic
             && skeletonDataAsset != null;
         if (isLoaded)
         {
-            _requestedUiSkeletonDataPaths.Remove(skeletonDataPath);
+            _requestedSkeletonDataPaths.Remove(skeletonDataPath);
         }
 
         for (int i = 0; i < _petEntries.Count; i++)
@@ -1391,7 +1569,7 @@ public sealed class PetTJUIForm : UIFormLogic
             PetItemEntry entry = _petEntries[i];
             if (entry == null
                 || entry.DataRow == null
-                || !string.Equals(entry.DataRow.UiSkeletonDataPath, skeletonDataPath, StringComparison.Ordinal))
+                || !string.Equals(entry.DataRow.EntitySkeletonDataPath, skeletonDataPath, StringComparison.Ordinal))
             {
                 continue;
             }
@@ -1401,7 +1579,48 @@ public sealed class PetTJUIForm : UIFormLogic
         }
 
         if (_detailView.CurrentDataRow != null
-            && string.Equals(_detailView.CurrentDataRow.UiSkeletonDataPath, skeletonDataPath, StringComparison.Ordinal))
+            && string.Equals(_detailView.CurrentDataRow.EntitySkeletonDataPath, skeletonDataPath, StringComparison.Ordinal))
+        {
+            bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(_detailView.CurrentDataRow.Code);
+            ApplyPetGraphic(_detailView.PetRoot, ref _detailView.PetGraphic, _detailView.CurrentDataRow, isUnlocked);
+        }
+    }
+
+    /// <summary>
+    /// 宠物 UI 材质加载状态变化回调：仅刷新被命中的可见条目和当前详情。
+    /// </summary>
+    /// <param name="materialPath">发生变化的材质资源路径。</param>
+    private void OnPetMaterialStateChanged(string materialPath)
+    {
+        if (string.IsNullOrWhiteSpace(materialPath))
+        {
+            return;
+        }
+
+        bool isLoaded = GameEntry.GameAssets != null
+            && GameEntry.GameAssets.TryGetPetMaterial(materialPath, out Material material)
+            && material != null;
+        if (isLoaded)
+        {
+            _requestedUiMaterialPaths.Remove(materialPath);
+        }
+
+        for (int i = 0; i < _petEntries.Count; i++)
+        {
+            PetItemEntry entry = _petEntries[i];
+            if (entry == null
+                || entry.DataRow == null
+                || !string.Equals(entry.DataRow.UiMaterialPath, materialPath, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(entry.DataRow.Code);
+            ApplyPetGraphic(entry.PetRoot, ref entry.PetGraphic, entry.DataRow, isUnlocked);
+        }
+
+        if (_detailView.CurrentDataRow != null
+            && string.Equals(_detailView.CurrentDataRow.UiMaterialPath, materialPath, StringComparison.Ordinal))
         {
             bool isUnlocked = GameEntry.Fruits != null && GameEntry.Fruits.IsPetUnlocked(_detailView.CurrentDataRow.Code);
             ApplyPetGraphic(_detailView.PetRoot, ref _detailView.PetGraphic, _detailView.CurrentDataRow, isUnlocked);
@@ -1424,34 +1643,6 @@ public sealed class PetTJUIForm : UIFormLogic
         }
 
         graphic.AnimationState.SetAnimation(0, animationName, true);
-    }
-
-    /// <summary>
-    /// 把 SkeletonGraphic 的 RectTransform 锚到底部中心，与图鉴角色站位风格保持一致。
-    /// </summary>
-    private static void ConfigureGraphicRect(RectTransform rectTransform)
-    {
-        if (rectTransform == null)
-        {
-            return;
-        }
-
-        rectTransform.anchorMin = new Vector2(0.5f, 0f);
-        rectTransform.anchorMax = new Vector2(0.5f, 0f);
-        rectTransform.pivot = new Vector2(0.5f, 0f);
-        rectTransform.anchoredPosition = Vector2.zero;
-        rectTransform.localRotation = Quaternion.identity;
-        rectTransform.localScale = Vector3.one;
-    }
-
-    private static void SetGraphicActive(SkeletonGraphic graphic, bool isActive)
-    {
-        if (graphic == null || graphic.gameObject.activeSelf == isActive)
-        {
-            return;
-        }
-
-        graphic.gameObject.SetActive(isActive);
     }
 
     /// <summary>

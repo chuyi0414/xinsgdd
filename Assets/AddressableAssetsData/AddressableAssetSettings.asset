@@ -131,6 +131,9 @@ MonoBehaviour:
     - CHW_5004
     - CHW_5005
     - CHW_5006
+    - ccw
+    - load
+    - main
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: 6bf8a47d9d811a3448188709ffb92cca, type: 2}

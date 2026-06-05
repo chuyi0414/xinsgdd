@@ -103,7 +103,24 @@ public sealed class GameAssetModule
         /// 设计语义：路径为空 / 加载失败均静默忽略，不阻塞主流程，UI 回退到预制体默认图。
         /// </summary>
         ProduceSprite = 16,
+
+        /// <summary>
+        /// 宠物材质资源。
+        /// 从 PetDataRow.EntityMaterialPath / UiMaterialPath 按需加载，用于替换 Spine atlas 默认材质。
+        /// </summary>
+        PetMaterial = 17,
+
+        /// <summary>
+        /// 主界面 MainUIForm 预制体资源。
+        /// 首次点击“进入游戏”时必须打开它，因此启动阶段先走一次 GF 资源加载回调，避免点击帧才冷加载。
+        /// </summary>
+        MainUIFormPrefab = 18,
     }
+
+    /// <summary>
+    /// MainUIForm 预制体的统一资源路径。
+    /// </summary>
+    private static readonly string MainUIFormPrefabPath = AssetPath.GetUI("Main/MainUIForm");
 
     /// <summary>
     /// 宠物食物气泡预制体的统一资源路径。
@@ -189,6 +206,11 @@ public sealed class GameAssetModule
     private readonly Dictionary<string, SkeletonDataAsset> _petSkeletonDataAssetsByPath = new Dictionary<string, SkeletonDataAsset>(StringComparer.Ordinal);
 
     /// <summary>
+    /// 已缓存的宠物材质，按材质资源路径索引。
+    /// </summary>
+    private readonly Dictionary<string, Material> _petMaterialsByPath = new Dictionary<string, Material>(StringComparer.Ordinal);
+
+    /// <summary>
     /// 已缓存的水果图标，按水果 Code 索引。
     /// </summary>
     private readonly Dictionary<string, Sprite> _fruitSpritesByCode = new Dictionary<string, Sprite>(StringComparer.Ordinal);
@@ -254,6 +276,11 @@ public sealed class GameAssetModule
     private readonly HashSet<string> _loadingPetAssetPaths = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
+    /// 当前仍在加载中的宠物材质路径集合。
+    /// </summary>
+    private readonly HashSet<string> _loadingPetMaterialPaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
     /// 当前仍在加载中的水果图标路径集合。
     /// </summary>
     private readonly HashSet<string> _loadingFruitAssetPaths = new HashSet<string>(StringComparer.Ordinal);
@@ -272,6 +299,12 @@ public sealed class GameAssetModule
     /// 当前仍在加载中的宠物实体预制体路径集合。
     /// </summary>
     private readonly HashSet<string> _loadingPetEntityPrefabPaths = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 当前仍在加载中的 MainUIForm 预制体路径集合。
+    /// 正常情况下只有一个路径；仍使用 HashSet 是为了复用现有 TryLoadAsset 去重模型。
+    /// </summary>
+    private readonly HashSet<string> _loadingMainUIFormPrefabPaths = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// 当前仍在加载中的宠物食物气泡预制体路径集合。
@@ -339,6 +372,11 @@ public sealed class GameAssetModule
     private int _pendingPetAssetCount;
 
     /// <summary>
+    /// 当前待完成的宠物材质加载数量。
+    /// </summary>
+    private int _pendingPetMaterialCount;
+
+    /// <summary>
     /// 当前待完成的水果图标加载数量。
     /// </summary>
     private int _pendingFruitAssetCount;
@@ -357,6 +395,12 @@ public sealed class GameAssetModule
     /// 当前待完成的宠物实体预制体加载数量。
     /// </summary>
     private int _pendingPetEntityPrefabCount;
+
+    /// <summary>
+    /// 当前待完成的 MainUIForm 预制体加载数量。
+    /// 初始为 0；启动预热后加 1，成功或失败回调后减回 0。
+    /// </summary>
+    private int _pendingMainUIFormPrefabCount;
 
     /// <summary>
     /// 当前待完成的宠物食物气泡预制体加载数量。
@@ -419,14 +463,14 @@ public sealed class GameAssetModule
     private bool _petPreloadRequested;
 
     /// <summary>
+    /// 是否已经发起过宠物材质预加载。
+    /// </summary>
+    private bool _petMaterialPreloadRequested;
+
+    /// <summary>
     /// 是否已经发起过水果图标预加载。
     /// </summary>
     private bool _fruitPreloadRequested;
-
-    /// <summary>
-    /// 是否已经发起过产出物图标预加载。
-    /// </summary>
-    private bool _producePreloadRequested;
 
     /// <summary>
     /// 是否已经发起过每日关卡卡图预加载。
@@ -437,6 +481,12 @@ public sealed class GameAssetModule
     /// 是否已经发起过宠物实体预制体预热。
     /// </summary>
     private bool _petEntityPrefabPreloadRequested;
+
+    /// <summary>
+    /// 是否已经发起过 MainUIForm 预制体预热。
+    /// 初始为 false；BeginPreloadRequiredAssets 首次调用后置为 true，避免重复发起冷加载。
+    /// </summary>
+    private bool _mainUIFormPrefabPreloadRequested;
 
     /// <summary>
     /// 是否已经发起过宠物食物气泡预制体预热。
@@ -499,14 +549,14 @@ public sealed class GameAssetModule
     private bool _petPreloadCompleted;
 
     /// <summary>
+    /// 宠物材质预加载是否已经完成。
+    /// </summary>
+    private bool _petMaterialPreloadCompleted;
+
+    /// <summary>
     /// 水果图标预加载是否已经完成。
     /// </summary>
     private bool _fruitPreloadCompleted;
-
-    /// <summary>
-    /// 产出物图标预加载是否已经完成。
-    /// </summary>
-    private bool _producePreloadCompleted;
 
     /// <summary>
     /// 每日关卡卡图预加载是否已经完成。
@@ -517,6 +567,12 @@ public sealed class GameAssetModule
     /// 宠物实体预制体预热是否已经完成。
     /// </summary>
     private bool _petEntityPrefabPreloadCompleted;
+
+    /// <summary>
+    /// MainUIForm 预制体预热是否已经完成。
+    /// 这是“进入游戏”按钮解锁条件之一，用来把主界面首次资源加载前移到 Load 页。
+    /// </summary>
+    private bool _mainUIFormPrefabPreloadCompleted;
 
     /// <summary>
     /// 宠物食物气泡预制体预热是否已经完成。
@@ -574,6 +630,12 @@ public sealed class GameAssetModule
     private GameObject _petEntityPrefab;
 
     /// <summary>
+    /// 已预热缓存的 MainUIForm 预制体。
+    /// 这里持有引用的目的不是手动实例化，而是防止资源系统在打开主界面前把预热结果释放掉。
+    /// </summary>
+    private GameObject _mainUIFormPrefab;
+
+    /// <summary>
     /// 已预热缓存的宠物食物气泡预制体。
     /// </summary>
     private GameObject _petFoodBubblePrefab;
@@ -615,6 +677,18 @@ public sealed class GameAssetModule
     public event Action<string> PetSkeletonDataStateChanged;
 
     /// <summary>
+    /// 宠物材质加载状态变化事件。
+    /// 参数为材质资源路径；成功写入缓存或加载失败都会触发，便于正在等待该路径的 UI/实体及时刷新材质。
+    /// </summary>
+    public event Action<string> PetMaterialStateChanged;
+
+    /// <summary>
+    /// 产出物图标加载完成事件。
+    /// 参数为产出物 Code；懒加载成功后触发，便于 UI 刷新对应图标的显示。
+    /// </summary>
+    public event Action<string> ProduceSpriteLoaded;
+
+    /// <summary>
     /// 初始化资源模块并创建统一回调集。
     /// </summary>
     public GameAssetModule()
@@ -626,22 +700,20 @@ public sealed class GameAssetModule
     /// 必需业务资源的预加载流程是否都已结束。
     /// 这里不要求全部资源都成功命中，只要预加载任务已经完成即可继续主流程。
     /// </summary>
+    // 仅保留主界面打开时必须就绪的核心资源；
+    // 头像/头像框/建筑/战斗分数/每日一关等资源仍在后台预加载，但不阻塞「进入游戏」按钮，
+    // 从而降低 WebGL/微信小游戏 WASM 内存峰值，避免纹理并发解压导致 memory access out of bounds。
+    // 宠物 SkeletonData 含 Spine atlas 纹理（2048×2048），是内存最大头。
+    // 移至懒加载：后台继续预加载，但不阻塞「进入游戏」按钮，
+    // 主界面打开后宠物按加载进度逐步出现在场地上。
     public bool IsReady => _eggPreloadCompleted
-        && _petPreloadCompleted
         && _fruitPreloadCompleted
-        && _dailyChallengeCardSpritePreloadCompleted
+        && _mainUIFormPrefabPreloadCompleted
         && _petEntityPrefabPreloadCompleted
         && _petFoodBubblePrefabPreloadCompleted
         && _goldCoinPrefabPreloadCompleted
         && _outputProducePrefabPreloadCompleted
-        && _goldCoinToastPrefabPreloadCompleted
-        && _dailyChallengeLevelTextPreloadCompleted
-        && _scoreDigitSpritePreloadCompleted
-        && _scoreDigitSmallSpritePreloadCompleted
-        && _headPortraitPreloadCompleted
-        && _headPortraitFramePreloadCompleted
-        && _architectureSpritePreloadCompleted
-        && _producePreloadCompleted;
+        && _goldCoinToastPrefabPreloadCompleted;
 
     /// <summary>
     /// 当前是否已经出现预加载失败。
@@ -679,6 +751,11 @@ public sealed class GameAssetModule
         if (!_petEntityPrefabPreloadRequested)
         {
             BeginPreloadPetEntityPrefab();
+        }
+
+        if (!_mainUIFormPrefabPreloadRequested)
+        {
+            BeginPreloadMainUIFormPrefab();
         }
 
         if (!_petFoodBubblePrefabPreloadRequested)
@@ -736,10 +813,6 @@ public sealed class GameAssetModule
             BeginPreloadArchitectureSprites(GameEntry.DataTables.GetAllDataRows<ArchitectureDataRow>());
         }
 
-        if (!_producePreloadRequested && GameEntry.DataTables.IsAvailable<PetProduceDataRow>())
-        {
-            BeginPreloadProduceSprites(GameEntry.DataTables.GetAllDataRows<PetProduceDataRow>());
-        }
     }
 
     /// <summary>
@@ -850,27 +923,94 @@ public sealed class GameAssetModule
     }
 
     /// <summary>
-    /// 按需请求单只宠物的 UI SkeletonData 资源。
-    /// 启动阶段已经跳过宠物全量预加载，因此宠物图鉴打开时，需要由 PetTJUIForm 按当前可见 PetDataRow 精准补齐该资源。
+    /// 按需请求单只宠物的 SkeletonData 资源（实体和 UI 共用）。
+    /// PetTJUIForm 原来使用 UiSkeletonDataPath，现在统一走 EntitySkeletonDataPath 配合 UiMaterialPath 区分材质。
     /// </summary>
     /// <param name="row">当前宠物表行。</param>
-    /// <returns>请求发起前该 UI SkeletonData 是否已经命中缓存。</returns>
-    public bool RequestPetUiSkeletonDataAsset(PetDataRow row)
+    /// <returns>请求发起前该骨架数据是否已经命中缓存。</returns>
+    public bool RequestPetSkeletonDataAsset(PetDataRow row)
     {
-        if (row == null || string.IsNullOrWhiteSpace(row.UiSkeletonDataPath))
+        if (row == null || string.IsNullOrWhiteSpace(row.EntitySkeletonDataPath))
         {
             return false;
         }
 
-        if (_petSkeletonDataAssetsByPath.TryGetValue(row.UiSkeletonDataPath, out SkeletonDataAsset skeletonDataAsset) && skeletonDataAsset != null)
+        if (_petSkeletonDataAssetsByPath.TryGetValue(row.EntitySkeletonDataPath, out SkeletonDataAsset skeletonDataAsset) && skeletonDataAsset != null)
         {
-            ValidatePetSkeletonData(row.UiSkeletonDataPath, skeletonDataAsset);
+            ValidatePetSkeletonData(row.EntitySkeletonDataPath, skeletonDataAsset);
             return true;
         }
 
-        if (!_loadingPetAssetPaths.Contains(row.UiSkeletonDataPath))
+        if (!_loadingPetAssetPaths.Contains(row.EntitySkeletonDataPath))
         {
-            StartLoadPetSkeletonDataPath(row, row.UiSkeletonDataPath);
+            StartLoadPetSkeletonDataPath(row, row.EntitySkeletonDataPath);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 尝试获取已缓存的宠物材质。
+    /// </summary>
+    /// <param name="materialPath">材质资源路径（PetDataRow.EntityMaterialPath 或 UiMaterialPath）。</param>
+    /// <param name="material">命中的材质资源。</param>
+    /// <returns>是否命中缓存。</returns>
+    public bool TryGetPetMaterial(string materialPath, out Material material)
+    {
+        if (string.IsNullOrWhiteSpace(materialPath))
+        {
+            material = null;
+            return false;
+        }
+
+        return _petMaterialsByPath.TryGetValue(materialPath, out material) && material != null;
+    }
+
+    /// <summary>
+    /// 按需请求单只宠物的实体材质资源。
+    /// </summary>
+    /// <param name="row">当前宠物表行。</param>
+    /// <returns>请求发起前该材质是否已经命中缓存。</returns>
+    public bool RequestPetEntityMaterial(PetDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.EntityMaterialPath))
+        {
+            return false;
+        }
+
+        if (_petMaterialsByPath.TryGetValue(row.EntityMaterialPath, out Material material) && material != null)
+        {
+            return true;
+        }
+
+        if (!_loadingPetMaterialPaths.Contains(row.EntityMaterialPath))
+        {
+            StartLoadPetMaterial(row.EntityMaterialPath);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 按需请求单只宠物的 UI 材质资源。
+    /// </summary>
+    /// <param name="row">当前宠物表行。</param>
+    /// <returns>请求发起前该材质是否已经命中缓存。</returns>
+    public bool RequestPetUiMaterial(PetDataRow row)
+    {
+        if (row == null || string.IsNullOrWhiteSpace(row.UiMaterialPath))
+        {
+            return false;
+        }
+
+        if (_petMaterialsByPath.TryGetValue(row.UiMaterialPath, out Material material) && material != null)
+        {
+            return true;
+        }
+
+        if (!_loadingPetMaterialPaths.Contains(row.UiMaterialPath))
+        {
+            StartLoadPetMaterial(row.UiMaterialPath);
         }
 
         return false;
@@ -1282,22 +1422,68 @@ public sealed class GameAssetModule
 
     /// <summary>
     /// 预热宠物实体预制体资源。
+    /// 同时预热场景实体预制体（Table/Orchard/Incubator），
+    /// 确保它们的纹理在加载界面阶段完成解压，避免 OpenUIForm 期间并发解压导致 WASM crash。
     /// </summary>
     private void BeginPreloadPetEntityPrefab()
     {
         _petEntityPrefabPreloadRequested = true;
         _petEntityPrefabPreloadCompleted = false;
 
-        if (_petEntityPrefab != null || _loadingPetEntityPrefabPaths.Contains(EntityDefine.PetEntity))
+        // 场景实体预制体路径列表：与 PetEntity 同批预热，共用 PreloadAssetKind.PetEntityPrefab。
+        // 这些实体在 OpenUIForm → OnOpen 之间被 GF 批量加载，纹理并发解压是 WASM crash 的根因。
+        string[] sceneEntityPaths = { EntityDefine.TableEntity, EntityDefine.OrchardEntity, EntityDefine.IncubatorEntity };
+        bool anyMissing = false;
+
+        if (_petEntityPrefab == null && !_loadingPetEntityPrefabPaths.Contains(EntityDefine.PetEntity))
+        {
+            if (!TryLoadAsset(EntityDefine.PetEntity, typeof(GameObject), PreloadAssetKind.PetEntityPrefab))
+            {
+                RegisterFailure(Utility.Text.Format("预热宠物实体预制体失败，无法开始加载资源，Path='{0}'。", EntityDefine.PetEntity));
+                anyMissing = true;
+            }
+        }
+
+        for (int i = 0; i < sceneEntityPaths.Length; i++)
+        {
+            string path = sceneEntityPaths[i];
+            if (!_loadingPetEntityPrefabPaths.Contains(path))
+            {
+                if (!TryLoadAsset(path, typeof(GameObject), PreloadAssetKind.PetEntityPrefab))
+                {
+                    RegisterFailure(Utility.Text.Format("预热场景实体预制体失败，无法开始加载资源，Path='{0}'。", path));
+                    anyMissing = true;
+                }
+            }
+        }
+
+        if (anyMissing)
+        {
+            UpdatePreloadCompletionState();
+            NotifyPreloadStateChanged();
+        }
+    }
+
+    /// <summary>
+    /// 预热 MainUIForm 预制体资源。
+    /// 该预热只加载资源并持有引用，不实例化 UIForm；真正实例化仍由 GameFramework UI 模块负责。
+    /// </summary>
+    private void BeginPreloadMainUIFormPrefab()
+    {
+        _mainUIFormPrefabPreloadRequested = true;
+        _mainUIFormPrefabPreloadCompleted = false;
+
+        string prefabPath = MainUIFormPrefabPath;
+        if (_mainUIFormPrefab != null || _loadingMainUIFormPrefabPaths.Contains(prefabPath))
         {
             UpdatePreloadCompletionState();
             NotifyPreloadStateChanged();
             return;
         }
 
-        if (!TryLoadAsset(EntityDefine.PetEntity, typeof(GameObject), PreloadAssetKind.PetEntityPrefab))
+        if (!TryLoadAsset(prefabPath, typeof(GameObject), PreloadAssetKind.MainUIFormPrefab))
         {
-            RegisterFailure(Utility.Text.Format("预热宠物实体预制体失败，无法开始加载资源，Path='{0}'。", EntityDefine.PetEntity));
+            RegisterFailure(Utility.Text.Format("预热 MainUIForm 预制体失败，无法开始加载资源，Path='{0}'。", prefabPath));
             UpdatePreloadCompletionState();
             NotifyPreloadStateChanged();
         }
@@ -1424,7 +1610,7 @@ public sealed class GameAssetModule
 
     /// <summary>
     /// 为单条宠物表记录启动 SkeletonData 加载。
-    /// 同一路径会先聚合校验信息，再共享一次实际加载。
+    /// 实体和 UI 共用 EntitySkeletonDataPath，不再加载 UiSkeletonDataPath。
     /// </summary>
     private void StartLoadPetSkeletonData(PetDataRow row)
     {
@@ -1435,7 +1621,6 @@ public sealed class GameAssetModule
         }
 
         StartLoadPetSkeletonDataPath(row, row.EntitySkeletonDataPath);
-        StartLoadPetSkeletonDataPath(row, row.UiSkeletonDataPath);
     }
 
     /// <summary>
@@ -1472,6 +1657,34 @@ public sealed class GameAssetModule
     }
 
     /// <summary>
+    /// 按指定路径启动一次宠物材质加载。
+    /// </summary>
+    /// <param name="materialPath">材质资源路径。</param>
+    private void StartLoadPetMaterial(string materialPath)
+    {
+        if (string.IsNullOrWhiteSpace(materialPath))
+        {
+            RegisterFailure("加载宠物材质失败，材质路径为空。");
+            return;
+        }
+
+        if (_petMaterialsByPath.ContainsKey(materialPath))
+        {
+            return;
+        }
+
+        if (_loadingPetMaterialPaths.Contains(materialPath))
+        {
+            return;
+        }
+
+        if (!TryLoadAsset(materialPath, typeof(Material), PreloadAssetKind.PetMaterial))
+        {
+            RegisterFailure(Utility.Text.Format("加载宠物材质失败，无法开始加载资源，Path='{0}'。", materialPath));
+        }
+    }
+
+    /// <summary>
     /// 为单条水果表记录启动图标加载。
     /// </summary>
     /// <param name="row">水果表行。</param>
@@ -1495,39 +1708,33 @@ public sealed class GameAssetModule
     }
 
     /// <summary>
-    /// 根据宠物产出表批量预加载产出物图标。
-    /// 设计语义：
-    /// 1. 路径为空的行直接跳过，不发起加载，不计 pending；
-    /// 2. 加载失败 / 资源缺失走静默忽略路径（OnLoadAssetFailure 中 ProduceSprite 分支不调 RegisterFailure）；
-    /// 3. UI 端 TryGetProduceSprite 命中失败回退到预制体默认图，确保拿不到图标不卡进程。
+    /// 按需加载单条产出物图标（懒加载）。
+    /// 设计语义：不再在启动期全量预加载所有产出物图标，
+    /// 改为按需加载——只有真正掉落产出物时才发起 IO。
+    /// 1. 路径为空 / 已缓存 / 已在加载中 → 直接返回；
+    /// 2. 加载失败异步静默忽略，不阻塞主流程；
+    /// 3. 首次加载未完成时 UI 自动回退到预制体默认图。
     /// </summary>
-    /// <param name="rows">宠物产出表行集合。</param>
-    private void BeginPreloadProduceSprites(PetProduceDataRow[] rows)
+    /// <param name="produceCode">产出物 Code。</param>
+    public void LoadProduceSprite(string produceCode)
     {
-        _producePreloadRequested = true;
-        _producePreloadCompleted = false;
-
-        if (rows == null || rows.Length == 0)
+        if (string.IsNullOrWhiteSpace(produceCode))
         {
-            // 表为空属于预期情况（数据未配置 / 全部行 IconPath 为空）— 直接判完成，不阻塞 IsReady。
-            UpdatePreloadCompletionState();
-            NotifyPreloadStateChanged();
             return;
         }
 
-        for (int i = 0; i < rows.Length; i++)
+        if (_produceSpritesByCode.ContainsKey(produceCode))
         {
-            PetProduceDataRow row = rows[i];
-            if (row == null)
-            {
-                continue;
-            }
-
-            StartLoadProduceSprite(row);
+            return;
         }
 
-        UpdatePreloadCompletionState();
-        NotifyPreloadStateChanged();
+        if (GameEntry.DataTables == null || !GameEntry.DataTables.IsAvailable<PetProduceDataRow>())
+        {
+            return;
+        }
+
+        PetProduceDataRow row = GameEntry.DataTables.GetDataRowByCode<PetProduceDataRow>(produceCode);
+        StartLoadProduceSprite(row);
     }
 
     /// <summary>
@@ -1762,6 +1969,11 @@ public sealed class GameAssetModule
                 _pendingPetEntityPrefabCount++;
                 break;
 
+            case PreloadAssetKind.MainUIFormPrefab:
+                _loadingMainUIFormPrefabPaths.Add(assetPath);
+                _pendingMainUIFormPrefabCount++;
+                break;
+
             case PreloadAssetKind.PetFoodBubblePrefab:
                 _loadingPetFoodBubblePrefabPaths.Add(assetPath);
                 _pendingPetFoodBubblePrefabCount++;
@@ -1817,11 +2029,19 @@ public sealed class GameAssetModule
                 _pendingDailyChallengeCardSpriteCount++;
                 break;
 
+            case PreloadAssetKind.PetMaterial:
+                _loadingPetMaterialPaths.Add(assetPath);
+                _pendingPetMaterialCount++;
+                break;
+
             case PreloadAssetKind.ProduceSprite:
                 _loadingProduceSpritePaths.Add(assetPath);
                 _pendingProduceSpriteCount++;
                 break;
         }
+
+        // 🔍 诊断日志：记录每一个资源的发起加载事件，与 [ASSET OK] 配对排查未完成的加载。
+        Log.Info("[ASSET LOAD] kind={0}, path={1}", loadInfo.AssetKind, assetPath);
 
         resourceManager.LoadAsset(assetPath, assetType, _loadAssetCallbacks, loadInfo);
         return true;
@@ -1840,6 +2060,9 @@ public sealed class GameAssetModule
             return;
         }
 
+        // 🔍 诊断日志：记录每一个资源的加载完成事件，用于定位 memory out of bounds 前最后加载的资源。
+        Log.Info("[ASSET OK] kind={0}, path={1}, type={2}", loadInfo.AssetKind, loadInfo.AssetPath, asset != null ? asset.GetType().Name : "null");
+
         switch (loadInfo.AssetKind)
         {
             case PreloadAssetKind.EggSprite:
@@ -1854,6 +2077,12 @@ public sealed class GameAssetModule
                 HandlePetSkeletonDataLoaded(loadInfo.AssetPath, asset as SkeletonDataAsset);
                 break;
 
+            case PreloadAssetKind.PetMaterial:
+                _loadingPetMaterialPaths.Remove(loadInfo.AssetPath);
+                _pendingPetMaterialCount = Mathf.Max(0, _pendingPetMaterialCount - 1);
+                HandlePetMaterialLoaded(loadInfo.AssetPath, asset as Material);
+                break;
+
             case PreloadAssetKind.FruitSprite:
                 _loadingFruitAssetPaths.Remove(loadInfo.AssetPath);
                 _pendingFruitAssetCount = Mathf.Max(0, _pendingFruitAssetCount - 1);
@@ -1864,6 +2093,12 @@ public sealed class GameAssetModule
                 _loadingPetEntityPrefabPaths.Remove(loadInfo.AssetPath);
                 _pendingPetEntityPrefabCount = Mathf.Max(0, _pendingPetEntityPrefabCount - 1);
                 HandlePetEntityPrefabLoaded(loadInfo.AssetPath, asset as GameObject);
+                break;
+
+            case PreloadAssetKind.MainUIFormPrefab:
+                _loadingMainUIFormPrefabPaths.Remove(loadInfo.AssetPath);
+                _pendingMainUIFormPrefabCount = Mathf.Max(0, _pendingMainUIFormPrefabCount - 1);
+                HandleMainUIFormPrefabLoaded(loadInfo.AssetPath, asset as GameObject);
                 break;
 
             case PreloadAssetKind.PetFoodBubblePrefab:
@@ -1969,6 +2204,13 @@ public sealed class GameAssetModule
             RegisterFailure(Utility.Text.Format("宠物 SkeletonData 加载失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
             NotifyPetSkeletonDataStateChanged(loadInfo.AssetPath);
         }
+        else if (loadInfo.AssetKind == PreloadAssetKind.PetMaterial)
+        {
+            _loadingPetMaterialPaths.Remove(loadInfo.AssetPath);
+            _pendingPetMaterialCount = Mathf.Max(0, _pendingPetMaterialCount - 1);
+            RegisterFailure(Utility.Text.Format("宠物材质加载失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
+            NotifyPetMaterialStateChanged(loadInfo.AssetPath);
+        }
         else if (loadInfo.AssetKind == PreloadAssetKind.FruitSprite)
         {
             _loadingFruitAssetPaths.Remove(loadInfo.AssetPath);
@@ -1985,6 +2227,12 @@ public sealed class GameAssetModule
             _loadingPetEntityPrefabPaths.Remove(loadInfo.AssetPath);
             _pendingPetEntityPrefabCount = Mathf.Max(0, _pendingPetEntityPrefabCount - 1);
             RegisterFailure(Utility.Text.Format("宠物实体预制体预热失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
+        }
+        else if (loadInfo.AssetKind == PreloadAssetKind.MainUIFormPrefab)
+        {
+            _loadingMainUIFormPrefabPaths.Remove(loadInfo.AssetPath);
+            _pendingMainUIFormPrefabCount = Mathf.Max(0, _pendingMainUIFormPrefabCount - 1);
+            RegisterFailure(Utility.Text.Format("MainUIForm 预制体预热失败，Path='{0}'，Status='{1}'，Error='{2}'。", loadInfo.AssetPath, status, errorMessage));
         }
         else if (loadInfo.AssetKind == PreloadAssetKind.PetFoodBubblePrefab)
         {
@@ -2230,6 +2478,12 @@ public sealed class GameAssetModule
         }
 
         _petSkeletonDataAssetsByPath[skeletonDataPath] = skeletonDataAsset;
+
+        // 【关键】严禁修改 atlas 内嵌材质（如替换 shader 为 Spine/SkeletonGraphic）。
+        // 实体（SkeletonAnimation）和 UI（SkeletonGraphic）共用同一 SkeletonDataAsset 及其 atlas，
+        // 原地改 shader 会让实体侧也用 UI shader 渲染，导致实体材质显示错误。
+        // UI 侧需要 _Stencil 时，由 Pet.txt 的 UiMaterialPath 列配置独立 UI 材质；
+        // 实体侧需要自定义材质时，使用 EntityMaterialPath + CustomMaterialOverride（不修改原始材质）。
         ValidatePetSkeletonData(skeletonDataPath, skeletonDataAsset);
         NotifyPetSkeletonDataStateChanged(skeletonDataPath);
     }
@@ -2247,6 +2501,38 @@ public sealed class GameAssetModule
         }
 
         PetSkeletonDataStateChanged?.Invoke(skeletonDataPath);
+    }
+
+    /// <summary>
+    /// 处理宠物材质加载完成。
+    /// </summary>
+    /// <param name="materialPath">材质资源路径。</param>
+    /// <param name="material">加载到的材质资源。</param>
+    private void HandlePetMaterialLoaded(string materialPath, Material material)
+    {
+        if (material == null)
+        {
+            RegisterFailure(Utility.Text.Format("宠物材质加载失败，资源类型不是 Material，Path='{0}'。", materialPath));
+            NotifyPetMaterialStateChanged(materialPath);
+            return;
+        }
+
+        _petMaterialsByPath[materialPath] = material;
+        NotifyPetMaterialStateChanged(materialPath);
+    }
+
+    /// <summary>
+    /// 通知指定宠物材质路径的加载状态发生变化。
+    /// </summary>
+    /// <param name="materialPath">发生变化的材质资源路径。</param>
+    private void NotifyPetMaterialStateChanged(string materialPath)
+    {
+        if (string.IsNullOrWhiteSpace(materialPath))
+        {
+            return;
+        }
+
+        PetMaterialStateChanged?.Invoke(materialPath);
     }
 
     /// <summary>
@@ -2289,6 +2575,7 @@ public sealed class GameAssetModule
         }
 
         _produceSpritesByCode[produceCode] = sprite;
+        ProduceSpriteLoaded?.Invoke(produceCode);
     }
 
     /// <summary>
@@ -2421,6 +2708,22 @@ public sealed class GameAssetModule
         }
 
         _petEntityPrefab = petEntityPrefab;
+    }
+
+    /// <summary>
+    /// 处理 MainUIForm 预制体预热完成。
+    /// </summary>
+    /// <param name="assetPath">预制体资源路径。</param>
+    /// <param name="mainUIFormPrefab">命中的 MainUIForm 预制体资源。</param>
+    private void HandleMainUIFormPrefabLoaded(string assetPath, GameObject mainUIFormPrefab)
+    {
+        if (mainUIFormPrefab == null)
+        {
+            RegisterFailure(Utility.Text.Format("MainUIForm 预制体预热失败，资源类型不是 GameObject，Path='{0}'。", assetPath));
+            return;
+        }
+
+        _mainUIFormPrefab = mainUIFormPrefab;
     }
 
     /// <summary>
@@ -2592,6 +2895,11 @@ public sealed class GameAssetModule
             _petPreloadCompleted = true;
         }
 
+        if (_petMaterialPreloadRequested && _pendingPetMaterialCount <= 0)
+        {
+            _petMaterialPreloadCompleted = true;
+        }
+
         if (_fruitPreloadRequested && _pendingFruitAssetCount <= 0)
         {
             _fruitPreloadCompleted = true;
@@ -2600,6 +2908,11 @@ public sealed class GameAssetModule
         if (_petEntityPrefabPreloadRequested && _pendingPetEntityPrefabCount <= 0)
         {
             _petEntityPrefabPreloadCompleted = true;
+        }
+
+        if (_mainUIFormPrefabPreloadRequested && _pendingMainUIFormPrefabCount <= 0)
+        {
+            _mainUIFormPrefabPreloadCompleted = true;
         }
 
         if (_petFoodBubblePrefabPreloadRequested && _pendingPetFoodBubblePrefabCount <= 0)
@@ -2657,10 +2970,6 @@ public sealed class GameAssetModule
             _dailyChallengeCardSpritePreloadCompleted = true;
         }
 
-        if (_producePreloadRequested && _pendingProduceSpriteCount <= 0)
-        {
-            _producePreloadCompleted = true;
-        }
     }
 
     /// <summary>

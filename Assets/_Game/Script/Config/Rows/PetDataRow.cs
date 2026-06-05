@@ -14,10 +14,10 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
 
     /// <summary>
     /// 数据表固定列数。
-    /// 新增 EatFruitCount / ProduceProbability 后为 15
-    /// （Id Code Name Quality EntitySkeletonDataPath UiSkeletonDataPath IdleAnimationName MoveAnimationName GiveGoldAnimationName AttributeType AttributeValue RequiredStars EatFruitCount ProduceProbability Description）。
+    /// 移除 UiSkeletonDataPath、新增 EntityMaterialPath / UiMaterialPath 后为 16
+    /// （Id Code Name Quality EntitySkeletonDataPath EntityMaterialPath UiMaterialPath IdleAnimationName MoveAnimationName GiveGoldAnimationName AttributeType AttributeValue RequiredStars EatFruitCount ProduceProbability Description）。
     /// </summary>
-    private const int ColumnCount = 15;
+    private const int ColumnCount = 16;
 
     /// <summary>
     /// 合法宠物 Code 的前缀。
@@ -56,10 +56,18 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
     public string EntitySkeletonDataPath { get; private set; }
 
     /// <summary>
-    /// UI 使用的 Spine SkeletonData 资源路径。
-    /// 图鉴、详情面板等 UI 角色只读取这条路径。
+    /// 实体使用的材质资源路径。
+    /// 宠物实体（SkeletonAnimation）渲染时用此材质替换 atlas 默认材质。
+    /// 为空时回退到 atlas 默认材质。
     /// </summary>
-    public string UiSkeletonDataPath { get; private set; }
+    public string EntityMaterialPath { get; private set; }
+
+    /// <summary>
+    /// UI 使用的材质资源路径。
+    /// UI 宠物（SkeletonGraphic）渲染时用此材质替换 atlas 默认材质。
+    /// 为空时回退到 atlas 默认材质。
+    /// </summary>
+    public string UiMaterialPath { get; private set; }
 
     /// <summary>
     /// 待机动画名。
@@ -167,43 +175,42 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
             return false;
         }
 
-        string uiSkeletonDataPath = columns[5].Trim();
-        if (string.IsNullOrWhiteSpace(uiSkeletonDataPath))
-        {
-            Log.Warning("PetDataRow parse failed because UiSkeletonDataPath is empty, code '{0}'.", code);
-            return false;
-        }
+        // EntityMaterialPath：允许为空；为空时实体回退到 atlas 默认材质。
+        string entityMaterialPath = columns[5].Trim();
 
-        string idleAnimationName = columns[6].Trim();
+        // UiMaterialPath：允许为空；为空时 UI 回退到 atlas 默认材质。
+        string uiMaterialPath = columns[6].Trim();
+
+        string idleAnimationName = columns[7].Trim();
         if (string.IsNullOrWhiteSpace(idleAnimationName))
         {
             Log.Warning("PetDataRow parse failed because IdleAnimationName is empty, code '{0}'.", code);
             return false;
         }
 
-        string moveAnimationName = columns[7].Trim();
+        string moveAnimationName = columns[8].Trim();
         if (string.IsNullOrWhiteSpace(moveAnimationName))
         {
             Log.Warning("PetDataRow parse failed because MoveAnimationName is empty, code '{0}'.", code);
             return false;
         }
 
-        string giveGoldAnimationName = columns[8].Trim();
+        string giveGoldAnimationName = columns[9].Trim();
         if (string.IsNullOrWhiteSpace(giveGoldAnimationName))
         {
             Log.Warning("PetDataRow parse failed because GiveGoldAnimationName is empty, code '{0}'.", code);
             return false;
         }
 
-        if (!Enum.TryParse(columns[9].Trim(), true, out PetAttributeType attributeType) || !Enum.IsDefined(typeof(PetAttributeType), attributeType))
+        if (!Enum.TryParse(columns[10].Trim(), true, out PetAttributeType attributeType) || !Enum.IsDefined(typeof(PetAttributeType), attributeType))
         {
-            Log.Warning("PetDataRow parse failed because AttributeType '{0}' is invalid, code '{1}'.", columns[9], code);
+            Log.Warning("PetDataRow parse failed because AttributeType '{0}' is invalid, code '{1}'.", columns[10], code);
             return false;
         }
 
-        if (!int.TryParse(columns[10], out int attributeValue))
+        if (!int.TryParse(columns[11], out int attributeValue))
         {
-            Log.Warning("PetDataRow parse failed because AttributeValue '{0}' is invalid, code '{1}'.", columns[10], code);
+            Log.Warning("PetDataRow parse failed because AttributeValue '{0}' is invalid, code '{1}'.", columns[11], code);
             return false;
         }
 
@@ -221,23 +228,23 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
 
         // RequiredStars：进入孵化候选池所需的玩家星星阈值；0 表示不限，负值不合法。
         // 之所以放在 AttributeValue 与 EatFruitCount 之间，是为了与 Egg/ArchitectureSlot/ArchitectureUpgrade 三表的列序保持完全一致，便于策划维护。
-        if (!int.TryParse(columns[11], out int requiredStars) || requiredStars < 0)
+        if (!int.TryParse(columns[12], out int requiredStars) || requiredStars < 0)
         {
-            Log.Warning("PetDataRow parse failed because RequiredStars '{0}' is invalid, code '{1}'.", columns[11], code);
+            Log.Warning("PetDataRow parse failed because RequiredStars '{0}' is invalid, code '{1}'.", columns[12], code);
             return false;
         }
 
         // EatFruitCount：必须为正整数。0 等价于“宠物不会吃饭”，没有任何业务意义，禁止配置。
-        if (!int.TryParse(columns[12], out int eatFruitCount) || eatFruitCount <= 0)
+        if (!int.TryParse(columns[13], out int eatFruitCount) || eatFruitCount <= 0)
         {
-            Log.Warning("PetDataRow parse failed because EatFruitCount '{0}' is invalid, code '{1}'.", columns[12], code);
+            Log.Warning("PetDataRow parse failed because EatFruitCount '{0}' is invalid, code '{1}'.", columns[13], code);
             return false;
         }
 
         // ProduceProbability：0-100 整数；0 表示宠物永远不掉产出物，100 表示每次必掉。
-        if (!int.TryParse(columns[13], out int produceProbability) || produceProbability < 0 || produceProbability > 100)
+        if (!int.TryParse(columns[14], out int produceProbability) || produceProbability < 0 || produceProbability > 100)
         {
-            Log.Warning("PetDataRow parse failed because ProduceProbability '{0}' is invalid, code '{1}'.", columns[13], code);
+            Log.Warning("PetDataRow parse failed because ProduceProbability '{0}' is invalid, code '{1}'.", columns[14], code);
             return false;
         }
 
@@ -246,7 +253,8 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
         Name = name;
         Quality = quality;
         EntitySkeletonDataPath = entitySkeletonDataPath;
-        UiSkeletonDataPath = uiSkeletonDataPath;
+        EntityMaterialPath = entityMaterialPath;
+        UiMaterialPath = uiMaterialPath;
         IdleAnimationName = idleAnimationName;
         MoveAnimationName = moveAnimationName;
         GiveGoldAnimationName = giveGoldAnimationName;
@@ -255,7 +263,7 @@ public sealed class PetDataRow : DataRowBase, ICodeDataRow
         RequiredStars = requiredStars;
         EatFruitCount = eatFruitCount;
         ProduceProbability = produceProbability;
-        Description = columns[14].Trim();
+        Description = columns[15].Trim();
         return true;
     }
 

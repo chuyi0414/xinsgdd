@@ -99,6 +99,25 @@ public partial class MainUIForm : UIFormLogic
     // 当前是否正在等待手动云存档的保存结果。
     // 自动保存也会触发 CloudSaveModule 的保存事件，使用该标记避免自动保存弹出保存提示。
     private bool _isWaitingManualCloudSaveResult;
+
+    /// <summary>
+    /// 主界面运行期子视图是否已经完成首次初始化。
+    /// 初始值为 false；首次打开 MainUIForm 后延迟一帧执行完整初始化，成功后置为 true。
+    /// </summary>
+    private bool _isRuntimeViewInitialized;
+
+    /// <summary>
+    /// 是否存在一次等待执行的运行期子视图打开请求。
+    /// 初始值为 false；OnOpen 里置为 true，OnUpdate 跨帧消费。
+    /// </summary>
+    private bool _isRuntimeViewOpenPending;
+
+    /// <summary>
+    /// 运行期子视图打开请求剩余延迟帧数。
+    /// 初始值为 0；OnOpen 设置为 1，确保微信小游戏真机上 UIForm 实例化栈彻底退出后再做重逻辑。
+    /// </summary>
+    private int _runtimeViewOpenDelayFrames;
+
     // 分页可视区域，未手动绑定时默认取 GoYiDong 的父节点。
     [SerializeField]
     private RectTransform _pageViewport;
@@ -154,7 +173,7 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     protected override void OnInit(object userData)
     {
-        CacheReferences();
+        Log.Info("[MainUIForm.OnInit] start");
         _isDailyChallengeAuxiliaryUiHidden = false;
         _pendingRestoreDailyChallengeAuxiliaryUi = false;
         _isWaitingManualCloudSaveResult = false;
@@ -214,19 +233,11 @@ public partial class MainUIForm : UIFormLogic
         }
 
         base.OnInit(userData);
-        RefreshPageLayout(true);
-        UpdateButtonState();
-        InitializeHatchView();
-        InitializeAutoHatchView();
-        InitializePetPlacementView();
-        InitializeGoldView();
-        InitializeStarsView();
-        InitializeProduceView();
-        InitializeArchitectureView();
-        InitializeDailyChallengeView();
-        InitializeFruitTJView();
-        InitializePetTJView();
-        CachePersonalSettingButton();
+        Log.Info("[MainUIForm.OnInit] base done");
+        _isRuntimeViewInitialized = false;
+        _isRuntimeViewOpenPending = false;
+        _runtimeViewOpenDelayFrames = 0;
+        Log.Info("[MainUIForm.OnInit] done");
     }
 
     /// <summary>
@@ -235,27 +246,12 @@ public partial class MainUIForm : UIFormLogic
     protected override void OnOpen(object userData)
     {
         base.OnOpen(userData);
+        Log.Info("[MainUIForm.OnOpen] start");
         _isDailyChallengeAuxiliaryUiHidden = false;
         _pendingRestoreDailyChallengeAuxiliaryUi = false;
         _isWaitingManualCloudSaveResult = false;
-        RefreshPageLayout(true);
-        UpdateButtonState();
-        OpenHatchView();
-        OpenAutoHatchView();
-        OpenPetPlacementView();
-        OpenGoldView();
-        OpenStarsView();
-        OpenProduceView();
-        OpenArchitectureView();
-        OpenDailyChallengeView();
-        TryFlushPendingPetRewardDrops();
-        RefreshPlayerNameDisplay();
-        RefreshAvatarDisplay();
-        SubscribeAvatarDisplayEvents();
-        GameEntry.CloudSave?.RegisterMainUIForm(this);
-        SubscribeManualCloudSaveResultEvents();
-        // 每日一关解锁闸门：订阅事件并按当前解锁数刷新图标颜色。
-        OpenDailyChallengeGate();
+        RequestDeferredRuntimeViewOpen();
+        Log.Info("[MainUIForm.OnOpen] runtime view open deferred");
     }
 
     /// <summary>
@@ -263,6 +259,8 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     protected override void OnClose(bool isShutdown, object userData)
     {
+        _isRuntimeViewOpenPending = false;
+        _runtimeViewOpenDelayFrames = 0;
         GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
         GameEntry.CloudSave?.SaveNow(true);
         _isWaitingManualCloudSaveResult = false;
@@ -270,17 +268,21 @@ public partial class MainUIForm : UIFormLogic
         UnsubscribeManualCloudSaveResultEvents();
         GameEntry.CloudSave?.UnregisterMainUIForm(this);
         StopSwitchTween();
-        CloseHatchView();
-        CloseAutoHatchView();
-        ClosePetPlacementView();
-        CloseGoldView();
-        CloseProduceView();
-        CloseArchitectureView();
-        CloseDailyChallengeView();
-        CloseFruitTJView();
-        ClosePetTJView();
-        // 每日一关解锁闸门：退订 CollectionUnlocksChanged，避免界面关闭后仍响应事件。
-        CloseDailyChallengeGate();
+        if (_isRuntimeViewInitialized)
+        {
+            CloseHatchView();
+            CloseAutoHatchView();
+            ClosePetPlacementView();
+            CloseGoldView();
+            CloseProduceView();
+            CloseArchitectureView();
+            CloseDailyChallengeView();
+            CloseFruitTJView();
+            ClosePetTJView();
+            // 每日一关解锁闸门：退订 CollectionUnlocksChanged，避免界面关闭后仍响应事件。
+            CloseDailyChallengeGate();
+        }
+
         base.OnClose(isShutdown, userData);
     }
 
@@ -291,6 +293,11 @@ public partial class MainUIForm : UIFormLogic
     protected override void OnReveal()
     {
         base.OnReveal();
+        if (!_isRuntimeViewInitialized)
+        {
+            return;
+        }
+
         RefreshPlayerNameDisplay();
         RefreshAvatarDisplay();
     }
@@ -301,6 +308,12 @@ public partial class MainUIForm : UIFormLogic
     protected override void OnUpdate(float elapseSeconds, float realElapseSeconds)
     {
         base.OnUpdate(elapseSeconds, realElapseSeconds);
+        TryConsumeDeferredRuntimeViewOpen();
+        if (!_isRuntimeViewInitialized)
+        {
+            return;
+        }
+
         UpdateHatchView();
         UpdateAutoHatchView();
         UpdatePetPlacementView();
@@ -313,6 +326,9 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     private void OnDestroy()
     {
+        _isRuntimeViewOpenPending = false;
+        _runtimeViewOpenDelayFrames = 0;
+        _isRuntimeViewInitialized = false;
         _isWaitingManualCloudSaveResult = false;
         UnsubscribeAvatarDisplayEvents();
         UnsubscribeManualCloudSaveResultEvents();
@@ -367,6 +383,102 @@ public partial class MainUIForm : UIFormLogic
         DestroyPersonalSettingButton();
         // 每日一关解锁闸门：双保险退订，防止 OnClose 未被调用时出现悬挂引用。
         DestroyDailyChallengeGate();
+    }
+
+    /// <summary>
+    /// 请求跨帧打开主界面运行期子视图。
+    /// 该方法只设置轻量状态，不做任何实例化、资源加载或大规模层级遍历。
+    /// </summary>
+    private void RequestDeferredRuntimeViewOpen()
+    {
+        _isRuntimeViewOpenPending = true;
+        _runtimeViewOpenDelayFrames = 1;
+    }
+
+    /// <summary>
+    /// 尝试消费跨帧打开请求。
+    /// 微信小游戏真机上，UIForm 的实例化、OnInit、OnOpen 属于同一条较深调用栈；
+    /// 这里强制等到下一帧再初始化子视图，避免在栈尚未退出时继续触发大量 UI/Entity/事件逻辑。
+    /// </summary>
+    private void TryConsumeDeferredRuntimeViewOpen()
+    {
+        if (!_isRuntimeViewOpenPending)
+        {
+            return;
+        }
+
+        if (_runtimeViewOpenDelayFrames > 0)
+        {
+            _runtimeViewOpenDelayFrames--;
+            return;
+        }
+
+        _isRuntimeViewOpenPending = false;
+        InitializeRuntimeViewsIfNeeded();
+        OpenRuntimeViews();
+    }
+
+    /// <summary>
+    /// 首次初始化主界面运行期子视图。
+    /// 初始化只执行一次；后续 MainUIForm 复用打开时只走 OpenRuntimeViews 刷新状态。
+    /// </summary>
+    private void InitializeRuntimeViewsIfNeeded()
+    {
+        if (_isRuntimeViewInitialized)
+        {
+            return;
+        }
+
+        Log.Info("[MainUIForm.RuntimeInit] start");
+        CacheReferences(); Log.Info("[MainUIForm.RuntimeInit] CacheReferences done");
+        RefreshPageLayout(true); Log.Info("[MainUIForm.RuntimeInit] RefreshPageLayout done");
+        UpdateButtonState(); Log.Info("[MainUIForm.RuntimeInit] UpdateButtonState done");
+        InitializeHatchView(); Log.Info("[MainUIForm.RuntimeInit] InitializeHatchView done");
+        InitializeAutoHatchView(); Log.Info("[MainUIForm.RuntimeInit] InitializeAutoHatchView done");
+        InitializePetPlacementView(); Log.Info("[MainUIForm.RuntimeInit] InitializePetPlacementView done");
+        InitializeGoldView(); Log.Info("[MainUIForm.RuntimeInit] InitializeGoldView done");
+        InitializeStarsView(); Log.Info("[MainUIForm.RuntimeInit] InitializeStarsView done");
+        InitializeProduceView(); Log.Info("[MainUIForm.RuntimeInit] InitializeProduceView done");
+        InitializeArchitectureView(); Log.Info("[MainUIForm.RuntimeInit] InitializeArchitectureView done");
+        InitializeDailyChallengeView(); Log.Info("[MainUIForm.RuntimeInit] InitializeDailyChallengeView done");
+        InitializeFruitTJView(); Log.Info("[MainUIForm.RuntimeInit] InitializeFruitTJView done");
+        InitializePetTJView(); Log.Info("[MainUIForm.RuntimeInit] InitializePetTJView done");
+        CachePersonalSettingButton(); Log.Info("[MainUIForm.RuntimeInit] CachePersonalSettingButton done");
+        _isRuntimeViewInitialized = true;
+        Log.Info("[MainUIForm.RuntimeInit] done");
+    }
+
+    /// <summary>
+    /// 打开或复用打开主界面运行期子视图。
+    /// 该方法只在 InitializeRuntimeViewsIfNeeded 成功后执行，确保所有子视图缓存已经具备可用初始状态。
+    /// </summary>
+    private void OpenRuntimeViews()
+    {
+        if (!_isRuntimeViewInitialized)
+        {
+            return;
+        }
+
+        Log.Info("[MainUIForm.RuntimeOpen] start");
+        RefreshPageLayout(true); Log.Info("[MainUIForm.RuntimeOpen] RefreshPageLayout done");
+        UpdateButtonState(); Log.Info("[MainUIForm.RuntimeOpen] UpdateButtonState done");
+        OpenHatchView(); Log.Info("[MainUIForm.RuntimeOpen] OpenHatchView done");
+        OpenAutoHatchView(); Log.Info("[MainUIForm.RuntimeOpen] OpenAutoHatchView done");
+        OpenPetPlacementView(); Log.Info("[MainUIForm.RuntimeOpen] OpenPetPlacementView done");
+        OpenGoldView(); Log.Info("[MainUIForm.RuntimeOpen] OpenGoldView done");
+        OpenStarsView(); Log.Info("[MainUIForm.RuntimeOpen] OpenStarsView done");
+        OpenProduceView(); Log.Info("[MainUIForm.RuntimeOpen] OpenProduceView done");
+        OpenArchitectureView(); Log.Info("[MainUIForm.RuntimeOpen] OpenArchitectureView done");
+        OpenDailyChallengeView(); Log.Info("[MainUIForm.RuntimeOpen] OpenDailyChallengeView done");
+        TryFlushPendingPetRewardDrops();
+        RefreshPlayerNameDisplay();
+        RefreshAvatarDisplay();
+        SubscribeAvatarDisplayEvents();
+        GameEntry.CloudSave?.RegisterMainUIForm(this);
+        SubscribeManualCloudSaveResultEvents();
+        // 每日一关解锁闸门：订阅事件并按当前解锁数刷新图标颜色。
+        OpenDailyChallengeGate();
+        Log.Info("[MainUIForm.RuntimeOpen] done");
     }
 
     /// <summary>
@@ -545,7 +657,7 @@ public partial class MainUIForm : UIFormLogic
     /// </summary>
     private void OnRectTransformDimensionsChange()
     {
-        if (!gameObject.activeInHierarchy)
+        if (!gameObject.activeInHierarchy || !_isRuntimeViewInitialized)
         {
             return;
         }
@@ -636,7 +748,10 @@ public partial class MainUIForm : UIFormLogic
         StopSwitchTween();
         UpdateButtonState();
         MarkPetPlacementLayoutDirty();
-        SyncPetPlacementMarkersToEntities();
+        if (!_isPetPlacementSyncDeferred)
+        {
+            SyncPetPlacementMarkersToEntities();
+        }
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityGameFramework.Runtime;
 
 /// <summary>
@@ -6,6 +7,15 @@ using UnityGameFramework.Runtime;
 /// </summary>
 public sealed class TableEntityLogic : EntityLogic
 {
+    /// <summary>
+    /// 建筑未解锁时的渲染顺序。
+    /// </summary>
+    private const int LockedSortingOrder = 10;
+
+    /// <summary>
+    /// 建筑解锁后的渲染顺序。
+    /// </summary>
+    private const int UnlockedSortingOrder = 20;
     /// <summary>
     /// 宠物入座挂点路径。
     /// </summary>
@@ -47,6 +57,13 @@ public sealed class TableEntityLogic : EntityLogic
     /// 是否已经缓存过 prefab 默认颜色。
     /// </summary>
     private bool _hasCachedDefaultColor;
+
+    /// <summary>
+    /// 桌子实体的排序组组件。
+    /// 由 Inspector 手动拖入，统一控制桌子所有子渲染器的排序层级。
+    /// </summary>
+    [SerializeField]
+    private SortingGroup _sortingGroup;
 
     /// <summary>
     /// 对外暴露的宠物入座挂点。
@@ -98,6 +115,13 @@ public sealed class TableEntityLogic : EntityLogic
         else
         {
             ApplyLevelSprite(PlayerRuntimeModule.ArchitectureCategory.Diet, entityData.Level);
+        }
+
+        if (_sortingGroup != null)
+        {
+            _sortingGroup.sortingOrder = entityData.IsUnlocked
+                ? UnlockedSortingOrder
+                : LockedSortingOrder;
         }
     }
 
@@ -186,6 +210,11 @@ public sealed class TableEntityLogic : EntityLogic
                 _defaultSprite = _spriteRenderer.sprite;
                 _hasCachedDefaultColor = true;
             }
+        }
+
+        if (_sortingGroup == null)
+        {
+            _sortingGroup = GetComponent<SortingGroup>();
         }
 
         if (_diningAnchor == null)

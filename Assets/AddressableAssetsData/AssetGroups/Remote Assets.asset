@@ -21,7 +21,13 @@ MonoBehaviour:
     m_Address: Prefabs/UI/Load/LoadUIForm
     m_ReadOnly: 0
     m_SerializedLabels:
-    - Load
+    - load
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f0f6d24574d6a0b4f9ebbb85dd76622e
+    m_Address: Prefabs/UI/Main/MainUIForm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - main
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 037329be66bb390418a43cb9b9520078, type: 2}

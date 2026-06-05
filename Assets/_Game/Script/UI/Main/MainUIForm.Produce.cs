@@ -159,6 +159,11 @@ public partial class MainUIForm
             GameEntry.PetDiningOrders.ProduceDropRequested += OnProduceDropRequested;
         }
 
+        if (GameEntry.GameAssets != null)
+        {
+            GameEntry.GameAssets.ProduceSpriteLoaded += OnProduceSpriteLoadedInMain;
+        }
+
         _isProduceEventSubscribed = true;
     }
 
@@ -177,12 +182,41 @@ public partial class MainUIForm
             GameEntry.PetDiningOrders.ProduceDropRequested -= OnProduceDropRequested;
         }
 
+        if (GameEntry.GameAssets != null)
+        {
+            GameEntry.GameAssets.ProduceSpriteLoaded -= OnProduceSpriteLoadedInMain;
+        }
+
         _isProduceEventSubscribed = false;
     }
 
     // ──────────────────────────────────────────────────────────
     //  事件回调
     // ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 产出物图标懒加载完成回调。
+    /// 刷新场上已有的产出物按钮图标。
+    /// </summary>
+    /// <param name=\"produceCode\">加载完成的产出物 Code。</param>
+    private void OnProduceSpriteLoadedInMain(string produceCode)
+    {
+        if (string.IsNullOrWhiteSpace(produceCode) || _activeProduceItems == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _activeProduceItems.Count; i++)
+        {
+            OutputProduceItem item = _activeProduceItems[i];
+            if (item == null || !string.Equals(item.ProduceCode, produceCode, System.StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            ApplyProduceItemIcon(item, produceCode);
+        }
+    }
 
     /// <summary>
     /// 产出物掉落事件回调。
@@ -283,7 +317,11 @@ public partial class MainUIForm
         if (GameEntry.GameAssets != null)
         {
             // 命中失败时 produceSprite 保持 null，由 SetIcon 内部回退到预制体默认图。
-            GameEntry.GameAssets.TryGetProduceSprite(produceCode, out produceSprite);
+            if (!GameEntry.GameAssets.TryGetProduceSprite(produceCode, out produceSprite))
+            {
+                // 未命中缓存 → 触发按需懒加载；本次使用默认图，加载完成后下次产出物即命中缓存。
+                GameEntry.GameAssets.LoadProduceSprite(produceCode);
+            }
         }
 
         produceItem.SetIcon(produceSprite);

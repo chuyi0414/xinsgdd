@@ -23,14 +23,14 @@ MonoBehaviour:
     DST: C:/Users/ChuYi/Desktop/weixinxiaochengxu/xinsgdd
     StreamCDN: 
     bundleHashLength: 32
-    bundlePathIdentifier: StreamingAssets;
+    bundlePathIdentifier: StreamingAssets;ServerData_sgdd
     bundleExcludeExtensions: json;
     AssetsUrl: 
-    MemorySize: 256
+    MemorySize: 496
     HideAfterCallMain: 1
     preloadFiles: 
     Orientation: 0
-    bgImageSrc: Assets/_Game/Resources_moved/Arts/Load/UI_Jiazai_001.png
+    bgImageSrc: Assets/_Game/Resources/Arts/Load/UI_Jiazai_001.png
     dataFileSubPrefix: 
     maxStorage: 200
     defaultReleaseSize: 31457280
@@ -54,8 +54,8 @@ MonoBehaviour:
     Il2CppOptimizeSize: 1
     profilingFuncs: 0
     Webgl2: 1
-    fbslim: 1
-    DeleteStreamingAssets: 0
+    fbslim: 0
+    DeleteStreamingAssets: 1
     ProfilingMemory: 0
     CleanBuild: 1
     CustomNodePath: 

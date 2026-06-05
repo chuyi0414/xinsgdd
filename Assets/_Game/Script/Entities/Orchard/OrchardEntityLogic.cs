@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityGameFramework.Runtime;
 
 /// <summary>
@@ -6,6 +7,15 @@ using UnityGameFramework.Runtime;
 /// </summary>
 public sealed class OrchardEntityLogic : EntityLogic
 {
+    /// <summary>
+    /// 建筑未解锁时的渲染顺序。
+    /// </summary>
+    private const int LockedSortingOrder = 10;
+
+    /// <summary>
+    /// 建筑解锁后的渲染顺序。
+    /// </summary>
+    private const int UnlockedSortingOrder = 20;
     /// <summary>
     /// 水果出生挂点。
     /// 由 Inspector 手动拖入 OrchardEntity prefab 内的子节点，
@@ -35,6 +45,13 @@ public sealed class OrchardEntityLogic : EntityLogic
     /// 是否已经缓存过 prefab 默认颜色。
     /// </summary>
     private bool _hasCachedDefaultColor;
+
+    /// <summary>
+    /// 果园实体的排序组组件。
+    /// 由 Inspector 手动拖入，统一控制果园所有子渲染器的排序层级。
+    /// </summary>
+    [SerializeField]
+    private SortingGroup _sortingGroup;
 
     /// <summary>
     /// 初始化并缓存渲染组件。
@@ -76,6 +93,13 @@ public sealed class OrchardEntityLogic : EntityLogic
         else
         {
             ApplyLevelSprite(PlayerRuntimeModule.ArchitectureCategory.Fruiter, entityData.Level);
+        }
+
+        if (_sortingGroup != null)
+        {
+            _sortingGroup.sortingOrder = entityData.IsUnlocked
+                ? UnlockedSortingOrder
+                : LockedSortingOrder;
         }
     }
 
@@ -193,6 +217,11 @@ public sealed class OrchardEntityLogic : EntityLogic
                 _defaultSprite = _spriteRenderer.sprite;
                 _hasCachedDefaultColor = true;
             }
+        }
+
+        if (_sortingGroup == null)
+        {
+            _sortingGroup = GetComponent<SortingGroup>();
         }
     }
 }

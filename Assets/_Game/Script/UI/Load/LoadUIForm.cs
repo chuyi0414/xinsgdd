@@ -94,14 +94,16 @@ public class LoadUIForm : UIFormLogic
     {
         UIInteractionSound.PlayClick();
         if (_enteredMain) return;
-        _enteredMain = true;
-        EnterMain();
-    }
 
-    private void EnterMain()
-    {
-        GameFramework.Procedure.ProcedureBase currentProcedure = GameEntry.Procedure.CurrentProcedure;
-        currentProcedure.ChangeState<MainProcedure>(currentProcedure.procedureOwner);
+        LoadProcedure loadProcedure = GameEntry.Procedure.CurrentProcedure as LoadProcedure;
+        if (loadProcedure == null || !loadProcedure.RequestEnterMainFromLoadUI())
+        {
+            SetLoadButtonInteractable(LoadProcedure.CanEnterMain());
+            return;
+        }
+
+        _enteredMain = true;
+        SetLoadButtonInteractable(false);
     }
 
     private void SetProgress(float progress)
@@ -111,25 +113,6 @@ public class LoadUIForm : UIFormLogic
 
     private static bool CanEnterMain()
     {
-        bool isBaseReady = GameEntry.DataTables != null
-            && GameEntry.DataTables.IsReady
-            && GameEntry.GameAssets != null
-            && GameEntry.GameAssets.IsReady;
-        if (!isBaseReady)
-        {
-            return false;
-        }
-
-        if (GameEntry.CloudSave == null)
-        {
-            return true;
-        }
-
-        if (!GameEntry.CloudSave.HasBegunInitialize)
-        {
-            GameEntry.CloudSave.BeginInitialize();
-        }
-
-        return GameEntry.CloudSave.IsReady;
+        return LoadProcedure.CanEnterMain();
     }
 }
