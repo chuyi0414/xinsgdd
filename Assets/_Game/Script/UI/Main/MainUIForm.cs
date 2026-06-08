@@ -60,6 +60,20 @@ public partial class MainUIForm : UIFormLogic
     // 用户在 Inspector 中自行拖入对应 Button 组件，不做运行时路径查找。
     [SerializeField]
     private Button _btnManualCloudSave;
+
+    /// <summary>
+    /// 存钱罐广告领奖入口按钮。
+    /// 初始状态由 MainUIForm.prefab 的 Inspector 绑定；点击后只负责打开 _savingPotAdRewardView。
+    /// </summary>
+    [SerializeField]
+    private Button _btnSavingPotAdReward;
+
+    /// <summary>
+    /// 存钱罐广告领奖确认弹窗。
+    /// 初始状态由 MainUIForm.prefab 的 Inspector 绑定；内部包含“是/否”两个按钮和广告领奖逻辑。
+    /// </summary>
+    [SerializeField]
+    private SavingPotAdRewardView _savingPotAdRewardView;
     // 每日一关附属 UI：GoTX 根节点。进入每日一关时隐藏，返回中页动画结束后恢复。
     [SerializeField]
     private GameObject _goTX;
@@ -232,6 +246,8 @@ public partial class MainUIForm : UIFormLogic
             _btnManualCloudSave.onClick.AddListener(OnBtnManualCloudSave);
         }
 
+        InitializeSavingPotAdRewardEntry();
+
         base.OnInit(userData);
         Log.Info("[MainUIForm.OnInit] base done");
         _isRuntimeViewInitialized = false;
@@ -250,6 +266,7 @@ public partial class MainUIForm : UIFormLogic
         _isDailyChallengeAuxiliaryUiHidden = false;
         _pendingRestoreDailyChallengeAuxiliaryUi = false;
         _isWaitingManualCloudSaveResult = false;
+        HideSavingPotAdRewardView();
         RequestDeferredRuntimeViewOpen();
         Log.Info("[MainUIForm.OnOpen] runtime view open deferred");
     }
@@ -264,6 +281,7 @@ public partial class MainUIForm : UIFormLogic
         GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PendingDrops);
         GameEntry.CloudSave?.SaveNow(true);
         _isWaitingManualCloudSaveResult = false;
+        HideSavingPotAdRewardView();
         UnsubscribeAvatarDisplayEvents();
         UnsubscribeManualCloudSaveResultEvents();
         GameEntry.CloudSave?.UnregisterMainUIForm(this);
@@ -370,6 +388,7 @@ public partial class MainUIForm : UIFormLogic
             _btnManualCloudSave.onClick.RemoveListener(OnBtnManualCloudSave);
         }
 
+        DestroySavingPotAdRewardEntry();
         DestroyHatchView();
         DestroyAutoHatchView();
         DestroyPetPlacementView();
@@ -564,6 +583,82 @@ public partial class MainUIForm : UIFormLogic
             SwitchToPage(MainPageSlot.Below);
             ScheduleDailyChallengeUIFormOpenAfterSwitch();
         }
+    }
+
+    /// <summary>
+    /// 初始化存钱罐广告领奖入口。
+    /// 该方法只在 MainUIForm.OnInit 中执行一次，避免运行期反复注册按钮监听。
+    /// </summary>
+    private void InitializeSavingPotAdRewardEntry()
+    {
+        if (_btnSavingPotAdReward != null)
+        {
+            _btnSavingPotAdReward.onClick.RemoveListener(OnBtnSavingPotAdReward);
+            _btnSavingPotAdReward.onClick.AddListener(OnBtnSavingPotAdReward);
+        }
+        else
+        {
+            Log.Warning("MainUIForm 缺少存钱罐广告领奖入口按钮引用，请在 Inspector 中绑定 _btnSavingPotAdReward。");
+        }
+
+        if (_savingPotAdRewardView != null)
+        {
+            // 弹窗脚本内部会缓存“是/否”按钮并默认隐藏自身，MainUIForm 不直接碰弹窗内部子节点。
+            _savingPotAdRewardView.Initialize();
+        }
+        else
+        {
+            Log.Warning("MainUIForm 缺少存钱罐广告领奖弹窗引用，请在 Inspector 中绑定 _savingPotAdRewardView。");
+        }
+    }
+
+    /// <summary>
+    /// 销毁存钱罐广告领奖入口。
+    /// 移除入口按钮监听，并通知弹窗脚本清理自己的“是/否”按钮监听。
+    /// </summary>
+    private void DestroySavingPotAdRewardEntry()
+    {
+        if (_btnSavingPotAdReward != null)
+        {
+            _btnSavingPotAdReward.onClick.RemoveListener(OnBtnSavingPotAdReward);
+        }
+
+        if (_savingPotAdRewardView != null)
+        {
+            _savingPotAdRewardView.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// 隐藏存钱罐广告领奖弹窗。
+    /// MainUIForm 打开、关闭时都会调用，保证复用 UIForm 时不会残留上一次的弹窗显示状态。
+    /// </summary>
+    private void HideSavingPotAdRewardView()
+    {
+        if (_savingPotAdRewardView == null)
+        {
+            return;
+        }
+
+        _savingPotAdRewardView.Hide();
+    }
+
+    /// <summary>
+    /// 存钱罐广告领奖入口按钮点击回调。
+    /// 入口只负责展示确认弹窗；广告播放、奖励发放和 Toast 提示交给 SavingPotAdRewardView。
+    /// </summary>
+    private void OnBtnSavingPotAdReward()
+    {
+        // 播放点击音效，保持主界面所有按钮反馈一致。
+        UIInteractionSound.PlayClick();
+
+        if (_savingPotAdRewardView == null)
+        {
+            Log.Warning("MainUIForm 无法显示存钱罐广告领奖弹窗，_savingPotAdRewardView 未绑定。");
+            return;
+        }
+
+        _savingPotAdRewardView.Show();
     }
 
     /// <summary>
