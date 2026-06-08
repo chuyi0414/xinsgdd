@@ -3,10 +3,11 @@
 public partial class MainUIForm
 {
     /// <summary>
-    /// 每日一关本地预览使用的默认关卡资源路径。
-    /// 当前先固定到 bbl1，后续接云端后再由外部下发实际关卡路径。
+    /// 运行时覆盖的每日一关关卡标识码（如 "4-2"）。
+    /// 为 null 时走数据表 DailyChallengeLevelDataRow 的默认值。
+    /// 云端函数下发新关卡时通过 OverrideDailyChallengeLevel 设置此字段。
     /// </summary>
-    private const string DailyChallengeDefaultLevelAssetPath = "Configs/Levels/bbl1";
+    private string _dailyChallengeLevelCode;
 
     /// <summary>
     /// 当前已打开的每日一关窗体序列号。
@@ -140,10 +141,10 @@ public partial class MainUIForm
     }
 
     /// <summary>
-    /// 供 DailyChallengeUIForm 调用的“开始关卡预览”入口。
+    /// 供 DailyChallengeUIForm 调用的"开始关卡预览"入口。
     /// 这里由 MainUIForm 接管生成逻辑，确保关窗后棋盘实体仍然保留在 Below 页。
     /// </summary>
-    /// <param name="levelAssetPath">要加载的关卡资源路径；为空时回退到默认测试关卡。</param>
+    /// <param name="levelAssetPath">要加载的关卡资源路径；为空时使用 GetCurrentDailyChallengeLevelAssetPath 决定。</param>
     /// <returns>是否成功开始生成棋盘。</returns>
     public bool TryStartDailyChallengePreviewFromUIForm(string levelAssetPath)
     {
@@ -152,14 +153,14 @@ public partial class MainUIForm
             Log.Warning("MainUIForm can not start daily challenge preview because current page is not Below.");
             return false;
         }
-
+    
         if (_eliminateCardController == null)
         {
             _eliminateCardController = new EliminateCardController();
         }
-
+    
         string targetLevelAssetPath = string.IsNullOrWhiteSpace(levelAssetPath)
-            ? DailyChallengeDefaultLevelAssetPath
+            ? GetCurrentDailyChallengeLevelAssetPath()
             : levelAssetPath.Trim();
         EliminateCardPreviewResult result = _eliminateCardController.RebuildPreview(targetLevelAssetPath);
         if (!result.IsSuccess)
@@ -167,8 +168,68 @@ public partial class MainUIForm
             Log.Warning("MainUIForm daily challenge preview failed: {0}", result.ErrorMessage);
             return false;
         }
-
+    
         return true;
+    }
+    
+    /// <summary>
+    /// 获取当前生效的每日一关关卡标识码。
+    /// 优先级：云端覆盖值 > 数据表默认值 > 硬编码兜底 "4-2"。
+    /// 这是所有每日关卡路径拼装的唯一入口，外部不应再自行拼装。
+    /// </summary>
+    /// <returns>关卡标识码，如 "4-2"。</returns>
+    public string GetCurrentDailyChallengeLevelCode()
+    {
+        if (!string.IsNullOrWhiteSpace(_dailyChallengeLevelCode))
+        {
+            return _dailyChallengeLevelCode;
+        }
+    
+        if (GameEntry.DataTables != null
+            && GameEntry.DataTables.TryGetDefaultDailyChallengeLevelCode(out string defaultCode)
+            && !string.IsNullOrWhiteSpace(defaultCode))
+        {
+            return defaultCode;
+        }
+    
+        // 兜底：数据表未就绪时使用项目内已有的 4-2 关卡。
+        return "4-2";
+    }
+    
+    /// <summary>
+    /// 获取当前生效的每日一关完整资源路径。
+    /// 路径格式为 "Configs/Levels/{关卡标识码}"，对应 Resources 下的 .txt 文件。
+    /// </summary>
+    /// <returns>完整资源路径。</returns>
+    public string GetCurrentDailyChallengeLevelAssetPath()
+    {
+        return "Configs/Levels/" + GetCurrentDailyChallengeLevelCode();
+    }
+    
+    /// <summary>
+    /// 云端下发每日关卡时的运行时覆盖入口。
+    /// 外部（如云函数回调、远程配置拉取）拿到关卡标识码后调用此方法，
+    /// MainUIForm 内部所有每日一关逻辑将立即切换为新关卡。
+    /// 若对应关卡 txt 尚未预加载，这里会自动触发补充加载。
+    /// </summary>
+    /// <param name="levelCode">云端下发的关卡标识码，如 "5-3"。</param>
+    public void OverrideDailyChallengeLevel(string levelCode)
+    {
+        if (string.IsNullOrWhiteSpace(levelCode))
+        {
+            Log.Warning("MainUIForm.OverrideDailyChallengeLevel 收到空的关卡标识码，忽略本次覆盖。");
+            return;
+        }
+    
+        _dailyChallengeLevelCode = levelCode.Trim();
+        Log.Info("MainUIForm 每日关卡已切换为: {0}", _dailyChallengeLevelCode);
+    
+        // 补充加载：如果新关卡文本尚未在预加载缓存中，触发一次按需加载。
+        string assetPath = GetCurrentDailyChallengeLevelAssetPath();
+        if (GameEntry.GameAssets != null && !GameEntry.GameAssets.HasDailyChallengeLevelText(assetPath))
+        {
+            GameEntry.GameAssets.LoadDailyChallengeLevelTextOnDemand(assetPath);
+        }
     }
 
     /// <summary>

@@ -57,6 +57,7 @@ public sealed class GameDataTableModule
         new DataTableEntry(typeof(HeadPortraitDataRow), AssetPath.GetDataTable("HeadPortrait")),
         new DataTableEntry(typeof(HeadPortraitFrameDataRow), AssetPath.GetDataTable("HeadPortraitFrame")),
         new DataTableEntry(typeof(SavingPotDataRow), AssetPath.GetDataTable("SavingPot")),
+        new DataTableEntry(typeof(DailyChallengeLevelDataRow), AssetPath.GetDataTable("DailyChallengeLevel")),
     };
 
     /// <summary>
@@ -390,6 +391,32 @@ public sealed class GameDataTableModule
     }
 
     /// <summary>
+    /// 尝试获取默认每日一关关卡标识码（如 "4-2"）。
+    /// 从 DailyChallengeLevelDataRow 数据表中读取默认行的 LevelCode 字段。
+    /// 这是所有每日关卡路径拼装的唯一默认来源，业务层不应再硬编码关卡标识。
+    /// </summary>
+    /// <param name="levelCode">输出的关卡标识码。</param>
+    /// <returns>true=读取成功；false=数据表不可用或默认行缺失。</returns>
+    public bool TryGetDefaultDailyChallengeLevelCode(out string levelCode)
+    {
+        levelCode = string.Empty;
+
+        if (!IsAvailable<DailyChallengeLevelDataRow>())
+        {
+            return false;
+        }
+
+        DailyChallengeLevelDataRow row = GetDataRowByCode<DailyChallengeLevelDataRow>(DailyChallengeLevelDataRow.DefaultCode);
+        if (row == null || string.IsNullOrWhiteSpace(row.LevelCode))
+        {
+            return false;
+        }
+
+        levelCode = row.LevelCode;
+        return true;
+    }
+
+    /// <summary>
     /// 清空指定类型的数据表缓存。
     /// </summary>
     public void Clear<T>() where T : class, IDataRow
@@ -453,6 +480,7 @@ public sealed class GameDataTableModule
             case nameof(HeadPortraitDataRow): BeginLoadCore<HeadPortraitDataRow>(entry.AssetName); break;
             case nameof(HeadPortraitFrameDataRow): BeginLoadCore<HeadPortraitFrameDataRow>(entry.AssetName); break;
             case nameof(SavingPotDataRow): BeginLoadCore<SavingPotDataRow>(entry.AssetName); break;
+            case nameof(DailyChallengeLevelDataRow): BeginLoadCore<DailyChallengeLevelDataRow>(entry.AssetName); break;
             default:
                 Log.Error("GameDataTableModule 遇到未识别的 RowType '{0}'，请补充 case 分支。", entry.RowType.Name);
                 break;
@@ -595,6 +623,9 @@ public sealed class GameDataTableModule
             case nameof(SavingPotDataRow):
                 TryRegisterSavingPotDataTable(GameEntry.DataTable.GetDataTable<SavingPotDataRow>());
                 break;
+            case nameof(DailyChallengeLevelDataRow):
+                TryRegisterDailyChallengeLevelDataTable(GameEntry.DataTable.GetDataTable<DailyChallengeLevelDataRow>());
+                break;
             default:
                 Log.Warning("GameDataTableModule 加载成功回调遇到未识别的 RowType '{0}'。", rowType.Name);
                 break;
@@ -644,6 +675,7 @@ public sealed class GameDataTableModule
             case nameof(HeadPortraitDataRow): Clear<HeadPortraitDataRow>(); break;
             case nameof(HeadPortraitFrameDataRow): Clear<HeadPortraitFrameDataRow>(); break;
             case nameof(SavingPotDataRow): Clear<SavingPotDataRow>(); break;
+            case nameof(DailyChallengeLevelDataRow): Clear<DailyChallengeLevelDataRow>(); break;
             default:
                 Log.Warning("GameDataTableModule 加载失败回调遇到未识别的 RowType '{0}'。", rowType.Name);
                 break;
@@ -863,6 +895,20 @@ public sealed class GameDataTableModule
         if (!Register(dailyChallengeCostDataTable))
         {
             Log.Error("每日一关价格配置表注册失败。");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 注册每日一关关卡标识配置表到通用模块。
+    /// </summary>
+    private bool TryRegisterDailyChallengeLevelDataTable(IDataTable<DailyChallengeLevelDataRow> dailyChallengeLevelDataTable)
+    {
+        if (!Register(dailyChallengeLevelDataTable))
+        {
+            Log.Error("每日一关关卡标识配置表注册失败。");
             return false;
         }
 

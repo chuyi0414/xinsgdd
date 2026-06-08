@@ -142,14 +142,9 @@ public sealed class GameAssetModule
     /// </summary>
     private static readonly string GoldCoinToastPrefabPath = AssetPath.GetUI("Toast/GoldCoinToast");
 
-    /// <summary>
-    /// 每日一关本地预览关卡资源路径集合。
-    /// 第一阶段只迁入一份 bbl1 作为预览验证关卡，后续扩充时继续往这里追加即可。
-    /// </summary>
-    private static readonly string[] DailyChallengeLevelAssetPaths =
-    {
-        "Configs/Levels/bbl1",
-    };
+    // 每日一关关卡文本预加载路径已改为数据表驱动，
+    // 不再使用硬编码数组。BeginPreloadDailyChallengeLevelTexts 内动态从
+    // GameEntry.DataTables.TryGetDefaultDailyChallengeLevelCode() 获取关卡标识码拼装路径。
 
     /// <summary>
     /// 单次资源加载任务的上下文数据。
@@ -1087,6 +1082,46 @@ public sealed class GameAssetModule
     }
 
     /// <summary>
+    /// 判断指定路径的每日一关关卡文本是否已在缓存中。
+    /// 供 MainUIForm.OverrideDailyChallengeLevel 使用，避免重复加载。
+    /// </summary>
+    /// <param name="assetPath">关卡资源路径。</param>
+    /// <returns>true=已缓存或正在加载中。</returns>
+    public bool HasDailyChallengeLevelText(string assetPath)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath))
+        {
+            return false;
+        }
+
+        string key = assetPath.Trim();
+        return _dailyChallengeLevelTextsByPath.ContainsKey(key) || _loadingDailyChallengeLevelTextPaths.Contains(key);
+    }
+
+    /// <summary>
+    /// 按需加载一份每日一关关卡文本（Cloud 下发新关卡后的补充加载入口）。
+    /// 与预加载不同的是，这里不会参与预加载完成度的判定，仅填充缓存。
+    /// </summary>
+    /// <param name="assetPath">关卡资源路径，如 Configs/Levels/5-3。</param>
+    public void LoadDailyChallengeLevelTextOnDemand(string assetPath)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath))
+        {
+            return;
+        }
+
+        if (HasDailyChallengeLevelText(assetPath))
+        {
+            return;
+        }
+
+        if (!TryLoadAsset(assetPath, typeof(TextAsset), PreloadAssetKind.DailyChallengeLevelText))
+        {
+            Log.Warning("按需加载每日一关关卡文本失败，Path='{0}'。", assetPath);
+        }
+    }
+
+    /// <summary>
     /// 获取分数数字精灵缓存。
     /// </summary>
     /// <param name="digit">数字 0~9。</param>
@@ -1386,34 +1421,33 @@ public sealed class GameAssetModule
     /// </summary>
     private void BeginPreloadDailyChallengeLevelTexts()
     {
+        // 从数据表读取默认每日关卡标识码，动态拼装预加载路径。
+        // 数据表尚未就绪时重置请求标记并返回，由 LoadProcedure.OnDataTableLoadStateChanged
+        // 在数据表加载完成后重新调用 BeginPreloadRequiredAssets 触发重试。
+        string levelCode = string.Empty;
+        if (GameEntry.DataTables == null || !GameEntry.DataTables.TryGetDefaultDailyChallengeLevelCode(out levelCode) || string.IsNullOrWhiteSpace(levelCode))
+        {
+            Log.Warning("每日一关关卡文本预加载跳过：数据表未就绪或默认关卡标识码缺失。");
+            _dailyChallengeLevelTextPreloadRequested = false;
+            _dailyChallengeLevelTextPreloadCompleted = false;
+            return;
+        }
+
         _dailyChallengeLevelTextPreloadRequested = true;
         _dailyChallengeLevelTextPreloadCompleted = false;
 
-        if (DailyChallengeLevelAssetPaths == null || DailyChallengeLevelAssetPaths.Length == 0)
+        string assetPath = "Configs/Levels/" + levelCode;
+
+        if (_dailyChallengeLevelTextsByPath.ContainsKey(assetPath) || _loadingDailyChallengeLevelTextPaths.Contains(assetPath))
         {
             UpdatePreloadCompletionState();
             NotifyPreloadStateChanged();
             return;
         }
 
-        for (int i = 0; i < DailyChallengeLevelAssetPaths.Length; i++)
+        if (!TryLoadAsset(assetPath, typeof(TextAsset), PreloadAssetKind.DailyChallengeLevelText))
         {
-            string assetPath = DailyChallengeLevelAssetPaths[i];
-            if (string.IsNullOrWhiteSpace(assetPath))
-            {
-                RegisterFailure("预加载每日一关关卡文本失败，存在空资源路径。");
-                continue;
-            }
-
-            if (_dailyChallengeLevelTextsByPath.ContainsKey(assetPath) || _loadingDailyChallengeLevelTextPaths.Contains(assetPath))
-            {
-                continue;
-            }
-
-            if (!TryLoadAsset(assetPath, typeof(TextAsset), PreloadAssetKind.DailyChallengeLevelText))
-            {
-                RegisterFailure(Utility.Text.Format("预加载每日一关关卡文本失败，无法开始加载资源，Path='{0}'。", assetPath));
-            }
+            RegisterFailure(Utility.Text.Format("预加载每日一关关卡文本失败，无法开始加载资源，Path='{0}'。", assetPath));
         }
 
         UpdatePreloadCompletionState();

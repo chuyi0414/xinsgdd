@@ -12,12 +12,6 @@ using UnityGameFramework.Runtime;
 public sealed class DailyChallengeUIForm : UIFormLogic
 {
     /// <summary>
-    /// 当前临时预览使用的本地关卡资源路径。
-    /// 这里先固定到迁移进来的首份测试关卡，便于快速验证生成链路。
-    /// </summary>
-    private const string PreviewLevelAssetPath = "Configs/Levels/bbl1";
-
-    /// <summary>
     /// 每日排行榜最大展示数量。
     /// 与服务端 `leaderboardTopLimit` 保持一致，避免 Content 中生成超出需求的条目。
     /// </summary>
@@ -157,7 +151,7 @@ public sealed class DailyChallengeUIForm : UIFormLogic
             return;
         }
 
-        if (!mainUIForm.TryStartDailyChallengePreviewFromUIForm(PreviewLevelAssetPath))
+        if (!mainUIForm.TryStartDailyChallengePreviewFromUIForm(null))
         {
             CloseLoadingUIForm();
             WriteFailureText("关卡加载失败，请检查资源或日志。");
