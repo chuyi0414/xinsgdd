@@ -76,6 +76,12 @@ public partial class GameEntry
     public static DailyChallengeLeaderboardModule DailyChallengeLeaderboard { get; private set; }
 
     /// <summary>
+    /// 任务系统模块。
+    /// 负责 8 个固定任务的进度跟踪、状态管理和奖励领取。
+    /// </summary>
+    public static TaskModule Tasks { get; private set; }
+
+    /// <summary>
     /// 初始化自定义组件。
     /// 与框架组件保持统一获取方式，方便业务层通过 GameEntry 静态入口访问。
     /// </summary>
@@ -94,6 +100,9 @@ public partial class GameEntry
         Advertisement = new AdvertisementModule();
         CloudSave = new CloudSaveModule();
         DailyChallengeLeaderboard = new DailyChallengeLeaderboardModule();
+        Tasks = new TaskModule();
+        // TaskModule.Initialize() 不在此处调用：数据表尚未加载，
+        // 延迟到 GameDataTableModule.DispatchOnLoadSuccess 中 TaskDataRow 加载成功后再初始化。
         Advertisement.PreloadRewardedVideoAd();
 
         // 从 PlayerRuntimeModule 读取运行时数量，驱动各模块延迟初始化数组

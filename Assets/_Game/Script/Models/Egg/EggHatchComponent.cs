@@ -140,6 +140,13 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     private int _autoEggCount;
 
     /// <summary>
+    /// 累计孵化完成总数（含在线孵化和离线结算）。
+    /// 初始为 0；每次孵化槽倒计时结束并成功生成宠物后递增。
+    /// 用于任务系统跟踪「完成 N 次宠物孵化」条件。
+    /// </summary>
+    private int _totalHatchCount;
+
+    /// <summary>
     /// 当前累计的补蛋进度秒数。
     /// </summary>
     private float _refillElapsedSeconds;
@@ -170,6 +177,12 @@ public sealed class EggHatchComponent : GameFrameworkComponent
     /// 当前是否允许在线业务秒数每帧推进。
     /// </summary>
     public bool IsRuntimeTickEnabled => _isRuntimeTickEnabled;
+
+    /// <summary>
+    /// 累计孵化完成总数（含在线孵化和离线结算）。
+    /// 任务系统通过此属性评估 HatchComplete 类型任务的进度。
+    /// </summary>
+    public int TotalHatchCount => _totalHatchCount;
 
     /// <summary>
     /// 当前手动蛋库存。
@@ -731,6 +744,7 @@ public sealed class EggHatchComponent : GameFrameworkComponent
             manualEggCodes = ExportManualEggCodes(),
             autoEggCodes = ExportAutoEggCodes(),
             refillElapsedSeconds = Mathf.Max(0f, _refillElapsedSeconds),
+            totalHatchCount = _totalHatchCount,
             slots = ExportSlotSaveData()
         };
 
@@ -760,6 +774,7 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         ClearAutoEggInventory();
         RestoreAutoEggInventory(saveData.autoEggCodes);
         RestoreRefillElapsedSeconds(saveData.refillElapsedSeconds);
+        _totalHatchCount = Mathf.Max(0, saveData.totalHatchCount);
         RestoreHatchSlots(saveData.slots);
         NotifyEggSlotsChanged();
         NotifyHatchStateChanged();
@@ -808,6 +823,7 @@ public sealed class EggHatchComponent : GameFrameworkComponent
             {
                 TrySpawnOfflineHatchedPetToPlayArea(slotState);
                 slotState.Clear();
+                _totalHatchCount++;
                 hasStateChanged = true;
                 continue;
             }
@@ -887,6 +903,7 @@ public sealed class EggHatchComponent : GameFrameworkComponent
             {
                 TrySpawnHatchedPet(slotState, i);
                 slotState.Clear();
+                _totalHatchCount++;
                 hasSlotChanged = true;
             }
         }

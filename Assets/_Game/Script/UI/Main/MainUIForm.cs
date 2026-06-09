@@ -297,6 +297,8 @@ public partial class MainUIForm : UIFormLogic
             CloseDailyChallengeView();
             CloseFruitTJView();
             ClosePetTJView();
+            CloseTaskView();
+            CloseTaskProgressView();
             // 每日一关解锁闸门：退订 CollectionUnlocksChanged，避免界面关闭后仍响应事件。
             CloseDailyChallengeGate();
         }
@@ -399,6 +401,8 @@ public partial class MainUIForm : UIFormLogic
         DestroyDailyChallengeView();
         DestroyFruitTJView();
         DestroyPetTJView();
+        DestroyTaskView();
+        DestroyTaskProgressView();
         DestroyPersonalSettingButton();
         // 每日一关解锁闸门：双保险退订，防止 OnClose 未被调用时出现悬挂引用。
         DestroyDailyChallengeGate();
@@ -462,6 +466,8 @@ public partial class MainUIForm : UIFormLogic
         InitializeDailyChallengeView(); Log.Info("[MainUIForm.RuntimeInit] InitializeDailyChallengeView done");
         InitializeFruitTJView(); Log.Info("[MainUIForm.RuntimeInit] InitializeFruitTJView done");
         InitializePetTJView(); Log.Info("[MainUIForm.RuntimeInit] InitializePetTJView done");
+        InitializeTaskView(); Log.Info("[MainUIForm.RuntimeInit] InitializeTaskView done");
+        InitializeTaskProgressView(); Log.Info("[MainUIForm.RuntimeInit] InitializeTaskProgressView done");
         CachePersonalSettingButton(); Log.Info("[MainUIForm.RuntimeInit] CachePersonalSettingButton done");
         _isRuntimeViewInitialized = true;
         Log.Info("[MainUIForm.RuntimeInit] done");

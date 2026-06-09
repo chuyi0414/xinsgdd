@@ -38,15 +38,16 @@ public static class WechatBundleCacheUtility
     /// <param name="tag">日志前缀标记。</param>
     public static void LogWasmMemory(string tag)
     {
-        long managed = System.GC.GetTotalMemory(false);
-        long totalAllocated = (long)UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
-        long totalReserved = (long)UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong();
-        Log.Info(string.Format(
-            "[WASM MEM][{0}] managed={1:F1}MB allocated={2:F1}MB reserved={3:F1}MB",
-            tag,
-            managed / 1048576.0,
-            totalAllocated / 1048576.0,
-            totalReserved / 1048576.0));
+        // [WASM MEM] 内存诊断日志已关闭，如需排查内存问题请取消注释
+        // long managed = System.GC.GetTotalMemory(false);
+        // long totalAllocated = (long)UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
+        // long totalReserved = (long)UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong();
+        // Log.Info(string.Format(
+        //     "[WASM MEM][{0}] managed={1:F1}MB allocated={2:F1}MB reserved={3:F1}MB",
+        //     tag,
+        //     managed / 1048576.0,
+        //     totalAllocated / 1048576.0,
+        //     totalReserved / 1048576.0));
     }
 
     /// <summary>

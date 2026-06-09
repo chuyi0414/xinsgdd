@@ -323,14 +323,15 @@ public static class AddressablesAssetRouterImpl
     /// <returns>路由是否接管。</returns>
     private static bool TryRoute(string assetName, Type assetType, LoadAssetCallbacks loadAssetCallbacks, object userData)
     {
-        // 🔍 诊断日志：记录每一个通过 GF ResourceManager 的加载请求。
-        string gfRouteTypeName = assetType != null ? assetType.Name : "<null>";
-        Log.Info("[GF ROUTE] asset='{0}', type='{1}'", assetName, gfRouteTypeName);
+        // [GF ROUTE] 诊断日志已关闭，如需排查资源加载问题请取消注释
+        // string gfRouteTypeName = assetType != null ? assetType.Name : "<null>";
+        // Log.Info("[GF ROUTE] asset='{0}', type='{1}'", assetName, gfRouteTypeName);
 
         if (!s_IsAddressablesReady)
         {
             AddressablesFallbackDiagnostic.SetReason(assetName, "Addressables catalog 尚未初始化完成，自动路由无法判定该资源，已回退到 Resources 后端。");
-            Log.Info("[GF ROUTE SKIP] asset='{0}' reason=catalog not ready", assetName);
+            // [GF ROUTE SKIP] 诊断日志已关闭，如需排查资源加载问题请取消注释
+            // Log.Info("[GF ROUTE SKIP] asset='{0}' reason=catalog not ready", assetName);
             return false;
         }
 
@@ -343,7 +344,8 @@ public static class AddressablesAssetRouterImpl
         if (!TryLocate(assetName, assetType, out IList<IResourceLocation> locations, out IResourceLocation selectedLocation, out int locatorCount))
         {
             string assetTypeName = GetAssetTypeName(assetType);
-            Log.Info("[GF ROUTE MISS] asset='{0}', type='{1}' reason=not in catalog", assetName, assetTypeName);
+            // [GF ROUTE MISS] 诊断日志已关闭，如需排查资源加载问题请取消注释
+            // Log.Info("[GF ROUTE MISS] asset='{0}', type='{1}' reason=not in catalog", assetName, assetTypeName);
             AddressablesFallbackDiagnostic.SetReason(
                 assetName,
                 Utility.Text.Format(
@@ -390,7 +392,8 @@ public static class AddressablesAssetRouterImpl
                 AddressablesShaderRepair.Repair(unityAsset);
                 // ⚠️ 必须先登记反查表再派发回调：业务侧拿到 asset 后立即 UnloadAsset 时，HybridResourceHelper 才能命中。
                 ResourceComponentExtensions.RegisterAddressablesHandle(unityAsset, op);
-                Log.Info("[GF ROUTE OK] asset='{0}', type='{1}', duration={2:F2}s", assetName, gfRouteTypeName, elapseSeconds);
+                // [GF ROUTE OK] 诊断日志已关闭，如需排查资源加载问题请取消注释
+                // Log.Info("[GF ROUTE OK] asset='{0}', type='{1}', duration={2:F2}s", assetName, gfRouteTypeName, elapseSeconds);
                 if (loadAssetCallbacks.LoadAssetSuccessCallback != null)
                 {
                     loadAssetCallbacks.LoadAssetSuccessCallback(assetName, op.Result, elapseSeconds, userData);

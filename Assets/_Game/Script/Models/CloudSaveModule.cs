@@ -435,6 +435,10 @@ public sealed class CloudSaveModule
             ? GameEntry.EggHatch.ExportCloudSaveData()
             : new EggHatchSaveData();
 
+        snapshot.claimedTasks = GameEntry.Tasks != null
+            ? GameEntry.Tasks.ExportTaskProgress()
+            : Array.Empty<TaskSaveData>();
+
         List<PendingGoldDropSaveData> goldDrops = new List<PendingGoldDropSaveData>(8);
         List<PendingProduceDropSaveData> produceDrops = new List<PendingProduceDropSaveData>(8);
         if (_mainUIForm != null)
@@ -551,6 +555,11 @@ public sealed class CloudSaveModule
             snapshot.dailyChallengeHistoricalBestTime = currentSnapshot.dailyChallengeHistoricalBestTime;
         }
 
+        if ((modulesToSave & CloudSaveDirtyModule.Tasks) != 0)
+        {
+            snapshot.claimedTasks = currentSnapshot.claimedTasks;
+        }
+
         NormalizeSnapshotForWechatCloudCall(snapshot);
         return true;
     }
@@ -584,6 +593,7 @@ public sealed class CloudSaveModule
         snapshot.pets = NormalizePets(snapshot.pets);
         snapshot.pendingGoldDrops = NormalizePendingGoldDrops(snapshot.pendingGoldDrops);
         snapshot.pendingProduceDrops = NormalizePendingProduceDrops(snapshot.pendingProduceDrops);
+        snapshot.claimedTasks = NormalizeTaskSaveData(snapshot.claimedTasks);
     }
 
     /// <summary>
@@ -765,6 +775,31 @@ public sealed class CloudSaveModule
     }
 
     /// <summary>
+    /// 净化任务存档数组，保证数组本体和每个元素都非 null。
+    /// </summary>
+    /// <param name="values">原任务存档数组。</param>
+    /// <returns>净化后的数组。</returns>
+    private static TaskSaveData[] NormalizeTaskSaveData(TaskSaveData[] values)
+    {
+        if (values == null || values.Length <= 0)
+        {
+            return Array.Empty<TaskSaveData>();
+        }
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (values[i] == null)
+            {
+                values[i] = new TaskSaveData();
+            }
+
+            values[i].code = values[i].code ?? string.Empty;
+        }
+
+        return values;
+    }
+
+    /// <summary>
     /// 将云端快照应用到当前运行时。
     /// 未点击掉落物不入账，只缓存到 MainUIForm 打开后恢复成可点击物体。
     /// </summary>
@@ -778,6 +813,7 @@ public sealed class CloudSaveModule
 
         GameEntry.Fruits?.ApplyPlayerCloudSaveSnapshot(snapshot);
         GameEntry.EggHatch?.ApplyCloudSaveData(snapshot.eggHatch);
+        GameEntry.Tasks?.ApplyTaskProgress(snapshot.claimedTasks);
         GameEntry.PetPlacement?.ApplyPetLiteSaveData(snapshot.pets);
 
         // 云存档恢复了运行时解锁的水果后，补充预加载这些水果的每日关卡卡图。

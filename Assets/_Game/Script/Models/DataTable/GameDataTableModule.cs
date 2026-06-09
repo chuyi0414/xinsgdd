@@ -58,6 +58,7 @@ public sealed class GameDataTableModule
         new DataTableEntry(typeof(HeadPortraitFrameDataRow), AssetPath.GetDataTable("HeadPortraitFrame")),
         new DataTableEntry(typeof(SavingPotDataRow), AssetPath.GetDataTable("SavingPot")),
         new DataTableEntry(typeof(DailyChallengeLevelDataRow), AssetPath.GetDataTable("DailyChallengeLevel")),
+        new DataTableEntry(typeof(TaskDataRow), AssetPath.GetDataTable("Task")),
     };
 
     /// <summary>
@@ -481,6 +482,7 @@ public sealed class GameDataTableModule
             case nameof(HeadPortraitFrameDataRow): BeginLoadCore<HeadPortraitFrameDataRow>(entry.AssetName); break;
             case nameof(SavingPotDataRow): BeginLoadCore<SavingPotDataRow>(entry.AssetName); break;
             case nameof(DailyChallengeLevelDataRow): BeginLoadCore<DailyChallengeLevelDataRow>(entry.AssetName); break;
+            case nameof(TaskDataRow): BeginLoadCore<TaskDataRow>(entry.AssetName); break;
             default:
                 Log.Error("GameDataTableModule 遇到未识别的 RowType '{0}'，请补充 case 分支。", entry.RowType.Name);
                 break;
@@ -625,6 +627,12 @@ public sealed class GameDataTableModule
                 break;
             case nameof(DailyChallengeLevelDataRow):
                 TryRegisterDailyChallengeLevelDataTable(GameEntry.DataTable.GetDataTable<DailyChallengeLevelDataRow>());
+                break;
+            case nameof(TaskDataRow):
+                // TaskDataRow 无特殊注册逻辑，走 default Register 即可。
+                // 数据表加载成功后延迟初始化 TaskModule，解决 InitCustomComponents 时机过早的问题。
+                Register(GameEntry.DataTable.GetDataTable<TaskDataRow>());
+                GameEntry.Tasks?.Initialize();
                 break;
             default:
                 Log.Warning("GameDataTableModule 加载成功回调遇到未识别的 RowType '{0}'。", rowType.Name);

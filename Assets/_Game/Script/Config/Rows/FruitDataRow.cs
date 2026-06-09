@@ -182,7 +182,8 @@ public sealed class FruitDataRow : DataRowBase, ICodeDataRow
         // 改为"容错 + 强制归零 + Warning"：保护数据表加载链路，并保证运行时语义无副作用。
         if (isUnlocked && unlockGold != 0)
         {
-            Log.Warning("FruitDataRow: unlocked fruit '{0}' has non-zero UnlockGold '{1}', will be coerced to 0 (default-unlocked fruits never consume UnlockGold).", code, unlockGold.ToString());
+            // 默认解锁水果的 UnlockGold 由数据表容错归零，不再输出警告
+            // Log.Warning("FruitDataRow: unlocked fruit '{0}' has non-zero UnlockGold '{1}', will be coerced to 0 (default-unlocked fruits never consume UnlockGold).", code, unlockGold.ToString());
             unlockGold = 0;
         }
 

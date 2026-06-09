@@ -39,6 +39,7 @@ const snapshotPatchModules = {
     Pets: 1 << 6,
     PendingDrops: 1 << 7,
     DailyChallengeBest: 1 << 8,
+    Tasks: 1 << 9,
 }
 snapshotPatchModules.All = snapshotPatchModules.PlayerProgress
     | snapshotPatchModules.IdentityAndCosmetic
@@ -49,13 +50,14 @@ snapshotPatchModules.All = snapshotPatchModules.PlayerProgress
     | snapshotPatchModules.Pets
     | snapshotPatchModules.PendingDrops
     | snapshotPatchModules.DailyChallengeBest
+    | snapshotPatchModules.Tasks
 
 // 服务端初始存档模板。
 // 新账号首次建档时只使用这里的数据，不再信任客户端传来的编辑器快照，方便在云函数内直接改数值测试。
 const initialSnapshotTemplate = {
     currentGold: 0,
     pendingOfflineEarningGold: 0,
-    currentStars: 60,
+    currentStars: 5,
     hasClaimedNewcomerPackage: false,
     playerName: '',
     playerCode: '',
@@ -64,18 +66,7 @@ const initialSnapshotTemplate = {
     selectedHeadPortraitCode: 'head_portrait_001',
     selectedHeadPortraitFrameCode: 'head_portrait_frame_001',
     clientSaveTime: '',
-    unlockedFruitCodes: [
-        'fruit_apple',
-        'fruit_banana',
-        'fruit_strawberry',
-        'fruit_corn',
-        'fruit_berry',
-        'fruit_grape',
-        'fruit_kiwi',
-        'fruit_wax_apple',
-        'fruit_lemon',
-        'fruit_avocado',
-    ],
+    unlockedFruitCodes: [],
     unlockedPetCodes: [],
     unlockedProduceCodes: [],
     unlockedHeadPortraitCodes: [
@@ -143,6 +134,7 @@ const initialSnapshotTemplate = {
     pets: [],
     pendingGoldDrops: [],
     pendingProduceDrops: [],
+    claimedTasks: [],
 }
 
 // 云函数主入口。
@@ -391,6 +383,12 @@ function mergeSnapshotPatch(existingSnapshot, patchSnapshot, patchModules) {
     if ((patchModules & snapshotPatchModules.DailyChallengeBest) !== 0) {
         mergedSnapshot.dailyChallengeHistoricalBestScore = normalizedPatch.dailyChallengeHistoricalBestScore
         mergedSnapshot.dailyChallengeHistoricalBestTime = normalizedPatch.dailyChallengeHistoricalBestTime
+    }
+
+    if ((patchModules & snapshotPatchModules.Tasks) !== 0) {
+        mergedSnapshot.claimedTasks = Array.isArray(normalizedPatch.claimedTasks)
+            ? normalizedPatch.claimedTasks
+            : []
     }
 
     return normalizeSnapshot(mergedSnapshot)

@@ -1427,7 +1427,8 @@ public sealed class GameAssetModule
         string levelCode = string.Empty;
         if (GameEntry.DataTables == null || !GameEntry.DataTables.TryGetDefaultDailyChallengeLevelCode(out levelCode) || string.IsNullOrWhiteSpace(levelCode))
         {
-            Log.Warning("每日一关关卡文本预加载跳过：数据表未就绪或默认关卡标识码缺失。");
+            // 每日一关数据表可能尚未加载，属于正常时序，不再输出警告
+            // Log.Warning("每日一关关卡文本预加载跳过：数据表未就绪或默认关卡标识码缺失。");
             _dailyChallengeLevelTextPreloadRequested = false;
             _dailyChallengeLevelTextPreloadCompleted = false;
             return;
@@ -2074,8 +2075,8 @@ public sealed class GameAssetModule
                 break;
         }
 
-        // 🔍 诊断日志：记录每一个资源的发起加载事件，与 [ASSET OK] 配对排查未完成的加载。
-        Log.Info("[ASSET LOAD] kind={0}, path={1}", loadInfo.AssetKind, assetPath);
+                // [ASSET LOAD] 诊断日志已关闭，如需排查资源加载问题请取消注释
+        // Log.Info("[ASSET LOAD] kind={0}, path={1}", loadInfo.AssetKind, assetPath);
 
         resourceManager.LoadAsset(assetPath, assetType, _loadAssetCallbacks, loadInfo);
         return true;
@@ -2094,8 +2095,8 @@ public sealed class GameAssetModule
             return;
         }
 
-        // 🔍 诊断日志：记录每一个资源的加载完成事件，用于定位 memory out of bounds 前最后加载的资源。
-        Log.Info("[ASSET OK] kind={0}, path={1}, type={2}", loadInfo.AssetKind, loadInfo.AssetPath, asset != null ? asset.GetType().Name : "null");
+        // [ASSET OK] 诊断日志已关闭，如需排查资源加载问题请取消注释
+        // Log.Info("[ASSET OK] kind={0}, path={1}, type={2}", loadInfo.AssetKind, loadInfo.AssetPath, asset != null ? asset.GetType().Name : "null");
 
         switch (loadInfo.AssetKind)
         {

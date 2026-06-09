@@ -59,6 +59,11 @@ public enum CloudSaveDirtyModule
     DailyChallengeBest = 1 << 8,
 
     /// <summary>
+    /// 任务系统模块：任务进度和领取状态。
+    /// </summary>
+    Tasks = 1 << 9,
+
+    /// <summary>
     /// 全部模块。
     /// </summary>
     All = PlayerProgress
@@ -70,6 +75,7 @@ public enum CloudSaveDirtyModule
         | Pets
         | PendingDrops
         | DailyChallengeBest
+        | Tasks
 }
 
 /// <summary>
@@ -258,6 +264,13 @@ public sealed class PlayerCloudSaveSnapshot
     /// 读取后恢复为可点击产出物，不直接加入 produceCounts。
     /// </summary>
     public PendingProduceDropSaveData[] pendingProduceDrops = Array.Empty<PendingProduceDropSaveData>();
+
+    /// <summary>
+    /// 任务系统存档。
+    /// 保存每个任务的领取时间戳和当前进度。
+    /// 旧存档反序列化时该字段缺失，默认空数组。
+    /// </summary>
+    public TaskSaveData[] claimedTasks = Array.Empty<TaskSaveData>();
 }
 
 /// <summary>
@@ -374,6 +387,13 @@ public sealed class EggHatchSaveData
     /// 读取时会被限制在 0 到 RefillDurationSeconds 之间，避免云端手改异常值导致立即刷满。
     /// </summary>
     public float refillElapsedSeconds;
+
+    /// <summary>
+    /// 累计孵化完成总数（含在线孵化和离线结算）。
+    /// 任务系统使用此字段跟踪「完成 N 次宠物孵化」条件进度。
+    /// 旧存档反序列化时该字段缺失，默认为 0。
+    /// </summary>
+    public int totalHatchCount;
 
     /// <summary>
     /// 固定孵化槽状态。

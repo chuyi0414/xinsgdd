@@ -136,6 +136,11 @@ public static class UIFormDefine
     public static readonly string PersonalSettingUIForm = AssetPath.GetUI("PersonalSetting/PersonalSettingUIForm");
 
     /// <summary>
+    /// 任务界面资源名。→ Popup
+    /// </summary>
+    public static readonly string TaskUIForm = AssetPath.GetUI("Task/TaskUIForm");
+
+    /// <summary>
     /// 通用轻提示界面资源名。→ Toast
     /// </summary>
     public static readonly string ToastUIForm = AssetPath.GetUI("Toast/ToastUIForm");
