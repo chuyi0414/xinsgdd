@@ -85,8 +85,20 @@ public static class AddressablesAssetRouterImpl
                 s_IsAddressablesReady = false;
                 Log.Error("[AddressablesRouter] Addressables.InitializeAsync 失败，所有请求将退回到 Resources.LoadAsync 兜底。Error: "
                     + (op.OperationException != null ? op.OperationException.Message : "unknown"));
+                // 失败路径释放 initHandle，避免 Addressables 内部句柄泄漏。
+                if (initHandle.IsValid())
+                {
+                    Addressables.Release(initHandle);
+                }
                 onComplete?.Invoke();
                 return;
+            }
+
+            // 成功路径：释放 initHandle。
+            // InitializeAsync 完成后，句柄不再需要。释放它让 Addressables 内部清理 AsyncOperation。
+            if (initHandle.IsValid())
+            {
+                Addressables.Release(initHandle);
             }
 
             BeginLoadRemoteVersionCatalog(onComplete);
@@ -114,15 +126,15 @@ public static class AddressablesAssetRouterImpl
 
         AddressablesRemoteVersionResolver.BeginResolve(result =>
         {
-            if (!result.HasRemoteCatalog)
+            if (result.HasRemoteCatalog)
             {
-                CompleteSuccessfulInitialize(onComplete);
+                // LoadContentCatalogAsync 走带重试的内部协程。
+                // 弱网下第一次 catalog 下载经常失败（HTTP/2 协商抖动、CDN 节点切换），重试 3 次能显著提升首启成功率。
+                BeginLoadRemoteCatalogWithRetry(result, onComplete);
                 return;
             }
 
-            // LoadContentCatalogAsync 走带重试的内部协程。
-            // 弱网下第一次 catalog 下载经常失败（HTTP/2 协商抖动、CDN 节点切换），重试 3 次能显著提升首启成功率。
-            BeginLoadRemoteCatalogWithRetry(result, onComplete);
+            BeginNativeCatalogUpdateWithRetry(result, onComplete);
         });
     }
 
@@ -140,6 +152,16 @@ public static class AddressablesAssetRouterImpl
     private static void BeginLoadRemoteCatalogWithRetry(AddressablesRemoteVersionResolveResult versionResult, Action onComplete)
     {
         AddressablesCatalogRetryDriver.Start(versionResult, onComplete);
+    }
+
+    /// <summary>
+    /// 启动 Addressables 原生远程 catalog 检查。
+    /// BuildRemoteCatalog 开启后，包内 catalog 会携带远程 .hash / .json 位置；
+    /// CheckForCatalogUpdates 只下载 hash，比自定义 version.json 更适合做增量更新判定。
+    /// </summary>
+    private static void BeginNativeCatalogUpdateWithRetry(AddressablesRemoteVersionResolveResult versionResult, Action onComplete)
+    {
+        AddressablesNativeCatalogUpdateDriver.Start(versionResult, onComplete);
     }
 
     /// <summary>
@@ -192,7 +214,12 @@ public static class AddressablesAssetRouterImpl
                 Exception startException = null;
                 try
                 {
-                    handle = Addressables.LoadContentCatalogAsync(versionResult.CatalogUrl, true);
+                    // ⚠️ 这里必须使用 autoReleaseHandle: false。
+                    // Unity Addressables 在 autoReleaseHandle 为 true 时，会在操作完成后自动释放句柄。
+                    // WebGL/微信小游戏环境下，协程 yield return handle 恢复执行时，句柄可能已经失效；
+                    // 后续读取 handle.Status / handle.Result 就会抛出：Attempting to use an invalid operation handle。
+                    // 因此本工程选择手动释放：读取 Result、完成依赖预下载后，再调用 Addressables.Release(handle)。
+                    handle = Addressables.LoadContentCatalogAsync(versionResult.CatalogUrl, false);
                 }
                 catch (Exception ex)
                 {
@@ -223,6 +250,17 @@ public static class AddressablesAssetRouterImpl
                     Log.Info("[AddressablesRouter] 远程 Addressables catalog 加载成功，resourceVersion='"
                         + versionResult.ResourceVersion + "'，catalogUrl='" + versionResult.CatalogUrl
                         + "'，attempt=" + attempt + "。");
+
+                    // ⚠️ 修复：在读取 Result 并完成依赖预下载后，手动释放 LoadContentCatalogAsync 的句柄。
+                    // 之前 autoReleaseHandle=true 但成功路径从未手动 Release → 句柄泄漏；
+                    // 现在改为 autoReleaseHandle=false + 手动 Release，确保句柄生命周期明确受控。
+                    // s_RemoteCatalogLocator 已经持有了 IResourceLocator 引用，
+                    // catalog 在 Addressables 内部保持注册，释放句柄不影响后续资源定位。
+                    yield return DownloadRemoteCatalogDependencies(versionResult, handle.Result);
+                    if (handle.IsValid())
+                    {
+                        Addressables.Release(handle);
+                    }
                     succeeded = true;
                     break;
                 }
@@ -259,6 +297,91 @@ public static class AddressablesAssetRouterImpl
         }
 
         /// <summary>
+        /// 预下载远程 catalog 中所有可定位资源的依赖 Bundle。
+        /// 未变化的 Bundle URL 会直接命中微信磁盘缓存；变化的 Bundle URL 会从 CDN 下载并写入微信缓存。
+        /// </summary>
+        private static System.Collections.IEnumerator DownloadRemoteCatalogDependencies(
+            AddressablesRemoteVersionResolveResult versionResult,
+            IResourceLocator locator)
+        {
+            if (locator == null)
+            {
+                yield break;
+            }
+
+            List<object> keys = new List<object>(128);
+            foreach (object key in locator.Keys)
+            {
+                if (key != null)
+                {
+                    keys.Add(key);
+                }
+            }
+
+            if (keys.Count == 0)
+            {
+                Log.Warning("[AddressablesRouter] 远程 catalog 没有可预下载的 key，跳过依赖下载。resourceVersion='"
+                    + versionResult.ResourceVersion + "'。");
+                yield break;
+            }
+
+            AsyncOperationHandle<long> sizeHandle = Addressables.GetDownloadSizeAsync(keys);
+            yield return sizeHandle;
+
+            if (sizeHandle.Status != AsyncOperationStatus.Succeeded)
+            {
+                string sizeError = sizeHandle.OperationException != null
+                    ? sizeHandle.OperationException.ToString()
+                    : "status=" + sizeHandle.Status;
+                Log.Warning("[AddressablesRouter] 远程资源下载体积计算失败，跳过启动期预下载，后续按需加载。resourceVersion='"
+                    + versionResult.ResourceVersion + "'，error='" + sizeError + "'。");
+                if (sizeHandle.IsValid())
+                {
+                    Addressables.Release(sizeHandle);
+                }
+                yield break;
+            }
+
+            long downloadBytes = sizeHandle.Result;
+            if (sizeHandle.IsValid())
+            {
+                Addressables.Release(sizeHandle);
+            }
+
+            if (downloadBytes <= 0L)
+            {
+                Log.Info("[AddressablesRouter] 远程资源依赖已全部命中缓存，无需下载。resourceVersion='"
+                    + versionResult.ResourceVersion + "'，keyCount=" + keys.Count + "。");
+                yield break;
+            }
+
+            Log.Info("[AddressablesRouter] 远程资源开始增量预下载，resourceVersion='"
+                + versionResult.ResourceVersion + "'，keyCount=" + keys.Count + "，downloadBytes=" + downloadBytes + "。");
+
+            AsyncOperationHandle downloadHandle = Addressables.DownloadDependenciesAsync(keys, Addressables.MergeMode.Union, false);
+            yield return downloadHandle;
+
+            if (downloadHandle.Status == AsyncOperationStatus.Succeeded)
+            {
+                Log.Info("[AddressablesRouter] 远程资源增量预下载完成，resourceVersion='"
+                    + versionResult.ResourceVersion + "'，downloadBytes=" + downloadBytes + "。");
+            }
+            else
+            {
+                string downloadError = downloadHandle.OperationException != null
+                    ? downloadHandle.OperationException.ToString()
+                    : "status=" + downloadHandle.Status;
+                Log.Warning("[AddressablesRouter] 远程资源增量预下载失败，后续会按需加载重试。resourceVersion='"
+                    + versionResult.ResourceVersion + "'，error='" + downloadError + "'。");
+            }
+
+            if (downloadHandle.IsValid())
+            {
+                Addressables.Release(downloadHandle);
+            }
+        }
+
+        /// <summary>
         /// 计算退避等待迭代器。
         /// </summary>
         private static bool TryWaitForRetry(int finishedAttempt, out System.Collections.IEnumerator backoff)
@@ -272,6 +395,189 @@ public static class AddressablesAssetRouterImpl
             float waitSeconds = RemoteCatalogInitialBackoffSeconds * UnityEngine.Mathf.Pow(RemoteCatalogBackoffGrowthFactor, finishedAttempt - 1);
             backoff = new UnityEngine.WaitForSecondsRealtime(waitSeconds);
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Addressables 原生 catalog 更新驱动器。
+    /// 该驱动器只在 Player 包触发：先检查远程 .hash，存在变化时更新 catalog，再按更新后的 locator 增量预下载依赖。
+    /// </summary>
+    private sealed class AddressablesNativeCatalogUpdateDriver : UnityEngine.MonoBehaviour
+    {
+        /// <summary>
+        /// 静态入口：创建一次 GameObject 承载协程，启动 Addressables 原生 catalog 更新链路。
+        /// </summary>
+        public static void Start(AddressablesRemoteVersionResolveResult versionResult, Action onComplete)
+        {
+            UnityEngine.GameObject driverGo = new UnityEngine.GameObject("[AddressablesRouter.NativeCatalogUpdateDriver]");
+            UnityEngine.Object.DontDestroyOnLoad(driverGo);
+            driverGo.hideFlags = UnityEngine.HideFlags.HideAndDontSave;
+            AddressablesNativeCatalogUpdateDriver driver = driverGo.AddComponent<AddressablesNativeCatalogUpdateDriver>();
+            driver.StartCoroutine(driver.UpdateCatalogs(versionResult, onComplete, driverGo));
+        }
+
+        /// <summary>
+        /// Addressables 原生 catalog 更新主协程。
+        /// 步骤：检查远程 hash → 更新 catalog → 对更新后的 locator 做依赖预下载。
+        /// </summary>
+        private System.Collections.IEnumerator UpdateCatalogs(
+            AddressablesRemoteVersionResolveResult versionResult,
+            Action onComplete,
+            UnityEngine.GameObject driverGo)
+        {
+            AsyncOperationHandle<List<string>> checkHandle = Addressables.CheckForCatalogUpdates(false);
+            yield return checkHandle;
+
+            if (checkHandle.Status != AsyncOperationStatus.Succeeded)
+            {
+                string checkError = checkHandle.OperationException != null
+                    ? checkHandle.OperationException.ToString()
+                    : "status=" + checkHandle.Status;
+                Log.Warning("[AddressablesRouter] CheckForCatalogUpdates 失败，将继续使用当前 catalog。resourceVersion='"
+                    + versionResult.ResourceVersion + "'，error='" + checkError + "'。");
+                if (checkHandle.IsValid())
+                {
+                    Addressables.Release(checkHandle);
+                }
+                CompleteSuccessfulInitialize(onComplete);
+                UnityEngine.Object.Destroy(driverGo);
+                yield break;
+            }
+
+            List<string> catalogs = checkHandle.Result;
+            bool hasUpdates = catalogs != null && catalogs.Count > 0;
+            if (!hasUpdates)
+            {
+                Log.Info("[AddressablesRouter] 远程 catalog 无变化，沿用当前 catalog。resourceVersion='"
+                    + versionResult.ResourceVersion + "'。");
+                if (checkHandle.IsValid())
+                {
+                    Addressables.Release(checkHandle);
+                }
+                CompleteSuccessfulInitialize(onComplete);
+                UnityEngine.Object.Destroy(driverGo);
+                yield break;
+            }
+
+            Log.Info("[AddressablesRouter] 检测到远程 catalog 更新，开始 UpdateCatalogs。resourceVersion='"
+                + versionResult.ResourceVersion + "'，catalogCount=" + catalogs.Count + "。");
+
+            AsyncOperationHandle<List<IResourceLocator>> updateHandle = Addressables.UpdateCatalogs(catalogs, false);
+            yield return updateHandle;
+
+            if (checkHandle.IsValid())
+            {
+                Addressables.Release(checkHandle);
+            }
+
+            if (updateHandle.Status == AsyncOperationStatus.Succeeded && updateHandle.Result != null)
+            {
+                List<IResourceLocator> locators = updateHandle.Result;
+                for (int i = 0; i < locators.Count; i++)
+                {
+                    IResourceLocator locator = locators[i];
+                    if (locator == null)
+                    {
+                        continue;
+                    }
+
+                    s_RemoteCatalogLocator = locator;
+                    yield return DownloadRemoteCatalogDependencies(versionResult, locator);
+                }
+            }
+            else
+            {
+                string updateError = updateHandle.OperationException != null
+                    ? updateHandle.OperationException.ToString()
+                    : "status=" + updateHandle.Status;
+                Log.Warning("[AddressablesRouter] UpdateCatalogs 失败，将继续使用当前 catalog。resourceVersion='"
+                    + versionResult.ResourceVersion + "'，error='" + updateError + "'。");
+            }
+
+            if (updateHandle.IsValid())
+            {
+                Addressables.Release(updateHandle);
+            }
+
+            CompleteSuccessfulInitialize(onComplete);
+            UnityEngine.Object.Destroy(driverGo);
+        }
+
+        /// <summary>
+        /// 预下载指定远程 locator 中所有可定位资源的依赖 Bundle。
+        /// </summary>
+        private static System.Collections.IEnumerator DownloadRemoteCatalogDependencies(
+            AddressablesRemoteVersionResolveResult versionResult,
+            IResourceLocator locator)
+        {
+            if (locator == null)
+            {
+                yield break;
+            }
+
+            List<object> keys = new List<object>(128);
+            foreach (object key in locator.Keys)
+            {
+                if (key != null)
+                {
+                    keys.Add(key);
+                }
+            }
+
+            if (keys.Count == 0)
+            {
+                yield break;
+            }
+
+            AsyncOperationHandle<long> sizeHandle = Addressables.GetDownloadSizeAsync(keys);
+            yield return sizeHandle;
+
+            if (sizeHandle.Status != AsyncOperationStatus.Succeeded)
+            {
+                if (sizeHandle.IsValid())
+                {
+                    Addressables.Release(sizeHandle);
+                }
+                yield break;
+            }
+
+            long downloadBytes = sizeHandle.Result;
+            if (sizeHandle.IsValid())
+            {
+                Addressables.Release(sizeHandle);
+            }
+
+            if (downloadBytes <= 0L)
+            {
+                Log.Info("[AddressablesRouter] catalog 更新后依赖已全部命中缓存，无需下载。resourceVersion='"
+                    + versionResult.ResourceVersion + "'，keyCount=" + keys.Count + "。");
+                yield break;
+            }
+
+            Log.Info("[AddressablesRouter] catalog 更新后开始增量下载，resourceVersion='"
+                + versionResult.ResourceVersion + "'，keyCount=" + keys.Count + "，downloadBytes=" + downloadBytes + "。");
+
+            AsyncOperationHandle downloadHandle = Addressables.DownloadDependenciesAsync(keys, Addressables.MergeMode.Union, false);
+            yield return downloadHandle;
+
+            if (downloadHandle.Status == AsyncOperationStatus.Succeeded)
+            {
+                Log.Info("[AddressablesRouter] catalog 更新后增量下载完成，resourceVersion='"
+                    + versionResult.ResourceVersion + "'，downloadBytes=" + downloadBytes + "。");
+            }
+            else
+            {
+                string downloadError = downloadHandle.OperationException != null
+                    ? downloadHandle.OperationException.ToString()
+                    : "status=" + downloadHandle.Status;
+                Log.Warning("[AddressablesRouter] catalog 更新后增量下载失败，后续会按需加载重试。resourceVersion='"
+                    + versionResult.ResourceVersion + "'，error='" + downloadError + "'。");
+            }
+
+            if (downloadHandle.IsValid())
+            {
+                Addressables.Release(downloadHandle);
+            }
         }
     }
 

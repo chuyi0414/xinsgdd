@@ -116,8 +116,6 @@ public sealed class NewcomerPackageUIForm : UIFormLogic
         }
 
         GameEntry.Fruits.AddGold(RewardGoldAmount);
-        // 新手礼包金币不计入任务 GoldTotal 进度
-        GameEntry.Tasks?.ExcludeGoldFromBaseline(RewardGoldAmount);
         GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.PlayerProgress);
         GameEntry.CloudSave?.SaveNow(true);
 

@@ -59,12 +59,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - CHW_1003
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 198897a2c0d725946a7c80e15a8376d8
-    m_Address: Assets/_Game/Resources_moved/Pet/CHW_4001/CHW_4001_Material.mat
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - CHW_4001
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1cdffad1e9476954ea97c588de1a34fd
     m_Address: Pet/CHW_1004/CHW_1004_Atlas
     m_ReadOnly: 0
@@ -382,12 +376,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - CHW_1002
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: edc16ae0f90dbb5458b347ec47b22f02
-    m_Address: Assets/_Game/Resources_moved/Pet/CHW_4001/CHW_4001_Material 1.mat
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - CHW_4001
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ee3bd5094292bbe4d893964ce949ccfb
     m_Address: Assets/_Game/Resources_moved/Pet/CHW_2003
     m_ReadOnly: 0
@@ -405,12 +393,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - CHW_1004
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f14510a4b00a85a45841e74488f88cd4
-    m_Address: Assets/_Game/Resources_moved/Pet/CHW_4001/CHW_4001_SkeletonData.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - CHW_4001
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fa5725bc1a7c1a142b09f3fa9e02a49c
     m_Address: Assets/_Game/Resources_moved/Pet/CHW_2001

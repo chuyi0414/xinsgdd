@@ -1,11 +1,18 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "volcengine-plan/ark-code-latest",
+  "model": "volcengine-plan/minimax-m3",
   "small_model": "volcengine-plan/deepseek-v4-flash",
+  "plugin": [
+    "opencode-notificator"
+  ],
   "mcp": {
     "context7": {
       "type": "remote",
       "url": "https://mcp.context7.com/mcp"
+    },
+    "gh_grep": {
+      "type": "remote",
+      "url": "https://mcp.grep.app"
     }
   },
   "provider": {
@@ -160,6 +167,44 @@
           }
         }
       }
+    }
+  },
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "model": "volcengine-plan/minimax-m3",
+      "prompt": "你所有的自然语言输出（思考过程、计划、诊断、说明、回复）必须使用简体中文。代码、变量名、类名、文件名等保持英文。"
+    },
+    "plan": {
+      "mode": "primary",
+      "model": "volcengine-plan/doubao-seed-2.0-pro",
+      "prompt": "你所有的自然语言输出（思考过程、计划、诊断、说明、回复）必须使用简体中文。代码、变量名、类名、文件名等保持英文。",
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "chat": {
+      "mode": "primary",
+      "description": "专业编程知识问答，不修改代码",
+      "model": "volcengine-plan/doubao-seed-2.0-pro",
+      "temperature": 0.3,
+      "prompt": "你所有的自然语言输出（思考过程、计划、诊断、说明、回复）必须使用简体中文。代码、变量名、类名、文件名等保持英文。",
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "task": "deny"
+      }
+    },
+    "explore": {
+      "mode": "subagent",
+      "model": "volcengine-plan/deepseek-v4-flash",
+      "prompt": "你所有的自然语言输出（思考过程、计划、诊断、说明、回复）必须使用简体中文。代码、变量名、类名、文件名等保持英文。"
+    },
+    "general": {
+      "mode": "subagent",
+      "model": "volcengine-plan/deepseek-v4-pro",
+      "prompt": "你所有的自然语言输出（思考过程、计划、诊断、说明、回复）必须使用简体中文。代码、变量名、类名、文件名等保持英文。"
     }
   }
 }

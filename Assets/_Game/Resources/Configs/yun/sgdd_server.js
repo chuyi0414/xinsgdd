@@ -155,7 +155,7 @@ exports.main = async (event, context) => {
     try {
         switch (action) {
             case 'initOrLoadSave':
-                return await initOrLoadSave(openid, requestEvent.snapshot)
+                return await initOrLoadSave(openid)
 
             case 'loadSnapshot':
                 return await loadSnapshot(openid)
@@ -197,7 +197,7 @@ function normalizeEvent(event) {
 
 // 首次进入时初始化或读取玩家存档。
 // 云端已有数据时直接返回；云端没有数据时使用服务端模板创建新档。
-async function initOrLoadSave(openid, initialSnapshot) {
+async function initOrLoadSave(openid) {
     const existing = await getSaveDocument(openid)
     if (existing) {
         return {
@@ -208,7 +208,7 @@ async function initOrLoadSave(openid, initialSnapshot) {
         }
     }
 
-    initialSnapshot = await createInitialSnapshot()
+    const initialSnapshot = await createInitialSnapshot()
     const now = db.serverDate()
     await playerSaves.add({
         data: {

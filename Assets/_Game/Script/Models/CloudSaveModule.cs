@@ -26,8 +26,8 @@ public sealed class CloudSaveModule
     private const string CloudEnvironmentId = "tianxing-001-2g9lrxwh45e5182d";
 
     /// <summary>
-    /// 初始化失败后允许自动继续进入游戏的兜底等待秒数。
-    /// 当前云函数失败会直接兜底，不额外阻塞加载界面。
+    /// 启动期云存档请求失败后的重试等待秒数。
+    /// 微信小游戏真机环境必须拿到云端快照后才能进入主界面，避免把客户端数据表默认值误当成新用户云档。
     /// </summary>
     private const float RetryDelaySeconds = 10f;
 
@@ -121,6 +121,12 @@ public sealed class CloudSaveModule
     private float _retryCountdownSeconds;
 
     /// <summary>
+    /// 启动期云存档读取失败后的重试倒计时。
+    /// 初始值为 0；只有微信小游戏非 Editor 环境读档失败时才会被设置为 RetryDelaySeconds。
+    /// </summary>
+    private float _initialLoadRetryCountdownSeconds;
+
+    /// <summary>
     /// 当前打开中的主界面引用。
     /// 用于采集或恢复未点击金币和产出物掉落物。
     /// </summary>
@@ -185,14 +191,10 @@ public sealed class CloudSaveModule
         RefreshAutoSaveInterval();
         SubscribeDirtyEvents();
         SubscribeWechatLifecycleEvents();
-        if (!TryBuildCurrentSnapshot(out PlayerCloudSaveSnapshot initialSnapshot))
-        {
-            Log.Warning("CloudSaveModule 无法构建初始云存档快照，将使用本地初始进度进入游戏。");
-            CompleteInitialLoadWithFallback();
-            return true;
-        }
-
-        CallCloudFunction("initOrLoadSave", initialSnapshot, 0, OnInitialLoadCloudSuccess, OnInitialLoadCloudFailure);
+        // 注意：initOrLoadSave 严禁上传客户端当前快照。
+        // 新用户无云档时，初始存档必须只能由 sgdd_server.js 的 initialSnapshotTemplate 创建；
+        // 否则编辑器/本地数据表进度可能被旧云函数或兼容逻辑当成新用户初始档写入云端。
+        CallCloudFunction("initOrLoadSave", null, 0, OnInitialLoadCloudSuccess, OnInitialLoadCloudFailure);
         return true;
     }
 
@@ -203,7 +205,18 @@ public sealed class CloudSaveModule
     /// <param name="realElapseSeconds">真实流逝秒数。</param>
     public void Update(float realElapseSeconds)
     {
-        if (!_isReady || _isCallingCloud || realElapseSeconds <= 0f)
+        if (realElapseSeconds <= 0f)
+        {
+            return;
+        }
+
+        if (!_isReady)
+        {
+            UpdateInitialLoadRetry(realElapseSeconds);
+            return;
+        }
+
+        if (_isCallingCloud)
         {
             return;
         }
@@ -237,6 +250,30 @@ public sealed class CloudSaveModule
         }
 
         _autoSaveCountdownSeconds = _autoSaveIntervalSeconds;
+    }
+
+    /// <summary>
+    /// 推进启动期云存档读取重试倒计时。
+    /// 非 Editor 的微信小游戏必须等云函数返回服务端快照，不能在这里切到客户端本地默认档。
+    /// </summary>
+    /// <param name="realElapseSeconds">真实流逝秒数。</param>
+    private void UpdateInitialLoadRetry(float realElapseSeconds)
+    {
+        if (!_hasBegunInitialize || _isCallingCloud)
+        {
+            return;
+        }
+
+        if (_initialLoadRetryCountdownSeconds > 0f)
+        {
+            _initialLoadRetryCountdownSeconds -= realElapseSeconds;
+            if (_initialLoadRetryCountdownSeconds > 0f)
+            {
+                return;
+            }
+        }
+
+        RetryInitialCloudLoad();
     }
 
     /// <summary>
@@ -1165,7 +1202,7 @@ public sealed class CloudSaveModule
     {
         _isCallingCloud = false;
         PlayerCloudSaveEnvelope envelope = ParseCloudSaveEnvelope(responseJson);
-        if (envelope != null && envelope.ok)
+        if (envelope != null && envelope.ok && envelope.snapshot != null)
         {
             PlayerCloudSaveSnapshot snapshot = envelope.snapshot;
             ApplySnapshotToRuntime(snapshot);
@@ -1177,6 +1214,7 @@ public sealed class CloudSaveModule
             _isPreGameplaySaveAllowed = hasOfflineSettlementChanged;
             _isReady = true;
             _retryCountdownSeconds = 0f;
+            _initialLoadRetryCountdownSeconds = 0f;
             _autoSaveCountdownSeconds = _autoSaveIntervalSeconds;
             if (hasOfflineSettlementChanged)
             {
@@ -1187,7 +1225,7 @@ public sealed class CloudSaveModule
         }
 
         Log.Warning("CloudSaveModule 启动期云存档读取失败：{0}", envelope != null ? envelope.errMsg : responseJson);
-        CompleteInitialLoadWithFallback();
+        CompleteInitialLoadAfterFailure();
     }
 
     /// <summary>
@@ -1197,8 +1235,8 @@ public sealed class CloudSaveModule
     private void OnInitialLoadCloudFailure(string errorMessage)
     {
         _isCallingCloud = false;
-        Log.Warning("CloudSaveModule 启动期云存档请求失败，将使用本地初始进度进入游戏：{0}", errorMessage);
-        CompleteInitialLoadWithFallback();
+        Log.Warning("CloudSaveModule 启动期云存档请求失败：{0}", errorMessage);
+        CompleteInitialLoadAfterFailure();
     }
 
     /// <summary>
@@ -1264,7 +1302,69 @@ public sealed class CloudSaveModule
         _dirtyModules = CloudSaveDirtyModule.All;
         _modulesInFlight = CloudSaveDirtyModule.None;
         _isPreGameplaySaveAllowed = false;
+        _initialLoadRetryCountdownSeconds = 0f;
         _retryCountdownSeconds = RetryDelaySeconds;
+    }
+
+    /// <summary>
+    /// 处理启动期云存档失败。
+    /// Editor / 非微信环境允许用本地模拟快照继续开发；微信小游戏真机必须保持加载并重试云函数。
+    /// </summary>
+    private void CompleteInitialLoadAfterFailure()
+    {
+        if (CanUseLocalInitialFallback())
+        {
+            Log.Warning("CloudSaveModule 当前环境允许本地兜底，将使用本地初始进度进入游戏。");
+            CompleteInitialLoadWithFallback();
+            return;
+        }
+
+        ScheduleInitialLoadRetry();
+    }
+
+    /// <summary>
+    /// 安排启动期云存档重新读取。
+    /// 这里显式清理所有保存脏标记，避免云端未读成功前把客户端默认进度写回云端。
+    /// </summary>
+    private void ScheduleInitialLoadRetry()
+    {
+        _isReady = false;
+        _dirtyModules = CloudSaveDirtyModule.None;
+        _modulesInFlight = CloudSaveDirtyModule.None;
+        _pendingSaveAfterCurrentCloudCall = false;
+        _isPreGameplaySaveAllowed = false;
+        _initialLoadRetryCountdownSeconds = RetryDelaySeconds;
+        Log.Warning("CloudSaveModule 将在 {0} 秒后重试启动期云存档读取，期间不会进入主界面。", RetryDelaySeconds);
+    }
+
+    /// <summary>
+    /// 重新发起启动期云存档读取。
+    /// 云函数会在新用户无档时使用 sgdd_server.js 的 initialSnapshotTemplate 建档。
+    /// </summary>
+    private void RetryInitialCloudLoad()
+    {
+        if (!PrepareRuntimeForCloudSave())
+        {
+            _initialLoadRetryCountdownSeconds = RetryDelaySeconds;
+            return;
+        }
+
+        // 启动期重试同样不能携带客户端快照，确保新用户建档入口始终只信任云函数模板。
+        CallCloudFunction("initOrLoadSave", null, 0, OnInitialLoadCloudSuccess, OnInitialLoadCloudFailure);
+    }
+
+    /// <summary>
+    /// 当前环境是否允许启动期云存档失败后使用本地初始进度兜底。
+    /// 真机微信小游戏禁止兜底，避免新账号没有走云函数模板而误用客户端数据表默认值。
+    /// </summary>
+    /// <returns>允许本地兜底返回 true；必须等待云函数返回返回 false。</returns>
+    private static bool CanUseLocalInitialFallback()
+    {
+#if (UNITY_WEBGL || WEIXINMINIGAME) && !UNITY_EDITOR
+        return false;
+#else
+        return true;
+#endif
     }
 
     /// <summary>
@@ -1329,12 +1429,18 @@ public sealed class CloudSaveModule
             onFailure?.Invoke(exception.Message);
         }
 #else
+        PlayerCloudSaveSnapshot localSnapshot = snapshot;
+        if (localSnapshot == null && action == "initOrLoadSave")
+        {
+            TryBuildCurrentSnapshot(out localSnapshot);
+        }
+
         PlayerCloudSaveEnvelope localEnvelope = new PlayerCloudSaveEnvelope
         {
             ok = true,
             created = action == "initOrLoadSave",
             openid = "local_editor",
-            snapshot = snapshot
+            snapshot = localSnapshot
         };
         onSuccess?.Invoke(JsonUtility.ToJson(localEnvelope));
 #endif

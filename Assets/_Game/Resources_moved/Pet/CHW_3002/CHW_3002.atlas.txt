@@ -1,110 +1,110 @@
 
 CHW_3002.png
-size: 487,220
+size: 346,277
 format: RGBA8888
 filter: Linear,Linear
 repeat: none
 m1
-  rotate: true
-  xy: 184, 49
+  rotate: 270
+  xy: 204, 108
   size: 169, 106
   orig: 169, 107
   offset: 0, 0
   index: -1
 m10
-  rotate: true
-  xy: 435, 117
+  rotate: false
+  xy: 68, 50
   size: 34, 46
   orig: 34, 46
   offset: 0, 0
   index: -1
 m11
-  rotate: true
-  xy: 2, 4
+  rotate: false
+  xy: 0, 97
   size: 214, 180
   orig: 214, 180
   offset: 0, 0
   index: -1
 m12
   rotate: false
-  xy: 300, 5
+  xy: 198, 9
   size: 58, 48
   orig: 66, 57
   offset: 4, 4
   index: -1
 m13
   rotate: true
-  xy: 184, 5
+  xy: 62, 6
   size: 42, 58
   orig: 50, 66
   offset: 4, 4
   index: -1
 m14
-  rotate: false
-  xy: 360, 2
+  rotate: true
+  xy: 122, 2
   size: 37, 51
   orig: 45, 59
   offset: 4, 4
   index: -1
 m15
-  rotate: false
-  xy: 399, 4
+  rotate: true
+  xy: 0, 1
   size: 35, 49
   orig: 43, 57
   offset: 4, 4
   index: -1
 m2
   rotate: true
-  xy: 292, 115
+  xy: 129, 79
   size: 103, 91
   orig: 103, 91
   offset: 0, 0
   index: -1
 m3
-  rotate: false
-  xy: 385, 153
+  rotate: 180
+  xy: 104, 33
   size: 93, 65
   orig: 93, 65
   offset: 0, 0
   index: -1
 m4
   rotate: true
-  xy: 292, 55
+  xy: 0, 38
   size: 58, 67
   orig: 58, 67
   offset: 0, 0
   index: -1
 m5
-  rotate: false
-  xy: 436, 24
+  rotate: true
+  xy: 311, 59
   size: 36, 34
   orig: 36, 34
   offset: 0, 0
   index: -1
 m6
   rotate: true
-  xy: 361, 55
+  xy: 242, 59
   size: 58, 67
   orig: 58, 67
   offset: 0, 0
   index: -1
 m7
   rotate: false
-  xy: 430, 60
+  xy: 258, 3
   size: 55, 55
   orig: 56, 56
   offset: 0, 1
   index: -1
 m8
-  rotate: true
-  xy: 244, 9
+  rotate: 270
+  xy: 287, 239
   size: 38, 54
   orig: 38, 54
   offset: 0, 0
   index: -1
 m9
-  rotate: true
-  xy: 385, 117
+  rotate: false
+  xy: 303, 119
   size: 34, 48
   orig: 34, 48
   offset: 0, 0

@@ -15,7 +15,7 @@ MonoBehaviour:
   atlasAssets:
   - {fileID: 11400000, guid: eb0f659fcd099a947b069f38471798e0, type: 2}
   scale: 0.00625
-  skeletonJSON: {fileID: 4900000, guid: 632ffb581baab8249966a58f7f5ebe14, type: 3}
+  skeletonJSON: {fileID: 4900000, guid: e9420f3a4df41504c8b21fb46a16ea77, type: 3}
   isUpgradingBlendModeMaterials: 0
   blendModeMaterials:
     requiresBlendModeMaterials: 0

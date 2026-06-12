@@ -79,6 +79,14 @@ public sealed class EggHatchComponent : GameFrameworkComponent
         /// 玩家星星总额不足 EggDataRow.RequiredStars。
         /// </summary>
         NotEnoughStars = 6,
+        /// <summary>
+        /// 目标孵化槽未解锁或下标非法。
+        /// </summary>
+        HatchSlotUnavailable = 7,
+        /// <summary>
+        /// 目标孵化槽当前已经有蛋。
+        /// </summary>
+        HatchSlotOccupied = 8,
     }
 
     /// <summary>
@@ -498,6 +506,74 @@ public sealed class EggHatchComponent : GameFrameworkComponent
             return false;
         }
 
+        NotifyHatchStateChanged();
+        failure = EggPurchaseFailure.None;
+        return true;
+    }
+
+    /// <summary>
+    /// 尝试购买一个商店蛋并直接放入指定孵化槽开始孵化。
+    /// 该入口用于主界面点击某个孵化槽 BtnEggAdd 后打开购买蛋界面，再由购买界面把玩家选中的蛋放回这个槽位。
+    /// </summary>
+    /// <param name="eggCode">要购买的蛋配置 Code。</param>
+    /// <param name="slotIndex">0 基孵化槽索引。</param>
+    /// <param name="failure">失败原因；成功时为 None。</param>
+    /// <returns>购买、扣费、占用槽位全部成功时返回 true。</returns>
+    public bool TryPurchaseEggToSlot(string eggCode, int slotIndex, out EggPurchaseFailure failure)
+    {
+        failure = EggPurchaseFailure.DependenciesUnavailable;
+        EnsureInitialized();
+        if (!_isInitialized
+            || !_isAvailable
+            || _gameplayRuleDataRow == null
+            || GameEntry.DataTables == null
+            || !GameEntry.DataTables.IsAvailable<EggDataRow>()
+            || GameEntry.Fruits == null
+            || !GameEntry.Fruits.EnsureInitialized())
+        {
+            return false;
+        }
+
+        EggHatchSlotState slotState = GetSlotState(slotIndex);
+        if (slotState == null)
+        {
+            failure = EggPurchaseFailure.HatchSlotUnavailable;
+            return false;
+        }
+
+        if (slotState.IsOccupied)
+        {
+            failure = EggPurchaseFailure.HatchSlotOccupied;
+            return false;
+        }
+
+        EggDataRow eggDataRow = GameEntry.DataTables.GetDataRowByCode<EggDataRow>(eggCode);
+        if (eggDataRow == null)
+        {
+            failure = EggPurchaseFailure.InvalidEgg;
+            return false;
+        }
+
+        if ((eggDataRow.AcquireWays & EggDataRow.EggAcquireWay.Shop) == 0 || eggDataRow.PurchaseGold <= 0)
+        {
+            failure = EggPurchaseFailure.NotPurchasable;
+            return false;
+        }
+
+        // 购买条件必须在扣金币前全部校验完，避免失败路径出现资源回滚遗漏。
+        if (GameEntry.Fruits.CurrentStars < eggDataRow.RequiredStars)
+        {
+            failure = EggPurchaseFailure.NotEnoughStars;
+            return false;
+        }
+
+        if (!GameEntry.Fruits.TryConsumeGold(eggDataRow.PurchaseGold))
+        {
+            failure = EggPurchaseFailure.InsufficientGold;
+            return false;
+        }
+
+        OccupySlot(slotIndex, eggDataRow.Code, eggDataRow.HatchSeconds);
         NotifyHatchStateChanged();
         failure = EggPurchaseFailure.None;
         return true;

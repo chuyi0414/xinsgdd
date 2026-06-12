@@ -1,96 +1,96 @@
 
 CHW_3006.png
-size: 521,193
+size: 378,230
 format: RGBA8888
 filter: Linear,Linear
 repeat: none
 yazi1
-  rotate: false
-  xy: 316, 128
+  rotate: true
+  xy: 202, 2
   size: 104, 63
   orig: 104, 76
   offset: 0, 6
   index: -1
 yazi10
-  rotate: true
-  xy: 2, 2
+  rotate: false
+  xy: 0, 2
   size: 189, 229
   orig: 191, 232
   offset: 2, 0
   index: -1
 yazi11
-  rotate: true
-  xy: 393, 5
+  rotate: false
+  xy: 298, 10
   size: 57, 60
   orig: 59, 64
   offset: 0, 4
   index: -1
 yazi12
-  rotate: true
-  xy: 396, 64
+  rotate: 180
+  xy: 291, 134
   size: 61, 65
   orig: 61, 65
   offset: 0, 0
   index: -1
 yazi2
-  rotate: false
-  xy: 463, 59
+  rotate: true
+  xy: 346, 30
   size: 52, 33
   orig: 52, 36
   offset: 0, 1
   index: -1
 yazi3
-  rotate: false
-  xy: 455, 6
+  rotate: 270
+  xy: 314, 195
   size: 35, 51
   orig: 39, 51
   offset: 0, 0
   index: -1
 yazi4
-  rotate: false
-  xy: 316, 76
+  rotate: 270
+  xy: 251, 153
   size: 78, 50
   orig: 83, 55
   offset: 1, 0
   index: -1
 yazi4b
-  rotate: false
-  xy: 313, 24
+  rotate: 270
+  xy: 255, 72
   size: 78, 50
   orig: 83, 55
   offset: 1, 0
   index: -1
 yazi5
   rotate: true
-  xy: 491, 134
+  xy: 329, 71
   size: 57, 27
   orig: 57, 27
   offset: 0, 0
   index: -1
 yazi6
   rotate: false
-  xy: 463, 94
+  xy: 173, 199
   size: 56, 31
   orig: 56, 31
   offset: 0, 0
   index: -1
 yazi7
-  rotate: false
-  xy: 422, 127
+  rotate: 180
+  xy: 246, 3
   size: 67, 64
   orig: 67, 64
   offset: 0, 0
   index: -1
 yazi8
-  rotate: false
-  xy: 233, 8
+  rotate: 180
+  xy: 182, 107
   size: 78, 86
   orig: 80, 87
   offset: 0, 0
   index: -1
 yazi9
   rotate: false
-  xy: 233, 96
+  xy: 122, 11
   size: 81, 95
   orig: 81, 95
   offset: 0, 0

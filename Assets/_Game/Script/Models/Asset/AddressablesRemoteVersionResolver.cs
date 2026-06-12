@@ -176,15 +176,13 @@ public static class AddressablesRemoteVersionResolver
 
     /// <summary>
     /// 构建带防缓存参数的 version.json 请求地址。
-    /// 时间戳每次都不同，确保 CDN 中间节点不会返回旧缓存。
+    /// 只给 version.json 追加时间戳，catalogUrl 保持服务端原样，避免破坏 Addressables 原生 hash / catalog id 机制。
     /// </summary>
-    /// <returns>包含 app 版本与时间戳查询参数的 URL。</returns>
+    /// <returns>包含时间戳查询参数的 version.json URL。</returns>
     private static string BuildRequestUrl()
     {
-        string separator = VersionManifestUrl.IndexOf("?", StringComparison.Ordinal) >= 0 ? "&" : "?";
-        string appVersion = UnityWebRequest.EscapeURL(Application.version);
         string timestamp = DateTime.UtcNow.Ticks.ToString();
-        return VersionManifestUrl + separator + "app=" + appVersion + "&ts=" + timestamp;
+        return VersionManifestUrl + "?ts=" + timestamp;
     }
 
     /// <summary>
@@ -265,18 +263,20 @@ public static class AddressablesRemoteVersionResolver
     }
 
     /// <summary>
-    /// 持久化"上次成功使用的 resourceVersion"用 PlayerPrefs key。
-    /// 在微信小游戏底层映射到 wx.setStorageSync，跨启动保留；首次启动取空串，等价于"必清一次"。
+    /// 持久化"上次成功使用的 resourceVersion"用存储 key。
+    /// 微信小游戏侧走 PersistentKv → wx.setStorageSync / wx.getStorageSync，跨启动稳定持久化。
     /// </summary>
     private const string PrefsKeyResourceVersion = "wx.cache.lastResourceVersion";
 
     /// <summary>
-    /// 安全派发解析完成回调，并在版本号变化时主动清理微信文件缓存。
+    /// 安全派发解析完成回调，并在版本号变化时持久化新版本号。
     /// 设计要点：
-    /// 　1) 只要拿到 resourceVersion 就参与版本比对，不要求一定拿到远程 catalog；
-    /// 　2) 清缓存是异步调用，不阻塞 onComplete 派发，避免首屏被卡；
-    /// 　3) 本次启动依旧走老缓存（清缓存是为下次启动生效），符合"小步换新"安全策略；
-    /// 　4) 编辑器与非微信平台 WechatBundleCacheUtility 内部 no-op，调用方零分支。
+    /// 　1) 只要拿到 resourceVersion 就参与版本比对，与 catalogUrl 是否存在解耦；
+    /// 　2) 版本变化时仅持久化版本号，不再调用 WX.CleanAllFileCache；
+    /// 　3) 增量更新由 Addressables 远程 catalog + DownloadDependenciesAsync 驱动：
+    /// 　   远程 catalog 指向新 URL → 微信插件按 URL 命中/未命中自动决定下载或走磁盘缓存；
+    /// 　4) 移除 CleanAllFileCache 的原因：旧方案存在竞态条件——
+    /// 　   先写 KV 再异步清缓存，若进程被杀导致清理未完成，下次启动版本已匹配跳过清理，旧缓存永不失效。
     /// </summary>
     /// <param name="onComplete">外部传入的解析完成回调。</param>
     /// <param name="result">本次解析结果。</param>
@@ -296,48 +296,41 @@ public static class AddressablesRemoteVersionResolver
         }
 
         // 只要服务端下发了 resourceVersion 就驱动版本比对，与 catalogUrl 是否存在解耦。
-        TryCleanWechatCacheOnVersionChanged(result.ResourceVersion);
+        TryPersistResourceVersion(result.ResourceVersion);
 
         onComplete?.Invoke(result);
     }
 
     /// <summary>
-    /// 仅在 resourceVersion 与上次记录不一致时，触发一次微信文件缓存全量清理。
-    /// 注意：
-    /// 　- 服务端 version.json 的 resourceVersion 字段必须保证"小版本递增 / 资源变化即变更"，否则清缓存不生效；
-    /// 　- 第一次上线该逻辑时，所有老用户 lastVersion 为空字符串，必触发一次清理 → 弱网下首启会重下，属正常阵痛；
-    /// 　- 异常路径下 PersistentKv.SetString 失败可能导致下次启动重复清一次，可接受。
-    /// 　- 持久化必须走 PersistentKv 而非 PlayerPrefs：微信小游戏 webview 禁用了 IndexedDB，
-    ///     vconsole 启动会打 "IndexedDB is not available. Data will not persist..."，
-    ///     PlayerPrefs 写入永远不会落盘。PersistentKv 在小游戏侧改走 wx.setStorageSync / wx.getStorageSync，跨启动稳定持久化。
+    /// 仅在 resourceVersion 与上次记录不一致时，持久化新版本号。
+    /// 不再触发 WX.CleanAllFileCache：
+    /// 　- 旧方案先写 KV 再异步清缓存，存在竞态条件（进程被杀→清理未完成→下次跳过→旧缓存永驻）；
+    /// 　- 新方案由 Addressables 远程 catalog 驱动增量更新：
+    /// 　  远程 catalog 包含新 bundle URL → 微信插件按 URL 自动命中磁盘缓存或从 CDN 下载；
+    /// 　  未变化的 bundle URL 相同 → 直接命中缓存，零下载；变化的 bundle URL 不同 → 自动下载新版本。
+    /// 　- 持久化必须走 PersistentKv：微信小游戏 webview 禁用 IndexedDB，
+    /// 　  PersistentKv 在小游戏侧改走 wx.setStorageSync / wx.getStorageSync，跨启动稳定持久化。
     /// </summary>
-    /// <param name="currentResourceVersion">本次 version.json 解析得到的资源版本号；空字符串视为"未知"，不触发清理。</param>
-    private static void TryCleanWechatCacheOnVersionChanged(string currentResourceVersion)
+    /// <param name="currentResourceVersion">本次 version.json 解析得到的资源版本号；空字符串视为"未知"，不触发持久化。</param>
+    private static void TryPersistResourceVersion(string currentResourceVersion)
     {
         if (string.IsNullOrEmpty(currentResourceVersion))
         {
-            // 服务端没下发版本号 → 不掌握任何切换证据，保守不清，防止误删。
             return;
         }
 
         string lastResourceVersion = PersistentKv.GetString(PrefsKeyResourceVersion, string.Empty);
         if (string.Equals(lastResourceVersion, currentResourceVersion, StringComparison.Ordinal))
         {
-            // 版本未变化 → 缓存仍然有效，按命中走，不触发任何 IO。
             return;
         }
 
         Log.Warning(Utility.Text.Format(
-            "[AddressablesRemoteVersion] resourceVersion 变化：{0} -> {1}，触发 WX.CleanAllFileCache。",
+            "[AddressablesRemoteVersion] resourceVersion 变化：{0} -> {1}，版本号已持久化（增量更新由 Addressables 远程 catalog 驱动，不再清全量缓存）。",
             string.IsNullOrEmpty(lastResourceVersion) ? "<empty>" : lastResourceVersion,
             currentResourceVersion));
 
-        // ⚠️ 必须先写 KV：清缓存是 fire-and-forget 异步调用，
-        //    若先等回调再写 KV，本次进程被强杀（玩家划掉小游戏）会导致下次启动再清一次。
-        //    先写 KV 等价于"本次决意切换版本"，即使清失败也不会陷入死循环。
         PersistentKv.SetString(PrefsKeyResourceVersion, currentResourceVersion);
-
-        WechatBundleCacheUtility.CleanAll(null);
     }
 
     /// <summary>

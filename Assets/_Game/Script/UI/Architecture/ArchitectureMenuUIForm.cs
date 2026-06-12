@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityGameFramework.Runtime;
 
@@ -161,14 +162,16 @@ public sealed class ArchitectureMenuUIForm : UIFormLogic
         base.OnOpen(userData);
 
         // 每次打开都重置到默认状态（SwitchMainTab 内部会调 SwitchSubTab）
-        _hasSelectedEntry = false;
-        _selectedEntryIndex = -1;
+        ClearCurrentSelectedGameObject();
+        ResetEntrySelectionState();
         SwitchMainTab(MainTabMode.Facility, true);
     }
 
     protected override void OnClose(bool isShutdown, object userData)
     {
         base.OnClose(isShutdown, userData);
+        ClearCurrentSelectedGameObject();
+        ResetEntrySelectionState();
     }
 
     private void OnDestroy()
@@ -808,6 +811,37 @@ public sealed class ArchitectureMenuUIForm : UIFormLogic
     }
 
     /// <summary>
+    /// 清空所有建筑条目按钮的选中视觉和运行时选中记录。
+    /// 关闭再打开界面时必须全量清理，避免旧条目的选中子节点残留，和新默认条目同时显示为选中。
+    /// </summary>
+    private void ResetEntrySelectionState()
+    {
+        for (int i = 0; i < _entryButtons.Count; i++)
+        {
+            SetEntryButtonSelected(i, false);
+        }
+
+        _selectedEntryIndex = -1;
+        _hasSelectedEntry = false;
+    }
+
+    /// <summary>
+    /// 清空 Unity EventSystem 当前选中对象。
+    /// Button 点击后会成为 EventSystem.currentSelectedGameObject；若关闭按钮残留为 Selected 状态，
+    /// 下次打开界面时它可能继续显示选中视觉，因此关闭和打开阶段都主动清掉。
+    /// </summary>
+    private static void ClearCurrentSelectedGameObject()
+    {
+        EventSystem eventSystem = EventSystem.current;
+        if (eventSystem == null || eventSystem.currentSelectedGameObject == null)
+        {
+            return;
+        }
+
+        eventSystem.SetSelectedGameObject(null);
+    }
+
+    /// <summary>
     /// 条目按钮点击回调（播音效）。
     /// </summary>
     private void OnEntryButtonClicked(int entryIndex)
@@ -1053,6 +1087,7 @@ public sealed class ArchitectureMenuUIForm : UIFormLogic
     private void OnCloseButtonClicked()
     {
         UIInteractionSound.PlayClick();
+        ClearCurrentSelectedGameObject();
 
         // 关闭菜单时同步隐藏详情面板
         if (_architectureDetailPanel != null)

@@ -1,194 +1,194 @@
 
 CHW_5004.png
-size: 142,848
+size: 935,125
 format: RGBA8888
 filter: Linear,Linear
 repeat: none
 c54c1
   rotate: true
-  xy: 2, 2
+  xy: 472, 6
   size: 25, 37
   orig: 25, 37
   offset: 0, 0
   index: -1
 c54c10
-  rotate: false
-  xy: 108, 470
+  rotate: true
+  xy: 907, 3
   size: 30, 27
   orig: 30, 27
   offset: 0, 0
   index: -1
 c54c11
-  rotate: true
-  xy: 2, 565
+  rotate: false
+  xy: 0, 1
   size: 160, 124
   orig: 170, 124
   offset: 10, 0
   index: -1
 c54c12
-  rotate: true
-  xy: 82, 69
+  rotate: 180
+  xy: 793, 6
   size: 50, 57
   orig: 50, 57
   offset: 0, 0
   index: -1
 c54c13
-  rotate: true
-  xy: 2, 29
+  rotate: false
+  xy: 649, 12
   size: 49, 77
   orig: 49, 77
   offset: 0, 0
   index: -1
 c54c14
   rotate: true
-  xy: 98, 245
+  xy: 431, 7
   size: 24, 39
   orig: 24, 39
   offset: 0, 0
   index: -1
 c54c15
   rotate: false
-  xy: 108, 542
+  xy: 287, 1
   size: 32, 21
   orig: 32, 21
   offset: 0, 0
   index: -1
 c54c16
   rotate: false
-  xy: 79, 6
+  xy: 321, 1
   size: 25, 21
   orig: 25, 21
   offset: 0, 0
   index: -1
 c54c17
   rotate: false
-  xy: 128, 708
+  xy: 0, 108
   size: 7, 17
   orig: 16, 25
   offset: 4, 4
   index: -1
 c54c18
-  rotate: false
-  xy: 2, 497
+  rotate: 270
+  xy: 524, 5
   size: 104, 66
   orig: 104, 66
   offset: 0, 0
   index: -1
 c54c19
-  rotate: true
-  xy: 2, 131
+  rotate: false
+  xy: 700, 40
   size: 53, 85
   orig: 53, 85
   offset: 0, 0
   index: -1
 c54c2
-  rotate: true
-  xy: 2, 80
+  rotate: false
+  xy: 742, 6
   size: 49, 78
   orig: 49, 78
   offset: 0, 0
   index: -1
 c54c20
-  rotate: false
-  xy: 89, 121
+  rotate: 180
+  xy: 860, 3
   size: 50, 59
   orig: 50, 61
   offset: 0, 0
   index: -1
 c54c21
   rotate: true
-  xy: 98, 271
+  xy: 876, 63
   size: 60, 39
   orig: 60, 41
   offset: 0, 0
   index: -1
 c54c22
   rotate: false
-  xy: 81, 29
+  xy: 592, 1
   size: 50, 38
   orig: 50, 38
   offset: 0, 0
   index: -1
 c54c23
   rotate: true
-  xy: 2, 727
+  xy: 161, 7
   size: 119, 136
   orig: 122, 136
   offset: 0, 0
   index: -1
 c54c24
-  rotate: true
-  xy: 106, 7
+  rotate: false
+  xy: 511, 5
   size: 20, 23
   orig: 28, 31
   offset: 4, 4
   index: -1
 c54c25
-  rotate: false
-  xy: 2, 408
+  rotate: true
+  xy: 299, 24
   size: 101, 87
   orig: 110, 95
   offset: 5, 4
   index: -1
 c54c26
-  rotate: true
-  xy: 2, 186
+  rotate: false
+  xy: 589, 39
   size: 58, 86
   orig: 58, 86
   offset: 0, 0
   index: -1
 c54c27
   rotate: false
-  xy: 90, 182
+  xy: 780, 64
   size: 50, 61
   orig: 50, 61
   offset: 0, 0
   index: -1
 c54c3
-  rotate: true
-  xy: 2, 246
+  rotate: false
+  xy: 388, 33
   size: 160, 94
   orig: 161, 96
   offset: 0, 0
   index: -1
 c54c4
   rotate: true
-  xy: 98, 363
+  xy: 832, 50
   size: 43, 42
   orig: 43, 42
   offset: 0, 0
   index: -1
 c54c5
   rotate: false
-  xy: 105, 435
+  xy: 700, 5
   size: 35, 33
   orig: 35, 33
   offset: 0, 0
   index: -1
 c54c6
-  rotate: true
-  xy: 108, 499
+  rotate: false
+  xy: 388, 6
   size: 41, 30
   orig: 41, 30
   offset: 0, 0
   index: -1
 c54c7
   rotate: false
-  xy: 41, 8
+  xy: 150, 3
   size: 36, 19
   orig: 36, 19
   offset: 0, 0
   index: -1
 c54c8
   rotate: false
-  xy: 105, 408
+  xy: 0, 6
   size: 35, 25
   orig: 36, 27
   offset: 0, 0
   index: -1
 c54c9
   rotate: true
-  xy: 98, 333
+  xy: 890, 45
   size: 28, 40
   orig: 28, 40
   offset: 0, 0

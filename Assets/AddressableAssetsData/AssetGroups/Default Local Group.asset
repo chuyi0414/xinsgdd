@@ -16,7 +16,13 @@ MonoBehaviour:
   m_Data:
     m_SerializedData: []
   m_GUID: b8cc2399154852140b551d5f8e6dcdfa
-  m_SerializeEntries: []
+  m_SerializeEntries:
+  - m_GUID: 9adfc0ce283f3de489244d5b49942f2a
+    m_Address: Assets/_Game/Resources_moved/Pet/CHW_4001
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - CHW_4001
+    FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 037329be66bb390418a43cb9b9520078, type: 2}
   m_SchemaSet:

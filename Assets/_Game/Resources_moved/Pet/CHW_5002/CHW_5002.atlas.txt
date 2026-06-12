@@ -1,145 +1,145 @@
 
 CHW_5002.png
-size: 668,142
+size: 612,157
 format: RGBA8888
 filter: Linear,Linear
 repeat: none
 h1
-  rotate: true
-  xy: 275, 51
+  rotate: 270
+  xy: 265, 69
   size: 89, 78
   orig: 89, 78
   offset: 0, 0
   index: -1
 h10
-  rotate: true
-  xy: 389, 4
+  rotate: 180
+  xy: 481, 19
   size: 49, 74
   orig: 50, 74
   offset: 0, 0
   index: -1
 h11
-  rotate: true
-  xy: 540, 5
+  rotate: 180
+  xy: 527, 41
   size: 53, 65
   orig: 53, 65
   offset: 0, 0
   index: -1
 h12
   rotate: false
-  xy: 275, 7
+  xy: 542, 108
   size: 60, 42
   orig: 60, 43
   offset: 0, 1
   index: -1
 h13
   rotate: false
-  xy: 337, 7
+  xy: 244, 10
   size: 50, 42
   orig: 50, 42
   offset: 0, 0
   index: -1
 h14
-  rotate: true
-  xy: 607, 6
+  rotate: false
+  xy: 429, 8
   size: 52, 27
   orig: 52, 27
   offset: 0, 0
   index: -1
 h15
   rotate: false
-  xy: 160, 11
+  xy: 154, 28
   size: 113, 129
   orig: 113, 129
   offset: 0, 0
   index: -1
 h16
   rotate: false
-  xy: 602, 88
+  xy: 0, 13
   size: 18, 21
   orig: 26, 29
   offset: 4, 4
   index: -1
 h17
-  rotate: false
-  xy: 355, 55
+  rotate: 180
+  xy: 295, 26
   size: 79, 85
   orig: 79, 85
   offset: 0, 0
   index: -1
 h18
-  rotate: true
-  xy: 465, 3
+  rotate: false
+  xy: 435, 79
   size: 53, 73
   orig: 53, 73
   offset: 0, 0
   index: -1
 h19
-  rotate: false
-  xy: 436, 58
+  rotate: true
+  xy: 376, 28
   size: 53, 82
   orig: 53, 82
   offset: 0, 0
   index: -1
 h2
   rotate: false
-  xy: 491, 77
+  xy: 376, 94
   size: 57, 63
   orig: 57, 63
   offset: 0, 0
   index: -1
 h3
   rotate: false
-  xy: 558, 60
+  xy: 531, 15
   size: 66, 24
   orig: 66, 24
   offset: 0, 0
   index: -1
 h4
-  rotate: false
-  xy: 602, 111
+  rotate: true
+  xy: 582, 42
   size: 64, 29
   orig: 64, 29
   offset: 0, 0
   index: -1
 h5
   rotate: false
-  xy: 491, 60
+  xy: 297, 9
   size: 65, 15
   orig: 65, 15
   offset: 0, 0
   index: -1
 h6
-  rotate: true
-  xy: 636, 4
+  rotate: false
+  xy: 400, 1
   size: 27, 25
   orig: 27, 25
   offset: 0, 0
   index: -1
 h7
-  rotate: true
-  xy: 626, 72
+  rotate: false
+  xy: 142, 3
   size: 37, 34
   orig: 37, 34
   offset: 0, 0
   index: -1
 h7a
-  rotate: true
-  xy: 636, 33
+  rotate: false
+  xy: 181, 1
   size: 37, 26
   orig: 37, 28
   offset: 0, 2
   index: -1
 h8
   rotate: false
-  xy: 2, 2
+  xy: 0, 20
   size: 156, 138
   orig: 156, 138
   offset: 0, 0
   index: -1
 h9
   rotate: false
-  xy: 550, 86
+  xy: 490, 95
   size: 50, 54
   orig: 50, 54
   offset: 0, 0

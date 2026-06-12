@@ -10,6 +10,29 @@ using UnityGameFramework.Runtime;
 public sealed class PurchaseEggsUIForm : UIFormLogic
 {
     /// <summary>
+    /// 购买蛋界面打开参数。
+    /// 使用引用类型而不是直接传 int，是为了避开 GameFramework.OpenUIForm 的 int priority 重载；
+    /// 否则主界面传入的孵化槽下标会被当成 UI 优先级，导致本界面收不到目标槽位。
+    /// </summary>
+    public sealed class OpenData
+    {
+        /// <summary>
+        /// 购买成功后要直接放入的目标孵化槽索引。
+        /// 初始由构造函数写入；0 基下标，负数表示不指定槽位。
+        /// </summary>
+        public int TargetHatchSlotIndex { get; }
+
+        /// <summary>
+        /// 创建购买蛋界面打开参数。
+        /// </summary>
+        /// <param name="targetHatchSlotIndex">购买成功后要直接放入的 0 基孵化槽索引。</param>
+        public OpenData(int targetHatchSlotIndex)
+        {
+            TargetHatchSlotIndex = targetHatchSlotIndex;
+        }
+    }
+
+    /// <summary>
     /// 当前界面固定展示的商店蛋数量。
     /// </summary>
     private const int ShopEggDisplayCount = 5;
@@ -46,6 +69,14 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     /// 初始为 false；界面打开后订阅，用于玩家达成某个蛋的星星门槛后立即隐藏“解锁条件”文本。
     /// </summary>
     private bool _isListeningStarsChanged;
+
+    /// <summary>
+    /// 当前购买完成后要直接放入的孵化槽索引。
+    /// 初始为 -1，表示普通商店购买模式：购买到的蛋进入手动蛋库存。
+    /// 当主界面某个孵化槽的 BtnEggAdd 打开本界面时，会通过 userData 传入 0 基槽位索引；
+    /// 此时购买成功后会直接占用该槽位开始孵化。
+    /// </summary>
+    private int _targetHatchSlotIndex = -1;
 
     /// <summary>
     /// 单个商店蛋条目的界面缓存。
@@ -110,6 +141,7 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     protected override void OnOpen(object userData)
     {
         base.OnOpen(userData);
+        _targetHatchSlotIndex = userData is OpenData openData && openData.TargetHatchSlotIndex >= 0 ? openData.TargetHatchSlotIndex : -1;
         EnsureStarsChangedEventSubscription();
         RefreshShopView();
     }
@@ -121,6 +153,7 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
     /// <param name="userData">用户自定义数据。</param>
     protected override void OnClose(bool isShutdown, object userData)
     {
+        _targetHatchSlotIndex = -1;
         ReleaseStarsChangedEventSubscription();
         base.OnClose(isShutdown, userData);
     }
@@ -636,27 +669,76 @@ public sealed class PurchaseEggsUIForm : UIFormLogic
             return;
         }
 
-        if (!GameEntry.EggHatch.TryPurchaseEgg(eggDataRow.Code, out EggHatchComponent.EggPurchaseFailure failure))
+        EggHatchComponent.EggPurchaseFailure failure;
+        bool purchaseSucceeded;
+        if (_targetHatchSlotIndex >= 0)
+        {
+            purchaseSucceeded = GameEntry.EggHatch.TryPurchaseEggToSlot(eggDataRow.Code, _targetHatchSlotIndex, out failure);
+        }
+        else
+        {
+            purchaseSucceeded = GameEntry.EggHatch.TryPurchaseEgg(eggDataRow.Code, out failure);
+        }
+
+        if (!purchaseSucceeded)
         {
             Log.Warning("PurchaseEggsUIForm 购买蛋 '{0}' 失败，原因：'{1}'。", eggDataRow.Code, failure);
-            switch (failure)
-            {
-                case EggHatchComponent.EggPurchaseFailure.InsufficientGold:
-                    ToastUtility.Show("金币不足");
-                    break;
-                case EggHatchComponent.EggPurchaseFailure.InventoryFull:
-                    ToastUtility.Show("蛋槽已满");
-                    break;
-                case EggHatchComponent.EggPurchaseFailure.NotEnoughStars:
-                    ToastUtility.Show("星星不足");
-                    break;
-                default:
-                    ToastUtility.Show("购买失败");
-                    break;
-            }
+            ShowPurchaseFailureToast(failure);
+            return;
+        }
+
+        if (_targetHatchSlotIndex >= 0)
+        {
+            CompleteSlotPurchase();
             return;
         }
 
         RefreshShopView();
+    }
+
+    /// <summary>
+    /// 根据购买失败原因给玩家明确提示。
+    /// 这里统一处理库存购买模式和指定孵化槽购买模式，避免两个购买入口文案不一致。
+    /// </summary>
+    /// <param name="failure">蛋购买失败原因。</param>
+    private static void ShowPurchaseFailureToast(EggHatchComponent.EggPurchaseFailure failure)
+    {
+        switch (failure)
+        {
+            case EggHatchComponent.EggPurchaseFailure.InsufficientGold:
+                ToastUtility.Show("金币不足");
+                break;
+            case EggHatchComponent.EggPurchaseFailure.InventoryFull:
+                ToastUtility.Show("蛋槽已满");
+                break;
+            case EggHatchComponent.EggPurchaseFailure.NotEnoughStars:
+                ToastUtility.Show("星星不足");
+                break;
+            case EggHatchComponent.EggPurchaseFailure.HatchSlotUnavailable:
+                ToastUtility.Show("孵化位未解锁");
+                break;
+            case EggHatchComponent.EggPurchaseFailure.HatchSlotOccupied:
+                ToastUtility.Show("该孵化位已有蛋");
+                break;
+            default:
+                ToastUtility.Show("购买失败");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 从孵化槽打开的购买流程，购买成功后立即刷新蛋实体并关闭弹窗。
+    /// 这里不刷新商店列表，因为玩家此时的目标已经完成：指定孵化槽已经被刚买的蛋占用并开始倒计时。
+    /// </summary>
+    private void CompleteSlotPurchase()
+    {
+        GameEntry.PlayfieldEntities?.NotifyEggStateChanged();
+
+        if (UIForm == null || GameEntry.UI == null)
+        {
+            return;
+        }
+
+        GameEntry.UI.CloseUIForm(UIForm.SerialId);
     }
 }

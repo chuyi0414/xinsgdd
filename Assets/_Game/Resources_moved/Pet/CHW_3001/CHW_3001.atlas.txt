@@ -1,75 +1,75 @@
 
 CHW_3001.png
-size: 351,274
+size: 459,180
 format: RGBA8888
 filter: Linear,Linear
 repeat: none
 g10
-  rotate: true
-  xy: 327, 136
+  rotate: false
+  xy: 83, 2
   size: 57, 22
   orig: 57, 22
   offset: 0, 0
   index: -1
 g11
-  rotate: true
-  xy: 216, 71
+  rotate: 180
+  xy: 0, 14
   size: 82, 65
   orig: 82, 65
   offset: 0, 0
   index: -1
 g12
   rotate: false
-  xy: 2, 155
+  xy: 0, 63
   size: 275, 117
   orig: 275, 117
   offset: 0, 0
   index: -1
 g13
-  rotate: false
-  xy: 300, 32
+  rotate: true
+  xy: 83, 27
   size: 30, 44
   orig: 31, 44
   offset: 1, 0
   index: -1
 g3
-  rotate: true
-  xy: 283, 78
+  rotate: false
+  xy: 411, 135
   size: 31, 45
   orig: 31, 45
   offset: 0, 0
   index: -1
 g4
-  rotate: false
-  xy: 2, 2
+  rotate: 180
+  xy: 226, 30
   size: 212, 151
   orig: 212, 158
   offset: 0, 0
   index: -1
 g5
-  rotate: true
-  xy: 279, 195
+  rotate: 180
+  xy: 152, 6
   size: 77, 70
   orig: 77, 70
   offset: 0, 0
   index: -1
 g5ye
-  rotate: true
-  xy: 300, 5
+  rotate: false
+  xy: 231, 6
   size: 25, 26
   orig: 25, 26
   offset: 0, 0
   index: -1
 g6
-  rotate: true
-  xy: 283, 111
+  rotate: false
+  xy: 334, 2
   size: 82, 42
   orig: 82, 45
   offset: 0, 0
   index: -1
 g8
-  rotate: false
-  xy: 216, 22
+  rotate: 270
+  xy: 410, 9
   size: 82, 47
   orig: 82, 50
   offset: 0, 3

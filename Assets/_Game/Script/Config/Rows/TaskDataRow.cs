@@ -21,8 +21,8 @@ public enum TaskCondition
     FeedComplete = 1,
 
     /// <summary>
-    /// 当前持有金币达到指定数量。
-    /// 订阅 PlayerRuntimeModule.GoldChanged，读取 CurrentGold。
+    /// 宠物累计吐出金币达到指定数量。
+    /// 订阅 PetDiningOrderComponent.CoinDropRequested，只累计事件参数中的 coinAmount。
     /// </summary>
     GoldTotal = 2,
 

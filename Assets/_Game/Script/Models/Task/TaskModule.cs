@@ -8,7 +8,7 @@ using UnityGameFramework.Runtime;
 /// 进度驱动方式：
 ///   - HatchComplete  → 订阅 EggHatchComponent.HatchStateChanged，读取 TotalHatchCount
 ///   - FeedComplete   → 订阅 PetDiningOrderComponent.CoinDropRequested，每次触发 +1
-///   - GoldTotal      → 订阅 PlayerRuntimeModule.GoldChanged，读取 CurrentGold
+///   - GoldTotal      → 订阅 PetDiningOrderComponent.CoinDropRequested，只累计宠物本次吐出的金币数量
 ///   - HatchSlotCount → 订阅 PlayerRuntimeModule.ArchitectureStateChanged，读取 HatchSlotCount
 ///   - DietSlotCount  → 订阅 PlayerRuntimeModule.ArchitectureStateChanged，读取 DiningSeatCount
 ///   - FruiterSlotCount → 订阅 PlayerRuntimeModule.ArchitectureStateChanged，读取 OrchardSlotCount
@@ -45,13 +45,6 @@ public sealed class TaskModule
     /// 用于 Shutdown 时取消订阅。
     /// </summary>
     private bool _isEventSubscribed;
-
-    /// <summary>
-    /// 金币基线值（任务模块初始化时的当前金币数）。
-    /// 用于 GoldTotal 任务进度计算：只有超出基线的金币才计入进度，
-    /// 从而将新手礼包等初始化前已存在的金币排除在外。
-    /// </summary>
-    private int _goldBaseline;
 
     /// <summary>
     /// 任务进度或状态发生变化时触发。
@@ -92,13 +85,6 @@ public sealed class TaskModule
 
         // 初始化完成后立即评估一次，保证打开界面时进度已就绪。
         EvaluateAllProgress();
-
-        // 记录初始化时的金币数作为基线，
-        // 后续 GoldTotal 任务进度只计算超出基线的部分（新手礼包金币不计入）。
-        _goldBaseline = GameEntry.Fruits != null ? Math.Max(0, GameEntry.Fruits.CurrentGold) : 0;
-
-        // 基线设置后需要重新评估 GoldTotal 任务进度，扣除基线部分。
-        EvaluateGoldTotalProgress();
     }
 
     /// <summary>
@@ -108,25 +94,6 @@ public sealed class TaskModule
     {
         UnsubscribeEvents();
         _isInitialized = false;
-    }
-
-    /// <summary>
-    /// 将指定数量的金币加入基线（排除在任务进度之外）。
-    /// 用于新手礼包等非玩家主动赚取的金币，避免其计入 GoldTotal 任务进度。
-    /// </summary>
-    /// <param name="amount">要排除的金币数量。</param>
-    public void ExcludeGoldFromBaseline(int amount)
-    {
-        if (!_isInitialized || amount <= 0)
-        {
-            return;
-        }
-
-        _goldBaseline += amount;
-
-        // 重新评估 GoldTotal 任务进度
-        EvaluateGoldTotalProgress();
-        TaskProgressChanged?.Invoke();
     }
 
     /// <summary>
@@ -352,7 +319,6 @@ public sealed class TaskModule
 
         if (GameEntry.Fruits != null)
         {
-            GameEntry.Fruits.GoldChanged += OnGoldChanged;
             GameEntry.Fruits.ArchitectureStateChanged += OnArchitectureStateChanged;
         }
 
@@ -381,7 +347,6 @@ public sealed class TaskModule
 
         if (GameEntry.Fruits != null)
         {
-            GameEntry.Fruits.GoldChanged -= OnGoldChanged;
             GameEntry.Fruits.ArchitectureStateChanged -= OnArchitectureStateChanged;
         }
 
@@ -403,10 +368,10 @@ public sealed class TaskModule
 
     /// <summary>
     /// 宠物喂养完成事件回调（每次宠物吃完食物产出金币时触发）。
-    /// 递增所有 FeedComplete 类型任务的进度。
+    /// 递增 FeedComplete 类型任务，并把本次宠物吐出的金币数累计到 GoldTotal 类型任务。
     /// </summary>
     /// <param name="petInstanceId">宠物实例 Id（未使用）。</param>
-    /// <param name="coinAmount">本次产出金币数量（未使用）。</param>
+    /// <param name="coinAmount">本次宠物吐出的金币数量；只有该值会计入 GoldTotal。</param>
     private void OnCoinDropRequested(int petInstanceId, int coinAmount)
     {
         if (_taskRows == null)
@@ -415,9 +380,10 @@ public sealed class TaskModule
         }
 
         bool changed = false;
+        int safeCoinAmount = Math.Max(0, coinAmount);
         for (int i = 0; i < _taskRows.Length; i++)
         {
-            if (_taskRows[i] == null || _taskRows[i].ConditionType != TaskCondition.FeedComplete)
+            if (_taskRows[i] == null)
             {
                 continue;
             }
@@ -428,55 +394,24 @@ public sealed class TaskModule
                 continue;
             }
 
-            _progressValues[i]++;
-            changed = true;
-        }
-
-        if (changed)
-        {
-            TaskProgressChanged?.Invoke();
-        }
-    }
-
-    /// <summary>
-    /// 金币数量变化事件回调。
-    /// 更新所有 GoldTotal 类型任务的进度。
-    /// 进度 = 当前金币 - 基线金币（新手礼包不计入）。
-    /// </summary>
-    /// <param name="gold">最新金币数量。</param>
-    private void OnGoldChanged(int gold)
-    {
-        bool changed = false;
-        if (_taskRows == null)
-        {
-            return;
-        }
-
-        // 扣除基线，只计算超出初始化时金币的部分
-        int effectiveGold = Math.Max(0, gold - _goldBaseline);
-
-        for (int i = 0; i < _taskRows.Length; i++)
-        {
-            if (_taskRows[i] == null || _taskRows[i].ConditionType != TaskCondition.GoldTotal)
+            if (_taskRows[i].ConditionType == TaskCondition.FeedComplete)
             {
+                _progressValues[i]++;
+                changed = true;
                 continue;
             }
 
-            if (_claimedTimestamps[i] > 0)
+            if (_taskRows[i].ConditionType == TaskCondition.GoldTotal && safeCoinAmount > 0)
             {
-                continue;
-            }
-
-            // GoldTotal 进度 = 当前金币 - 基线（花费后会回落，符合「累计到 N」语义）
-            if (_progressValues[i] != effectiveGold)
-            {
-                _progressValues[i] = effectiveGold;
+                long nextProgress = (long)_progressValues[i] + safeCoinAmount;
+                _progressValues[i] = nextProgress >= int.MaxValue ? int.MaxValue : (int)nextProgress;
                 changed = true;
             }
         }
 
         if (changed)
         {
+            GameEntry.CloudSave?.MarkDirty(CloudSaveDirtyModule.Tasks);
             TaskProgressChanged?.Invoke();
         }
     }
@@ -537,7 +472,7 @@ public sealed class TaskModule
 
     /// <summary>
     /// 读取指定条件类型的当前实际值。
-    /// GoldTotal 会扣除基线金币（新手礼包不计入）。
+    /// FeedComplete 和 GoldTotal 都由宠物吐金币事件递增，不从 CurrentGold 反推。
     /// </summary>
     /// <param name="condition">条件类型。</param>
     /// <returns>当前实际值；依赖不可用时返回 0。</returns>
@@ -548,10 +483,6 @@ public sealed class TaskModule
             case TaskCondition.HatchComplete:
                 return GameEntry.EggHatch != null ? GameEntry.EggHatch.TotalHatchCount : 0;
 
-            case TaskCondition.GoldTotal:
-                // 扣除基线，只计算超出初始化时金币的部分
-                return GameEntry.Fruits != null ? Math.Max(0, GameEntry.Fruits.CurrentGold - _goldBaseline) : 0;
-
             case TaskCondition.HatchSlotCount:
                 return GameEntry.Fruits != null ? GameEntry.Fruits.HatchSlotCount : 0;
 
@@ -561,7 +492,7 @@ public sealed class TaskModule
             case TaskCondition.FruiterSlotCount:
                 return GameEntry.Fruits != null ? GameEntry.Fruits.OrchardSlotCount : 0;
 
-            // FeedComplete 由事件递增驱动，不走 ReadConditionValue
+            // FeedComplete / GoldTotal 由宠物吐金币事件递增驱动，不走 ReadConditionValue。
             default:
                 return 0;
         }
@@ -591,40 +522,13 @@ public sealed class TaskModule
             }
 
             TaskCondition condition = _taskRows[i].ConditionType;
-            if (condition == TaskCondition.FeedComplete)
+            if (condition == TaskCondition.FeedComplete || condition == TaskCondition.GoldTotal)
             {
-                // FeedComplete 由事件递增，不从运行时读取
+                // FeedComplete / GoldTotal 由事件递增，不从运行时读取。
                 continue;
             }
 
             _progressValues[i] = ReadConditionValue(condition);
-        }
-    }
-
-    /// <summary>
-    /// 专门评估所有 GoldTotal 类型任务的进度。
-    /// 在设置金币基线后调用，确保进度已扣除基线部分。
-    /// </summary>
-    private void EvaluateGoldTotalProgress()
-    {
-        if (_taskRows == null)
-        {
-            return;
-        }
-
-        for (int i = 0; i < _taskRows.Length; i++)
-        {
-            if (_taskRows[i] == null || _taskRows[i].ConditionType != TaskCondition.GoldTotal)
-            {
-                continue;
-            }
-
-            if (_claimedTimestamps[i] > 0)
-            {
-                continue;
-            }
-
-            _progressValues[i] = ReadConditionValue(TaskCondition.GoldTotal);
         }
     }
 
@@ -693,7 +597,7 @@ public sealed class TaskSaveData
 
     /// <summary>
     /// 任务当前进度值。
-    /// 用于离线后再恢复，避免 FeedComplete 等事件驱动型任务的进度丢失。
+    /// 用于离线后再恢复，避免 FeedComplete / GoldTotal 等事件驱动型任务的进度丢失。
     /// </summary>
     public int progress;
 }
